@@ -8,3 +8,15 @@ simulaneously, making it suitable for comparing directory trees.
 
 A cmd-line tool, dirscan, provides directory scanning and comparing
 functions from the command-line.
+
+----------
+
+Home for the project:
+          https://github.com/sveinse/dirscan
+
+(C) 2010-2016, Svein Seldal <sveinse@seldal.com>
+
+This application is licensed under GNU GPL version 3
+<http://gnu.org/licenses/gpl.html>. This is free software: you are
+free to change and redistribute it. There is NO WARRANTY, to the
+extent permitted by law.
