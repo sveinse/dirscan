@@ -18,6 +18,7 @@ import stat
 import itertools
 import hashlib
 import errno
+import filecmp
 
 
 # Select hash algorthm to use
@@ -55,8 +56,6 @@ class BaseObj(object):
         self.stat = stat
 
         fp = os.path.join(path,name)
-        #if fp.endswith('/.'):
-        #    fp=fp[:-2]
         self.fullpath = fp
 
 
@@ -103,16 +102,8 @@ class BaseObj(object):
         return s
 
 
-    #def get(self,k,v):
-    #    return v
-
-
-    #def __repr__(self):
-    #    return "%s:%s:%s:%s" %(self.objtype,self.fullpath,self.path,self.name)
-
-
-    #def data(self):
-    #    return None
+    def get(self,k,v):
+        return v
 
 
 
@@ -126,6 +117,9 @@ class FileObj(BaseObj):
 
     def hashsum(self):
         ''' Return the hashsum of the file '''
+
+        # This is not a part of the parse() structure because it can take considerable
+        # time to evaluate the hashsum, hence its done on need-to have basis.
         if self._hashsum: return self._hashsum
 
         m = hashalgorithm()
@@ -155,32 +149,23 @@ class FileObj(BaseObj):
         return BaseObj.compare(self,other,s)
 
 
-    #def data(self):
-    #    return self.hashsum()
-
-
 
 class LinkObj(BaseObj):
     ''' Symbolic Link File Object '''
     objtype = 'l'
     objname = 'symbolic link'
-    
-    _link = None
 
-    def link(self):
-        if self._link is not None: return self._link
+    link = None
 
-        self._link = os.readlink(self.fullpath)
-        return self._link
 
-    #def parse(self):
-    #    # Execute super
-    #    if self.parsed: return
-    #    BaseObj.parse(self,done=False)
+    def parse(self):
+        # Execute super
+        if self.parsed: return
+        BaseObj.parse(self,done=False)
 
-    #    # Read the contents of the link
-    #    self.linkdst = os.readlink(self.fullpath)
-    #    self.parsed = True
+        # Read the contents of the link
+        self.link = os.readlink(self.fullpath)
+        self.parsed = True
 
 
     def compare(self,other,s=None):
@@ -190,10 +175,6 @@ class LinkObj(BaseObj):
         if self.link != other.link:
             s.append('link differs')
         return BaseObj.compare(self,other,s)
-
-
-    #def data(self):
-    #    return self.link
 
 
 
@@ -219,7 +200,7 @@ class DirObj(BaseObj,dict):
     def close(self):
         ''' Delete all used references to allow GC cleanup '''
         self.clear()
-        self.parsed = False
+        BaseObj.close(self)
 
 
     def children(self):
@@ -246,13 +227,13 @@ class SpecialObj(BaseObj):
 
         # The known special device types
         if dtype=='b':
-            self.objname = 'block device file'
+            self.objname = 'block device'
         elif dtype=='c':
-            self.objname = 'char device file'
+            self.objname = 'char device'
         elif dtype=='p':
-            self.objname = 'fifo file'
+            self.objname = 'fifo'
         elif dtype=='s':
-            self.objname = 'socket file'
+            self.objname = 'socket'
 
 
     def parse(self):
@@ -321,25 +302,40 @@ def newFromFS(path, name):
     return o
 
 
+
 def newFromData(path, name, objtype, size, mode, uid, gid, mtime, data=None):
     ''' Create a new object from the given data and return an
         instance of the object. '''
     o = None
+
     if objtype == 'f':
         o = FileObj(path, name)
         o._hashsum = data
+        o.size = size
+
+        # Hashsum is normally not defined if the size is 0.
+        if not data and size==0:
+            m = hashalgorithm()
+            o._hashsum = m.hexdigest()
+
     elif objtype == 'l':
         o = LinkObj(path, name)
         o.link = data
+        o.size = size
+
     elif objtype == 'd':
         o = DirObj(path, name)
+
     elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
         o = SpecialObj(path, name, dtype=objtype)
+
+    # The common fields
     o.mode = mode
     o.uid = uid
     o.gid = gid
-    o.size = size
     o.mtime = mtime
+
+    # Ensure we don't go out on the FS
     o.parsed = True
     return o
 
@@ -358,15 +354,20 @@ def walkdirs(dirs,reverse=False,topdown=True):
     # Check list of dirs indeed are dirs and create initial object list
     objs = [ ]
     for d in dirs:
-        # If d is file, then we read it as a listfile.
-        #if os.path.isfile(d):
-        #    o = readfilelist(d)
-        if os.path.isdir(d):
+        if isinstance(d,DirObj):
+            o = d
+        elif os.path.isdir(d):
             o = DirObj('',d)
         else:
             raise OSError(errno.ENOENT,os.strerror(errno.ENOENT),d)
         o.hasparent = True
         objs.append(o)
+
+
+    # Get a base path to determine the relative directory path
+    basepath = dirs[0]
+    if isinstance(basepath,DirObj):
+        basepath = basepath.name
 
 
     # popno controls which object is taken next from the objects list. -1 is the last, while 0 is the first.
@@ -387,13 +388,13 @@ def walkdirs(dirs,reverse=False,topdown=True):
         sortrev=True
 
 
-    objects = [ objs ]
-    basepath = dirs[0]
+    # Push the top-level directories on the queue to start the traversal
+    queue = [ objs ]
 
-    while len(objects):
+    while len(queue):
 
         # Get the next set of objects
-        objs = objects.pop(popno)
+        objs = queue.pop(popno)
 
         # Parse the objects (which investigates the objects and and creates children objects if present)
         for o in objs:
@@ -403,10 +404,8 @@ def walkdirs(dirs,reverse=False,topdown=True):
             except OSError as e:
                 o.parserr = e
 
-        # Path to give
-        path = objs[0].fullpath.replace(basepath,'',1)
-        if len(path)==0: path='.'
-        if path.startswith('/'): path = path.replace('/','',1)
+        # Relative path: Gives '.', './a', './b'
+        path = objs[0].fullpath.replace(basepath,'.',1)
 
         # Send back object list to caller
         yield (path,objs)
@@ -432,5 +431,5 @@ def walkdirs(dirs,reverse=False,topdown=True):
         for o in objs:
             o.close()
 
-        # Append the newly discovered objects to the stack
-        objects.extend(children)
+        # Append the newly discovered objects to the queue
+        queue.extend(children)
