@@ -89,7 +89,7 @@ def unquote(st):
                 ns += chr(31)
             elif ord(s) >= 64 and ord(s) <= 95:
                 ns += chr(ord(s)-64)
-            # Unknown escape char is silently ignored
+            # Unknown/incorrectly formatted escape char is silently ignored
             escape = False
         elif '\\' in s:
             escape = True
@@ -196,6 +196,8 @@ def format_data(obj):
         their symlink target.
     '''
     if obj.objtype=='f' and obj.size:
+        # FIXME: This might fail if we can't read the file. The error needs to bubble up
+        #        to the mainloop.
         return obj.hashsum()
     elif obj.objtype=='l':
         return obj.link
@@ -272,6 +274,7 @@ diff_arrows = {
 #
 def dump_fileinfo(path, obj, format, quoter, f):
 
+    # The base fields
     fields = {
         'path': quoter(str(path)),
     }
@@ -302,6 +305,7 @@ def dump_fileinfo(path, obj, format, quoter, f):
 
 def dump_diffinfo(path, change, left, right, text, format, quoter, f):
 
+    # The common fields
     fields = {
         'arrow': diff_arrows[change][1],
         'path': quoter(str(path)),
@@ -402,17 +406,22 @@ def readscanfile(fname):
     return rootobj
 
 
+
 #
 # DIFF TOOL
 # =========
 #
 def diffworker(left,right,exclude):
 
+    left_path = left
+    if isinstance(left,dirscan.BaseObj):
+        left_path = left.fullpath
+    right_path = right
+    if isinstance(right,dirscan.BaseObj):
+        right_path = right.fullpath
+
     # Traverse the directories
     for (path,ob) in dirscan.walkdirs([left,right]):
-
-        #if path != '.':
-        #    path = os.path.join('.',path)
 
         # Ignored file?
         fullpath = ob[0].fullpath
@@ -435,30 +444,31 @@ def diffworker(left,right,exclude):
             # File present RIGHT only
             # =======================
             if opts.traverse or ob[0].hasparent:
-                text="%s only in %s" %(ob[1].objname,right)
+                text="%s only in %s" %(ob[1].objname,right_path)
                 yield (path,'only_right', ob, text)
 
         elif ob[1].objtype == '-':
             # File present LEFT only
             # ======================
             if opts.traverse or ob[1].hasparent:
-                text="%s only in %s" %(ob[0].objname,left)
+                text="%s only in %s" %(ob[0].objname,left_path)
                 yield (path, 'only_left', ob, text)
 
         elif ob[0].objtype != ob[1].objtype:
             # File type DIFFERENT
             # ===================
-            text="Different type, %s in %s and %s in %s" %(ob[0].objname,left,ob[1].objname,right)
+            text="Different type, %s in %s and %s in %s" %(ob[0].objname,left_path,ob[1].objname,right_path)
             yield (path, 'different_type', ob, text)
 
         else:
             # File type EQUAL
             # ===============
 
-            # eq returns a list of differences. If None, they are equal
+            # compare returns a list of differences. If None, they are equal
             try:
                 rl=ob[0].compare(ob[1])
             except IOError as e:
+                # Compares might fail
                 yield (path, 'error', ob, str(e))
                 continue
 
@@ -470,12 +480,12 @@ def diffworker(left,right,exclude):
                     if 'newer' in r:
                         if 't' in opts.ignore:
                             continue
-                        r = '%s is newer' %(left)
+                        r = '%s is newer' %(left_path)
                         change='left_newer'
                     elif 'older' in r:
                         if 't' in opts.ignore:
                             continue
-                        r = '%s is newer' %(right)
+                        r = '%s is newer' %(right_path)
                         change='right_newer'
                     elif 'u' in opts.ignore and 'UID differs' in r:
                         continue
@@ -494,7 +504,7 @@ def diffworker(left,right,exclude):
                     yield (path, change, ob, text)
                     continue
 
-                # Compares may fall through here because of ignore settings
+                # Compares with changes may fall through here because of ignore settings
 
             # File contents EQUAL
             # ===================
@@ -521,7 +531,7 @@ def diffdirs(left,right,exclude):
     filter = opts.filter or filter
 
 
-    # If either left or write is file, they should be read as scan files
+    # If either left or write is file, they should be parsed as scan files
     if os.path.isfile(left):
         left = readscanfile(left)
     if os.path.isfile(right):
@@ -622,6 +632,7 @@ def scandir(dir,outfile,exclude):
     if os.path.isfile(dir):
         dir = readscanfile(dir)
 
+
     # Prepare histogram
     histogram = {}
     def hist_add(objtype):
@@ -631,14 +642,16 @@ def scandir(dir,outfile,exclude):
         return histogram.get(objtype,0)
 
 
-    size = 0
     f = None
     try:
+        size = 0
+
+        # Setup output destination/files
         if not outfile:
             f = sys.stdout
             doprint = False
             dowrite = not opts.quiet
-            quoter = lambda a: a   # No quoter
+            quoter = lambda a: a   # No quoter on stdout
         else:
             f = open(outfile, 'w')
             doprint = opts.verbose
@@ -758,6 +771,12 @@ extent permitted by law.
     ap.add_argument('dir1', metavar='DIR1', help='Directory to scan/traverse')
     ap.add_argument('dir2', metavar='DIR2', help='If present, compare DIR1 with DIR2', default=False, nargs='?')
 
+    # FIXME:  Other possible options:
+    #   --print0  to safely interact with xargs -0
+    #   --filter  on scan to show only certain kind of file types
+
+
+    # -- Global options not passed via function arguments
     global opts
     opts = ap.parse_args()
     global prog
@@ -774,9 +793,9 @@ extent permitted by law.
 
     # -- COMMAND HANDLING
     if not opts.dir2:
-        return scandir(opts.dir1,opts.outfile,exclude=exclude)
+        return scandir(opts.dir1,opts.outfile,exclude)
     else:
-        return diffdirs(opts.dir1,opts.dir2,exclude=exclude)
+        return diffdirs(opts.dir1,opts.dir2,exclude)
 
 
 

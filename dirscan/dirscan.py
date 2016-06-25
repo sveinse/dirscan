@@ -28,6 +28,9 @@ hashalgorithm = hashlib.sha256
 class DirscanException(Exception):
     pass
 
+class DirscanParseError(Exception):
+    pass
+
 
 
 ############################################################
@@ -298,7 +301,7 @@ def newFromFS(path, name):
     elif stat.S_ISSOCK(t):
         o = SpecialObj(path,name,s,'s')
     else:
-        raise DirscanException("%s: Uknown file type" %(fullpath))
+        raise DirscanParseError("%s: Uknown file type" %(fullpath))
     return o
 
 
@@ -403,6 +406,9 @@ def walkdirs(dirs,reverse=False,topdown=True):
                 o.parserr = None
             except OSError as e:
                 o.parserr = e
+
+        # ^^ FIXME: This leads to a very anonymous failure. It will probably be better to replace this
+        #           with a separate error object type which contains the file object inside.
 
         # Relative path: Gives '.', './a', './b'
         path = objs[0].fullpath.replace(basepath,'.',1)
