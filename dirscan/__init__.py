@@ -1,1 +1,1 @@
-from dirscan import *
+from .dirscan import *

@@ -33,7 +33,7 @@ prog = None
 
 
 def log(text):
-    print >>sys.stderr, text
+    sys.stderr.write(text + '\n')
 
 
 
@@ -614,15 +614,15 @@ def scandir(dir,outfile,exclude):
 
     elif opts.all:
         if opts.human:
-            format = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {fullpath}'
+            format = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {type}  {fullpath}'
         else:
-            format = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {fullpath}'
+            format = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {type}  {fullpath}'
 
     elif opts.long:
         if opts.human:
-            format = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {fullpath}'
+            format = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {type}  {fullpath}'
         else:
-            format = '{type}  {mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {fullpath}'
+            format = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}'
 
     # User provided format overrides any defaults
     format = opts.format or format
@@ -663,30 +663,38 @@ def scandir(dir,outfile,exclude):
         for (path,objs) in dirscan.walkdirs([dir,]):
             obj = objs[0]
 
-            # Ignored file?
-            fullpath = obj.fullpath
-            if [ fnmatch.fnmatch(fullpath, e) for e in exclude ].count(True) > 0:
-                hist_add('x')
-                continue
+            try:
 
-            # Failed file?
-            if obj.parserr:
-                sys.stderr.write('%s: %s\n' %(prog, obj.parserr))
-                hist_add('e')
-                continue
+                # Ignored file?
+                fullpath = obj.fullpath
+                if [ fnmatch.fnmatch(fullpath, e) for e in exclude ].count(True) > 0:
+                    hist_type = 'x'
+                    continue
 
-            # Save histogram info
-            hist_add(obj.objtype)
-            if obj.objtype == 'f':
-                size += obj.size
+                # Failed file?
+                if obj.parserr:
+                    raise obj.parserr
 
-            # Print to stdout?
-            if doprint:
-                dump_fileinfo(path, obj, format=printformat, quoter=lambda a:a, f=sys.stdout)
+                # Save histogram info
+                hist_type = obj.objtype
 
-            # Print to stdout or file?
-            if dowrite:
-                dump_fileinfo(path, obj, format=format, quoter=quoter, f=f)
+                # Print to stdout?
+                if doprint:
+                    dump_fileinfo(path, obj, format=printformat, quoter=lambda a:a, f=sys.stdout)
+
+                # Print to stdout or file?
+                if dowrite:
+                    dump_fileinfo(path, obj, format=format, quoter=quoter, f=f)
+
+            except (IOError,OSError) as e:
+                # Handle errors
+                sys.stderr.write('%s: %s\n' %(prog, e))
+                hist_type = 'e'
+
+            finally:
+                hist_add(hist_type)
+                if hist_type == 'f':
+                    size += obj.size
 
 
         if opts.summary:
