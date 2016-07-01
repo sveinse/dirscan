@@ -687,7 +687,8 @@ def scandir(dir,outfile,exclude):
                     dump_fileinfo(path, obj, format=format, quoter=quoter, f=f)
 
             except (IOError,OSError) as e:
-                # Handle errors
+                # Handle errors -- it may either come from obj.parseerr, or from
+                # the dump_fileinfo() calls
                 sys.stderr.write('%s: %s\n' %(prog, e))
                 hist_type = 'e'
 
