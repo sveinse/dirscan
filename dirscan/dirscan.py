@@ -97,7 +97,7 @@ class BaseObj(object):
         if self.gid != other.gid:
             s.append('GID differs')
         if self.mode != other.mode:
-            s.append('Perm differs')
+            s.append('Permissions differs')
         if self.mtime > other.mtime:
             s.append('newer')
         elif self.mtime < other.mtime:

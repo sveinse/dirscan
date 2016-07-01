@@ -255,9 +255,9 @@ info_fields = {
 
 diff_arrows = {
     # Change type    : ( filter, arrow )
-    'ignored'        : ( 'i', '    x' ),
-    'only_right'     : ( 'r', '   >>' ),
-    'only_left'      : ( 'l', '<<   ' ),
+    'excluded'       : ( 'x', '    x' ),
+    'right_only'     : ( 'r', '   >>' ),
+    'left_only'      : ( 'l', '<<   ' ),
     'different_type' : ( 'd', '~~~~~' ),
     'changed'        : ( 'c', '<--->' ),
     'left_newer'     : ( 'L', '<<-->' ),
@@ -423,12 +423,12 @@ def diffworker(left,right,exclude):
     # Traverse the directories
     for (path,ob) in dirscan.walkdirs([left,right]):
 
-        # Ignored file?
+        # Excluded file?
         fullpath = ob[0].fullpath
         if [ fnmatch.fnmatch(fullpath, e) for e in exclude ].count(True) > 0:
-            # File IGNORED
-            # ============
-            yield (path, 'ignored', ob, 'ignored')
+            # File EXCLUDED
+            # =============
+            yield (path, 'excluded', ob, 'excluded')
 
         elif ob[0].parserr:
             # Left file ERROR
@@ -445,14 +445,14 @@ def diffworker(left,right,exclude):
             # =======================
             if opts.traverse or ob[0].hasparent:
                 text="%s only in %s" %(ob[1].objname,right_path)
-                yield (path,'only_right', ob, text)
+                yield (path,'right_only', ob, text)
 
         elif ob[1].objtype == '-':
             # File present LEFT only
             # ======================
             if opts.traverse or ob[1].hasparent:
                 text="%s only in %s" %(ob[0].objname,left_path)
-                yield (path, 'only_left', ob, text)
+                yield (path, 'left_only', ob, text)
 
         elif ob[0].objtype != ob[1].objtype:
             # File type DIFFERENT
@@ -512,7 +512,7 @@ def diffworker(left,right,exclude):
 
 
 
-def diffdirs(left,right,exclude):
+def diffdirs(left,right,outfile,exclude):
 
     #
     # Determine print format to use
@@ -549,9 +549,19 @@ def diffdirs(left,right,exclude):
 
     f = None
     try:
-        # FIXME: Add support for outfile
-        f = sys.stdout
-        quoter = lambda a: a
+
+        # Setup output destination/files
+        if not outfile:
+            f = sys.stdout
+            doprint = False
+            dowrite = not opts.quiet
+            quoter = lambda a: a
+        else:
+            f = open(outfile, 'w')
+            doprint = opts.verbose
+            dowrite = True
+            quoter = lambda a: quote(a)
+
 
         # Traverse the directories
         for (path, change, ob, text) in diffworker(left,right,exclude):
@@ -559,28 +569,68 @@ def diffdirs(left,right,exclude):
             # Print the difference if type is listed in filter
             letter = diff_arrows[change][0]
             if letter in filter:
-                dump_diffinfo(path, change, ob[0], ob[1], text, format, quoter, f)
+
+                # Print to stdout (used if writing to file)
+                if doprint:
+                    dump_diffinfo(path, change, ob[0], ob[1], text, format, quoter=lambda a:a, f=sys.stdout)
+
+                # Write to stdout or file
+                if dowrite:
+                    dump_diffinfo(path, change, ob[0], ob[1], text, format, quoter=quoter, f=f)
 
             # Add to the histogram
             hist_add(change)
 
 
         if opts.summary:
-            log('')
-            log("Statistics of compare between '%s' and '%s':" %(left,right))
-            log("     %s  equal files" %(hist_get('equal')))
-            log("     %s  changed files" %(hist_get('changed')))
-            log("     %s  files of different type but same name" %(hist_get('different_type')))
-            log("     %s  files only in '%s'" %(hist_get('only_left'),left))
-            log("     %s  files only in '%s'" %(hist_get('only_right'),right))
-            if 't' not in opts.ignore:
-                log("     %s  files in '%s' is newer" %(hist_get('left_newer'),left))
-                log("     %s  files in '%s' is newer" %(hist_get('right_newer'),right))
-            if hist_get('ignored') > 0:
-                log("     %s  ignored files" %(hist_get('ignored')))
-            if hist_get('error') > 0:
-                log("     %s  files with error" %(hist_get('error')))
-            log("In total %s file objects" %(sum(histogram.values())))
+
+            summary_dict = {
+                'left': left,
+                'right': right,
+                'n_equal': hist_get('equal'),
+                'n_changed': hist_get('changed'),
+                'n_different_type': hist_get('different_type'),
+                'n_left': hist_get('left_only'),
+                'n_right': hist_get('right_only'),
+                'n_newer_left': hist_get('left_newer'),
+                'n_newer_right': hist_get('right_newer'),
+                'n_excludes': hist_get('excluded'),
+                'n_errors': hist_get('errors'),
+                'sum_objects': sum(histogram.values()),
+            }
+
+            summary_text = [
+                # Condition,    Text.  Condition is a lookup into summary_dict
+                ( True,               "Statistics of compare between '{left}' and '{right}':" ),
+                ( True,               "    {n_equal}  equal files" ),
+                ( 'n_changed',        "    {n_changed}  changed files" ),
+                ( 'n_different_type', "    {n_different_type}  files of same name but different type" ),
+                ( 'n_left',           "    {n_left}  files only in '{left}'" ),
+                ( 'n_right',          "    {n_right}  files only in '{right}'" ),
+                ( 'n_newer_left',     "    {n_newer_left}  newer files in '{left}'" ),
+                ( 'n_newer_right',    "    {n_newer_right}  newer files in '{right}'" ),
+                ( 'n_excludes',       "    {n_excludes}  excluded files" ),
+                ( 'n_errors',         "    {n_errors}  errors" ),
+                ( True,               "In total {sum_objects} file objects" ),
+            ]
+
+
+            try:
+                if not opts.summary_format:
+
+                    # Use the pre-defined summary_text
+                    for (doprint,line) in summary_text:
+                        # d.get(n,n) will return the d value for n if n exists, otherwise return n. Thus if n is True, True will
+                        # be returned
+                        if summary_dict.get(doprint,doprint):
+                            sys.stderr.write(line.format(**summary_dict)+'\n')
+
+                else:
+                    # Use the user provided summary_text
+                    sys.stderr.write(opts.summary_format.format(**summary_dict)+'\n')
+
+            except (KeyError, IndexError, ValueError) as e:
+                raise SyntaxError("Format error: %s" %(e))
 
 
     finally:
@@ -678,11 +728,11 @@ def scandir(dir,outfile,exclude):
                 # Save histogram info
                 hist_type = obj.objtype
 
-                # Print to stdout?
+                # Print to stdout (used if writing to file)
                 if doprint:
                     dump_fileinfo(path, obj, format=printformat, quoter=lambda a:a, f=sys.stdout)
 
-                # Print to stdout or file?
+                # Write to stdout or file
                 if dowrite:
                     dump_fileinfo(path, obj, format=format, quoter=quoter, f=f)
 
@@ -699,17 +749,52 @@ def scandir(dir,outfile,exclude):
 
 
         if opts.summary:
-            log('')
-            log("Statistics of '%s':" %(dir))
-            log("     %s  files, total %s" %(hist_get('f'),format_bytes(size,print_full=True) ))
-            log("     %s  directories" %(hist_get('d')))
-            log("     %s  symbolic links" %(hist_get('l')))
-            log("     %s  special files" %(hist_get('b')+hist_get('c')+hist_get('p')+hist_get('s')))
-            if hist_get('x') > 0:
-                log("     %s  ignored files" %(hist_get('x')))
-            if hist_get('e') > 0:
-                log("     %s  files with error" %(hist_get('e')))
-            log("In total %s file objects" %(sum(histogram.values())))
+
+            summary_dict = {
+                'dir': dir,
+                'n_files': hist_get('f'),
+                'n_dirs': hist_get('d'),
+                'n_symlinks': hist_get('l'),
+                'n_special': hist_get('b')+hist_get('c')+hist_get('p')+hist_get('s'),
+                'n_blkdev': hist_get('b'),
+                'n_chrdev': hist_get('c'),
+                'n_fifos': hist_get('p'),
+                'n_sockets': hist_get('s'),
+                'n_excludes': hist_get('x'),
+                'n_errors': hist_get('e'),
+                'sum_bytes': size,
+                'sum_bytes_t': format_bytes(size,print_full=True),
+                'sum_objects': sum(histogram.values()),
+            }
+
+            summary_text = [
+                # Condition,    Text.  Condition is a lookup into summary_dict
+                ( True,         "Statistics of '{dir}':" ),
+                ( True,         "    {n_files}  files, total {sum_bytes_t}" ),
+                ( True,         "    {n_dirs}  directories" ),
+                ( 'n_symlinks', "    {n_symlinks}  symbolic links" ),
+                ( 'n_special',  "    {n_special}  special files  ({n_blkdev} block devices, {n_chrdev} char devices, {n_fifos} fifos, {n_sockets} sockets)" ),
+                ( 'n_excludes', "    {n_excludes}  excluded files" ),
+                ( 'n_errors',   "    {n_errors}  errors" ),
+                ( True,         "In total {sum_objects} file objects" ),
+            ]
+
+            try:
+                if not opts.summary_format:
+
+                    # Use the pre-defined summary_text
+                    for (doprint,line) in summary_text:
+                        # d.get(n,n) will return the d value for n if n exists, otherwise return n. Thus if n is True, True will
+                        # be returned
+                        if summary_dict.get(doprint,doprint):
+                            sys.stderr.write(line.format(**summary_dict)+'\n')
+
+                else:
+                    # Use the user provided summary_text
+                    sys.stderr.write(opts.summary_format.format(**summary_dict)+'\n')
+
+            except (KeyError, IndexError, ValueError) as e:
+                raise SyntaxError("Format error: %s" %(e))
 
 
     finally:
@@ -761,6 +846,9 @@ extent permitted by law.
     # Common options
     ap.add_argument('-a', '--all', dest='all', action='store_true', default=False, help='Print all file info')
     ap.add_argument('-f', '--format', dest='format', metavar='FORMAT', default=None, help='File printing format')
+    ap.add_argument('-q', '--quiet', action='store_true', dest='quiet', default=False, help='Quiet operation')
+    ap.add_argument('-s', '--summary', action='store_true', dest='summary', default=False, help='Print summary')
+    ap.add_argument('--summary-format', action='store', dest='summary_format', default=None, help='Summary format')
     ap.add_argument('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Verbose printing.')
     ap.add_argument('-X', '--exclude-dir', dest='exclude', metavar='PATH', action='append', default=[], help='Exclude PATH from scan. PATH is relative to DIR.')
 
@@ -768,15 +856,14 @@ extent permitted by law.
     ap.add_argument('-h', '--human', dest='human', action='store_true', default=False, help='Display human readable sizes')
     ap.add_argument('-l', '--long', dest='long', action='store_true', default=False, help='Dump file in extended format')
     ap.add_argument('-o', '--output', dest='outfile', metavar='FILE', help='Store scan output in FILE.')
-    ap.add_argument('-q', '--quiet', action='store_true', dest='quiet', default=False, help='Quiet operation')
-    ap.add_argument('-s', '--summary', action='store_true', dest='summary', default=False, help='Print summary')
 
     # Diff options
-    ap.add_argument('-F', '--filter', dest='filter', action='store', default='', help='Show only difference type e=equal, l=only left, r=only right, c=changed, L=left is newest, R=right is newest, d=different type, E=error, i=ignored')
+    ap.add_argument('-F', '--filter', dest='filter', action='store', default='', help='Show only difference type e=equal, l=only left, r=only right, c=changed, L=left is newest, R=right is newest, d=different type, E=error, x=excluded')
     ap.add_argument('-i', '--ignore', dest='ignore', action='store', default='', help='Ignore differences in u=uid, g=gid, p=permissions, t=time')
     ap.add_argument('-t', '--traverse', dest='traverse', action='store_true', default=False,
                     help='Traverse the children of directories that exists on only one side.')
 
+    # Main arguments
     ap.add_argument('dir1', metavar='DIR1', help='Directory to scan/traverse')
     ap.add_argument('dir2', metavar='DIR2', help='If present, compare DIR1 with DIR2', default=False, nargs='?')
 
@@ -804,7 +891,7 @@ extent permitted by law.
     if not opts.dir2:
         return scandir(opts.dir1,opts.outfile,exclude)
     else:
-        return diffdirs(opts.dir1,opts.dir2,exclude)
+        return diffdirs(opts.dir1,opts.dir2,opts.outfile,exclude)
 
 
 
