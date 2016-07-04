@@ -11,6 +11,7 @@
 # free to change and redistribute it. There is NO WARRANTY, to the
 # extent permitted by law.
 #
+from __future__ import absolute_import
 
 import sys
 import os
@@ -18,8 +19,8 @@ import argparse
 import fnmatch
 import datetime
 
-import dirscan
-import fileinfo
+from . import dirscan
+from . import fileinfo
 
 
 #
