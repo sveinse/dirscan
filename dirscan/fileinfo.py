@@ -297,7 +297,7 @@ def get_fileinfo(path, ob, change, text, prefixlist, formatlist):
         'path'  : str(path),
         'change': str(change),
         'arrow' : compare_arrows[change][1],
-        'text'  : str(text).capitalize(),
+        'text'  : text[0].upper() + text[1:],
     }
 
 

@@ -313,8 +313,9 @@ def scandirs(left,right,outfile,exclude,opts):
                     if err is not None and not opts.realquiet:
                         sys.stderr.write('%s: %s\n' %(opts.prog, err))
 
-            # Show this file type? -- this works only on left side objects
-            if ob[0].objtype not in filetypes:
+            # Show this file type?
+            ft = [ o.objtype in filetypes for o in ob ]
+            if not any(ft):
                 show = False
 
             # Get dict of file info fields used by the formatlist
