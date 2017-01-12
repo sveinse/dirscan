@@ -1,0 +1,5 @@
+Svein 2016-08-02:
+
+- Don't compare and report "a is newer" if the only difference is a
+  changes in date. Perhaps have a --report-date or --compare-date if a
+  strict date-based compare is wanted.
