@@ -1,13 +1,38 @@
-from setuptools import setup, find_packages
-from codecs import open
+# -*- coding: utf-8 -*-
+'''
+This file is a part of dirscan, a handy tool for recursively
+scanning and comparing directories and files
+
+Copyright (C) 2010-2016 Svein Seldal, sveinse@seldal.com
+URL: https://github.com/sveinse/dirscan
+
+This application is licensed under GNU GPL version 3
+<http://gnu.org/licenses/gpl.html>. This is free software: you are
+free to change and redistribute it. There is NO WARRANTY, to the
+extent permitted by law.
+'''
 import os
+from codecs import open
+from setuptools import setup, find_packages
+import re
+import io
 
 
-here = os.path.abspath(os.path.dirname(__file__))
+HERE = os.path.abspath(os.path.dirname(__file__))
 
-# Get the long description from the README file
-with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
+
+def read(fname):
+    return io.open(os.path.join(HERE, fname), encoding='utf-8').read()
+
+
+def find_version(fname):
+
+    version_file = read(fname)
+    version_match = re.search(r"^\s*__version__\s*=\s*['\"]([^'\"]*)['\"]",
+                              version_file, re.M)
+    if version_match:
+        return version_match.group(1)
+    raise RuntimeError("Unable to find version string.")
 
 
 setup(
@@ -16,10 +41,10 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='1.0.0',
+    version=find_version('dirscan/__init__.py'),
 
     description='Directory traverser',
-    long_description=long_description,
+    long_description=read('README.rst'),
 
     # The project's main homepage.
     url='https://github.com/sveinse/dirscan',
