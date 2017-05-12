@@ -44,6 +44,7 @@ class DirscanParseError(Exception):
 class BaseObj(object):
     ''' File Objects Base Class '''
     parsed = False
+    hasparent = False
 
     # Standard file entries
     stat = None
@@ -59,13 +60,14 @@ class BaseObj(object):
         self.name = name
         self.stat = stat
 
-        fp = os.path.join(path, name)
-        self.fullpath = fp
+        fullpath = os.path.join(path, name)
+        self.fullpath = fullpath
 
 
     def parse(self, done=True):
         ''' Parse the object. Get file stat info. '''
-        if self.parsed: return
+        if self.parsed:
+            return
         if not self.stat:
             self.stat = os.lstat(self.fullpath)
         self.mode = self.stat.st_mode
@@ -126,7 +128,8 @@ class FileObj(BaseObj):
         # This is not a part of the parse() structure because it can take
         # considerable time to evaluate the hashsum, hence its done on
         # need-to have basis.
-        if self.hashsum_cache: return self.hashsum_cache
+        if self.hashsum_cache:
+            return self.hashsum_cache
 
         m = HASHALGORITHM()
         with open(self.fullpath, 'rb') as f:
@@ -185,7 +188,7 @@ class LinkObj(BaseObj):
 
 
 
-class DirObj(BaseObj,dict):
+class DirObj(BaseObj, dict):
     ''' Directory File Object '''
     objtype = 'd'
     objname = 'directory'
@@ -356,7 +359,8 @@ def newFromData(path, name, objtype, size, mode, uid, gid, mtime, data=None):
 ############################################################
 
 
-def walkdirs(dirs,reverse=False,topdown=True):
+def walkdirs(dirs, reverse=False, topdown=True):
+    ''' Generator function that traverses the directories 'dirs' '''
 
     # Check list of dirs indeed are dirs and create initial object list
     objs = []
@@ -383,16 +387,16 @@ def walkdirs(dirs,reverse=False,topdown=True):
     # list, the default parsing (that is reverse=False and topdown=True) is to
     # pick the last object with popno=-1 and populate the object list in
     # reversed order (for a to be picked first)
-    if reverse == True and topdown == True:
+    if reverse and topdown:
         popno = -1
         sortrev = False
-    elif reverse == False and topdown == False:
+    elif not reverse and not topdown:
         popno = 0
         sortrev = False
-    elif reverse == True and topdown == False:
+    elif reverse and not topdown:
         popno = 0
         sortrev = True
-    else: # reverse == False and topdown == True
+    else:  # not reverse and not topdown
         popno = -1
         sortrev = True
 

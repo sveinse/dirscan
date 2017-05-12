@@ -380,12 +380,12 @@ def scandirs(left, right, outfile, exclude, opts):
 
         # Assemble the per-directory summaries
         for (fh, pre) in zip(filehist, prefixlist):
-            for e, d in fh.get_summary_fields().items():
+            for field, data in fh.get_summary_fields().items():
 
                 # Replace 'n_' with specified prefix
-                if e.startswith('n_') and len(pre):
-                    e = e[2:]
-                summary_fields[pre + e] = d
+                if field.startswith('n_') and len(pre):
+                    field = field[2:]
+                summary_fields[pre + field] = data
 
         # Get the summary texts
         if any(opts.summary):

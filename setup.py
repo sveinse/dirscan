@@ -12,10 +12,9 @@ free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
 import os
-from codecs import open
-from setuptools import setup, find_packages
 import re
 import io
+from setuptools import setup, find_packages
 
 
 HERE = os.path.dirname(__file__)
@@ -26,7 +25,6 @@ def read(fname):
 
 
 def find_version(fname):
-
     version_file = read(fname)
     version_match = re.search(r"^\s*__version__\s*=\s*['\"]([^'\"]*)['\"]",
                               version_file, re.M)
