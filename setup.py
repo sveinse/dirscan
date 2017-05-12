@@ -18,7 +18,7 @@ import re
 import io
 
 
-HERE = os.path.abspath(os.path.dirname(__file__))
+HERE = os.path.dirname(__file__)
 
 
 def read(fname):
