@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 '''
-This file is a part of dirscan, a handy tool for recursively
+This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2016 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -74,7 +74,7 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
 
     # What does your project relate to?

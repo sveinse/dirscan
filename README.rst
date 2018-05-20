@@ -14,7 +14,7 @@ functions from the command-line.
 Home for the project:
           https://github.com/sveinse/dirscan
 
-Copyright 2010-2016, Svein Seldal <sveinse@seldal.com>
+Copyright 2010-2018, Svein Seldal <sveinse@seldal.com>
 
 This application is licensed under GNU GPL version 3
 <http://gnu.org/licenses/gpl.html>. This is free software: you are

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 '''
-This file is a part of dirscan, a handy tool for recursively
+This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2016 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -11,7 +11,7 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 import stat
 import time
@@ -59,51 +59,54 @@ FILE_FIELDS = {
 
     # Special data-payload of the file. For files: the hashsum, links: the link destination
     'data': lambda o: format_data(o),
+
+    # The device node which the file resides
+    'dev': lambda o: o.dev,
 }
 
 
 COMPARE_ARROWS = {
     # Change type    : ( filter, arrow )
+    'error'          : ('E', 'ERROR'),
     'excluded'       : ('x', '    x'),
     'right_only'     : ('r', '   >>'),
     'left_only'      : ('l', '<<   '),
-    'different_type' : ('d', '~~~~~'),
+    'different_type' : ('t', '<~~~>'),
     'changed'        : ('c', '<--->'),
     'left_newer'     : ('L', '<<-->'),
     'right_newer'    : ('R', '<-->>'),
     'equal'          : ('e', '     '),
-    'error'          : ('E', 'ERROR'),
     'scan'           : ('s', '     '),
 }
 
 
-summary_scan = [
+SUMMARY_SCAN = (
     # Condition,    Text.  Condition is a lookup into summary_dict
     (True,               "\nSummary of '{dir}':"),
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
     ('n_dirs',           "    {n_dirs}  directories"),
     ('n_symlinks',       "    {n_symlinks}  symbolic links"),
     ('n_special',        "    {n_special}  special files  ({n_blkdev} block devices, {n_chrdev} char devices, {n_fifos} fifos, {n_sockets} sockets)"),
-    ('n_exclude',        "    {n_exclude}  excluded files"),
+    ('n_exclude',        "    {n_exclude}  excluded files or directories"),
     (True,               "In total {n_objects} file objects"),
-]
+)
 
 
-summary_compare = [
+SUMMARY_COMPARE = (
     # Condition,    Text.  Condition is a lookup into summary_dict
     (True,               "\nSummary of compare between '{left}' and '{right}':"),
-    ('n_equal',          "    {n_equal}  equal files"),
-    ('n_changed',        "    {n_changed}  changed files"),
+    ('n_equal',          "    {n_equal}  equal files or directories"),
+    ('n_changed',        "    {n_changed}  changed files or directories"),
     ('n_different_type', "    {n_different_type}  files of same name but different type"),
-    ('n_left_only',      "    {n_left_only}  files only in '{left}'"),
-    ('n_right_only',     "    {n_right_only}  files only in '{right}'"),
+    ('n_left_only',      "    {n_left_only}  files or directories only in '{left}'"),
+    ('n_right_only',     "    {n_right_only}  files or directories only in '{right}'"),
     ('n_left_newer',     "    {n_left_newer}  newer files in '{left}'"),
     ('n_right_newer',    "    {n_right_newer}  newer files in '{right}'"),
     ('n_scan',           "    {n_scan}  scanned objects in '{left}'"),
-    ('n_excludes',       "    {n_excludes}  excluded files"),
-    ('n_errors',         "    {n_errors}  errors"),
+    ('n_excludes',       "    {n_excludes}  excluded files or directories"),
+    ('n_errors',         "    {n_errors}  compare errors"),
     (True,               "In total {sum_objects} file objects"),
-]
+)
 
 
 
@@ -279,11 +282,13 @@ def format_data(obj):
 
 
 def format_user(uid):
+    ''' Return the username for the given uid '''
     return pwd.getpwuid(uid).pw_name
 
 
 
 def format_group(gid):
+    ''' Return the group name for the given gid '''
     return grp.getgrgid(gid).gr_name
 
 
@@ -293,7 +298,7 @@ def format_group(gid):
 # INFO PRINT FUNCTIONS
 # ====================
 #
-def get_fileinfo(path, ob, change, text, prefixlist, formatlist):
+def get_fileinfo(path, objs, change, text, prefixlist, formatlist):
 
     # The base fields
     fields = {
@@ -316,7 +321,7 @@ def get_fileinfo(path, ob, change, text, prefixlist, formatlist):
             if field is None or field in fields:
                 continue
 
-            for (obj, prefix) in zip(ob, prefixlist):
+            for (obj, prefix) in zip(objs, prefixlist):
 
                 # Consider only fieldnames with the specific prefix
                 if not field.startswith(prefix):
@@ -333,7 +338,7 @@ def get_fileinfo(path, ob, change, text, prefixlist, formatlist):
                     if data is None:
                         data = ''
                 except (IOError, OSError) as e:
-                    data = '**-VOID-**'
+                    data = '**-ERROR-**'
                     err = e
 
                 # Store the field (as string)
@@ -420,5 +425,6 @@ class CompareHistogram(Histogram):
             'n_scan': self.get('scan'),
             'n_excludes': self.get('excluded'),
             'n_errors': self.get('error'),
-            'sum_objects': sum(self.d.values()),
+            'n_err': self.get('err'),
+            'sum_objects': sum(self.d.values())-self.get('err'),
         }

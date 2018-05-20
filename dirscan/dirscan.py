@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 '''
-This file is a part of dirscan, a handy tool for recursively
+This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2016 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -11,7 +11,7 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 import os
 import datetime
@@ -20,6 +20,7 @@ import itertools
 import hashlib
 import errno
 import filecmp
+import fnmatch
 
 
 # Select hash algorthm to use
@@ -28,9 +29,6 @@ HASHALGORITHM = hashlib.sha256
 
 class DirscanException(Exception):
     ''' Directory scan error '''
-
-class DirscanParseError(Exception):
-    ''' Error while parsing or scanning directories '''
 
 
 
@@ -44,7 +42,8 @@ class DirscanParseError(Exception):
 class BaseObj(object):
     ''' File Objects Base Class '''
     parsed = False
-    hasparent = False
+    excluded = False
+    objname = 'Base'
 
     # Standard file entries
     stat = None
@@ -52,6 +51,7 @@ class BaseObj(object):
     uid = None
     gid = None
     size = None
+    dev = None
     mtime = None
 
 
@@ -74,6 +74,7 @@ class BaseObj(object):
         self.uid = self.stat.st_uid
         self.gid = self.stat.st_gid
         self.size = self.stat.st_size
+        self.dev = self.stat.st_dev
         self.mtime = datetime.datetime.fromtimestamp(self.stat.st_mtime)
         self.parsed = done
 
@@ -94,13 +95,13 @@ class BaseObj(object):
         if s is None:
             s = []
         if type(other) is not type(self):
-            return ['Type mismatch']
+            return ['type mismatch']
         if self.uid != other.uid:
             s.append('UID differs')
         if self.gid != other.gid:
             s.append('GID differs')
         if self.mode != other.mode:
-            s.append('Permissions differs')
+            s.append('permissions differs')
         if self.mtime > other.mtime:
             s.append('newer')
         elif self.mtime < other.mtime:
@@ -112,6 +113,28 @@ class BaseObj(object):
     def get(self, k, v):
         return v
 
+
+    def __repr__(self):
+        return "%s('%s')" %(type(self).__name__, self.fullpath)
+
+
+    def exclude_otherfs(self, base):
+        ''' Set excluded flag if this object differs from fs '''
+
+        # Note that self.excluded will be set on NonExistingObj() since they
+        # have dev = None
+        if self.dev != base.dev:
+            self.excluded = True
+
+
+    def exclude_files(self, excludes, base):
+        ''' Set excluded flag if any of the entries in exludes matches
+            this object '''
+        for ex in excludes:
+            ex = os.path.join(base.fullpath, ex)
+            if fnmatch.fnmatch(self.fullpath, ex):
+                self.excluded = True
+                return
 
 
 class FileObj(BaseObj):
@@ -188,10 +211,16 @@ class LinkObj(BaseObj):
 
 
 
-class DirObj(BaseObj, dict):
+class DirObj(BaseObj):
     ''' Directory File Object '''
     objtype = 'd'
     objname = 'directory'
+
+
+    def __init__(self, path, name, stat=None):
+        BaseObj.__init__(self, path, name, stat)
+        self.dir = {}
+        self.dir_parsed = False
 
 
     def parse(self, done=True):
@@ -201,27 +230,31 @@ class DirObj(BaseObj, dict):
         BaseObj.parse(self, done=False)
         self.size = None
 
-        # Try to get list of sub directories and make new sub object
-        for name in os.listdir(self.fullpath):
-            self[name] = newFromFS(self.fullpath, name)
         self.parsed = True
 
 
     def close(self):
         ''' Delete all used references to allow GC cleanup '''
-        self.clear()
+        self.dir.clear()
+        self.dir_parsed = False
         BaseObj.close(self)
 
 
     def children(self):
         ''' Return a dict of the sub objects '''
-        c = {}
-        c.update(self)
-        return c
+        if not self.dir_parsed:
+
+            # Try to get list of sub directories and make new sub object
+            for name in os.listdir(self.fullpath):
+                self.dir[name] = create_from_fs(self.fullpath, name)
+
+            self.dir_parsed = True
+
+        return self.dir.copy()
 
 
     def get(self, k, v):
-        return dict.get(self, k, v)
+        return self.dir.get(k, v)
 
 
 
@@ -268,8 +301,8 @@ class SpecialObj(BaseObj):
 
 class NonExistingObj(BaseObj):
     ''' NonExisting File Object. Evaluates to false for everything. Used by the
-        walk2dirs() when parsing two trees in parallell to indicate a
-        non-existing file object. '''
+        walkdirs() when parsing multiple trees in parallell to indicate a
+        non-existing file object in one or more of the trees. '''
     objtype = '-'
     objname = 'missing file'
 
@@ -280,12 +313,12 @@ class NonExistingObj(BaseObj):
 
 ############################################################
 #
-#  DIRECTORY TRAVERSER
-#  ===================
+#  OBJECT FACTORIES
+#  ================
 #
 ############################################################
 
-def newFromFS(path, name):
+def create_from_fs(path, name):
     ''' Create a new object from file system path and return an
         instance of the object. The object type returned is based on
         stat of the actual file system entry.'''
@@ -308,12 +341,12 @@ def newFromFS(path, name):
     elif fstat.S_ISSOCK(t):
         o = SpecialObj(path, name, s, 's')
     else:
-        raise DirscanParseError("%s: Uknown file type" %(fullpath))
+        raise DirscanException("%s: Uknown file type" %(fullpath))
     return o
 
 
 
-def newFromData(path, name, objtype, size, mode, uid, gid, mtime, data=None):
+def create_from_data(path, name, objtype, size, mode, uid, gid, mtime, data=None):
     ''' Create a new object from the given data and return an
         instance of the object. '''
     o = None
@@ -358,93 +391,119 @@ def newFromData(path, name, objtype, size, mode, uid, gid, mtime, data=None):
 #
 ############################################################
 
+def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
+             traverse_oneside=None, exception_fn=None):
+    ''' Generator function that traverses the directories in list/tuple dirs
+        simultaneously in paralell. This function is useful for scanning a file
+        system, and for comparing two or more directories.
 
-def walkdirs(dirs, reverse=False, topdown=True):
-    ''' Generator function that traverses the directories 'dirs' '''
+        As it walks down the directories, for each file object it finds it will
+        it will yield a tuple containing (path, objs). path represents the
+        common file path. objs is a tuple of objects representing the found
+        file/directory-object found in the directory tree from the dirs list.
+        The entries in objs represents the file objects, such as FileObj,
+        DirObj, all derived from the BaseObj class. If a file is only present
+        in one of the trees, the object returned in the other tree(s) where
+        the file isn't present, will be returned as NonExistingObj() object.
+    '''
 
-    # Check list of dirs indeed are dirs and create initial object list
-    objs = []
+    # Ensure the exclusion list is a list
+    if excludes is None:
+        excludes = []
+
+    # Set default of traverse_oneside depending on if one-dir scanning or
+    # comparing multiple dirs
+    if traverse_oneside is None:
+        traverse_oneside = True if len(dirs) == 1 else False
+
+    # Check list of dirs indeed are dirs and create initial object list to
+    # start from
+    base = []
     for d in dirs:
         if isinstance(d, DirObj):
             o = d
         elif os.path.isdir(d):
             o = DirObj('', d)
         else:
-            raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), d)
-        o.hasparent = True
-        objs.append(o)
+            e = OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), d)
+            raise DirscanException(str(e))
+        base.append(o)
 
+        # Parse the object to get the device.
+        try:
+            o.parse()
+            o.children()   # To force an exception here if permission denied
+        except OSError as err:
+            raise DirscanException(str(err))
 
-    # Get a base path to determine the relative directory path
-    basepath = dirs[0]
-    if isinstance(basepath, DirObj):
-        basepath = basepath.name
+    # Start the queue
+    queue = [tuple(base)]
 
-
-    # popno controls which object is taken next from the objects list. -1 is the
-    # last, while 0 is the first. sortrev controls the order of the list going
-    # into the object's list.  Since the loop adds to the end of the objects
-    # list, the default parsing (that is reverse=False and topdown=True) is to
-    # pick the last object with popno=-1 and populate the object list in
-    # reversed order (for a to be picked first)
-    if reverse and topdown:
-        popno = -1
-        sortrev = False
-    elif not reverse and not topdown:
-        popno = 0
-        sortrev = False
-    elif reverse and not topdown:
-        popno = 0
-        sortrev = True
-    else:  # not reverse and not topdown
-        popno = -1
-        sortrev = True
-
-
-    # Push the top-level directories on the queue to start the traversal
-    queue = [objs]
-
-    while len(queue):
+    # Traverse the queue
+    while queue:
 
         # Get the next set of objects
-        objs = queue.pop(popno)
-
-        # Parse the objects (which investigates the objects and and creates
-        # children objects if present)
-        for o in objs:
-            try:
-                o.parse()
-                o.parserr = None
-            except OSError as e:
-                o.parserr = e
-
-        # ^^ FIXME: This leads to a very anonymous failure. It will probably be
-        #           better to replace this with a separate error object type
-        #           which contains the file object inside.
+        objs = queue.pop(-1)
 
         # Relative path: Gives '.', './a', './b'
-        path = objs[0].fullpath.replace(basepath, '.', 1)
+        path = objs[0].fullpath.replace(base[0].name, '.', 1)
+
+        # Parse the objects, getting object metadata
+        for o, b in zip(objs, base):
+            try:
+                # Get file object metadata
+                o.parse()
+
+                # Test for exclusions
+                o.exclude_files(excludes, base=b)
+                if onefs:
+                    o.exclude_otherfs(base=b)
+
+            # Parsing the object failed
+            except OSError as err:
+                # Call the user exception callback, raise if not
+                if not exception_fn or not exception_fn(err):
+                    raise
+
+        # How many objects are present?
+        present = sum([not isinstance(o, NonExistingObj) and not o.excluded for o in objs])
 
         # Send back object list to caller
         yield (path, objs)
 
-        # Create a list of unique children names seen across all objects
-        names = sorted(set(itertools.chain.from_iterable(o.children().keys() for o in objs)),
-                       reverse=sortrev)
+        # Create a list of unique children names seen across all objects, where
+        # excluded objects are removed from parsing
+        subobjs = []
+        for o in objs:
+            try:
+                # Skip the children if...
 
-        # Iterate over all unique children names
+                # ...the parent is excluded
+                if o.excluded:
+                    continue
+
+                # ..the parent is the only one
+                if not traverse_oneside and present == 1:
+                    continue
+
+                # Get and append the children names
+                subobjs.append(o.children().keys())
+
+            # Getting the children failed
+            except OSError as err:
+                # Call the user exception callback, raise if not
+                if not exception_fn or not exception_fn(err):
+                    raise
+
+        # Merge all subobjects into a single list of unique, sorted, children names
         children = []
-        for n in names:
+        for name in sorted(set(itertools.chain.from_iterable(subobjs)), reverse=not reverse):
 
-            # Create a list of children object with name n
-            child = [o.get(n, NonExistingObj(os.path.join(o.path, o.name), n)) for o in objs]
-
-            # Set the hasparent if the parent object is a real file object
-            for c, o in zip(child, objs):
-                c.hasparent = type(o) is not NonExistingObj
+            # Create a list of children objects for that name
+            child = [o.get(name, NonExistingObj(o.fullpath, name)) for o in objs]
 
             # Append it to the processing list
-            children.append(child)
+            children.append(tuple(child))
 
         # Close objects to conserve memory
         for o in objs:
