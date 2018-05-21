@@ -63,8 +63,9 @@ setup(
         'Development Status :: 4 - Beta',
 
         # Indicate who your project is intended for
-        #'Intended Audience :: Developers',
-        #'Topic :: Software Development :: Build Tools',
+        'Intended Audience :: Developers',
+        'Intended Audience :: System Administrators',
+        'Topic :: Utilities',
 
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
