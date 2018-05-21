@@ -15,3 +15,8 @@ extent permitted by law.
 #from .dirscan import *
 
 __version__ = '0.9'
+
+
+from .dirscan import walkdirs, create_from_fs, create_from_data
+from .dirscan import DirscanException
+from .dirscan import FileObj, LinkObj, DirObj, SpecialObj, NonExistingObj

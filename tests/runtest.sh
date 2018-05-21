@@ -26,7 +26,7 @@ test_01b () {
     tsetup $FUNCNAME "Simple directory scan, verbose"
     mk_dir a
 
-    trun a -al -cEs --summary
+    trun a -als
     tclean
 }
 
@@ -44,7 +44,7 @@ test_02b () {
     mk_dir a
     mk_dir b
 
-    trun a b -al -celrcLRtEx --summary
+    trun a b -als
     tclean
 }
 
@@ -65,7 +65,7 @@ test_03b () {
     mk_dir b
     rm -rf a/d
 
-    trun a b -al -celrcLRtEx --summary
+    trun a b -als
     tclean
 }
 
@@ -85,11 +85,16 @@ test_04b () {
     mk_dir b
     rm -rf a/d
 
-    trun a b -al -celrcLRtEx --summary -t
+    trun a b -alst
     tclean
 }
 
-test_05 () {
+
+#=============================================================================
+# Coverage tests
+#=============================================================================
+
+test_c01 () {   # FIXME: Not done yet
     tsetup $FUNCNAME "All compare difference"
     mkdir -p a b
     touch a/empty b/empty
@@ -105,26 +110,99 @@ test_05 () {
     techo "left" a/change
     techo "right" b/change
 
-    trun a -al -cEs --summary
-    trun b -al -cEs --summary
-    trun a b -al -celrcLRtEx -X exclude -X l_exclude -X r_exclude --summary
+    trun a -als
+    trun b -als
+    trun a b -als -X exclude -X l_exclude -X r_exclude
     tclean
 }
 
 
 #=============================================================================
-# Order tests
+# Scan-file tests
+#=============================================================================
+
+test_s01 () {
+    tsetup $FUNCNAME "Save scan file"
+    mk_dir a
+
+    trun a -o scanfile.txt -s
+    cat scanfile.txt
+    tclean
+}
+
+test_s02 () {
+    tsetup $FUNCNAME "Read from scan file"
+    mk_dir a
+
+    trun -als a
+    trun a -o scanfile.txt
+    trun -als --input scanfile.txt
+    tclean
+}
+
+test_s03 () {
+    tsetup $FUNCNAME "Compare with scan file"
+    mk_dir a
+
+    trun -als a
+    trun a -o scanfile.txt
+    trun -als --input scanfile.txt a
+    tclean
+}
+
+test_s04 () {
+    tsetup $FUNCNAME "Generate scanfile from scanfile"
+    mk_dir a
+
+    trun -als a
+    trun a -o scanfile.txt
+    trun -als --input scanfile.txt -o scanfile2.txt
+    (set -x; diff scanfile.txt scanfile2.txt)
+    tclean
+}
+
+test_s05 () {
+    tsetup $FUNCNAME "Compare scanfile with scanfile"
+    mk_dir a
+
+    trun -als a
+    trun a -o scanfile.txt
+    trun -als --input --right scanfile.txt scanfile.txt
+    tclean
+}
+
+test_s06 () {
+    tsetup $FUNCNAME "Scan file comparison with excluded fs"
+    mkdir -p a/tmp
+    techo "file" a/file
+    (set -x; sudo mount -t tmpfs tmpfs a/tmp)
+    mkdir a/tmp/three
+    touch a/tmp/one a/tmp/a a/tmp/three/file
+
+    trun a -x -o scanfile.txt
+    cat scanfile.txt
+    trun -alsx --input scanfile.txt a
+
+    (set -x; sudo umount a/tmp)
+    tclean
+
+}
+
+
+#=============================================================================
+# Ordering tests
 #=============================================================================
 
 test_o01 () {
-    tsetup $FUNCNAME "Basic directory scan"
+    tsetup $FUNCNAME "Directory scan, ascending"
     mk_dir a
 
     trun a
     tclean
 }
+
 test_o02 () {
-    tsetup $FUNCNAME "Basic directory scan, reverse"
+    tsetup $FUNCNAME "Directory scan, descending"
     mk_dir a
 
     trun a --reverse
@@ -133,7 +211,7 @@ test_o02 () {
 
 
 #=============================================================================
-# Top-level tests
+# Top-level type tests
 #=============================================================================
 
 test_t01 () {
@@ -199,7 +277,7 @@ test_p02 () {
     echo "file" >a/file
     chmod 0000 a/one a/file
 
-    trun a -al -cEs --summary
+    trun a -als
 
     chmod +rwx a/one a/file
     tclean
@@ -213,9 +291,9 @@ test_p03 () {
     touch a/empty b/empty
     chmod 0000 a/one a/file
 
-    trun a   -al -cEs --summary
-    trun b   -al -cEs --summary
-    trun a b -al -celrcLRtEx --summary
+    trun a   -als
+    trun b   -als
+    trun a b -als
 
     chmod +rwx a/one a/file
     tclean
@@ -228,9 +306,9 @@ test_p04 () {
     techo "file" a/file b/file
     chmod 0000 a/one b/one a/file b/file
 
-    trun a   -al -cEs --summary
-    trun b   -al -cEs --summary
-    trun a b -al -celrcLRtEx --summary
+    trun a   -als
+    trun b   -als
+    trun a b -als
 
     chmod +rwx a/one b/one a/file b/file
     tclean
@@ -249,7 +327,7 @@ test_x01 () {
     mkdir a/tmp/three
     touch a/tmp/one a/tmp/a a/tmp/three/file
 
-    trun -alx -cEsx --format="{arrow}  {mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}" a --summary
+    trun -alxs --format="{arrow}  {mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}" a
 
     (set -x; sudo umount a/tmp)
     tclean
@@ -263,10 +341,10 @@ test_x02 () {
     mkdir a/tmp/three b/tmp/three
     touch a/tmp/one a/tmp/a a/tmp/three/file b/tmp/one b/tmp/b b/tmp/three/file
 
-    trun a   -al -cEs --summary
-    trun b   -al -cEs --summary
-    trun a b -al -x -celrcLRtEx --summary
-    trun a b -al -x -t -celrcLRtEx --summary
+    trun a   -als
+    trun b   -als
+    trun a b -alxs
+    trun a b -alxts
 
     (set -x; sudo umount a/tmp)
     tclean
@@ -281,10 +359,10 @@ test_x03 () {
     mkdir a/tmp/three b/tmp/three
     touch a/tmp/one a/tmp/a a/tmp/three/file b/tmp/one b/tmp/b b/tmp/three/file
 
-    trun a   -al -cEs --summary
-    trun b   -al -cEs --summary
-    trun a b -al -x -celrcLRtEx --summary
-    trun a b -al -x -t -celrcLRtEx --summary
+    trun a   -als
+    trun b   -als
+    trun a b -alxs
+    trun a b -alxts
 
     (set -x; sudo umount a/tmp)
     (set -x; sudo umount b/tmp)
@@ -299,9 +377,9 @@ test_x04 () {
     mkdir a/tmp/three
     touch a/tmp/one a/tmp/a a/tmp/three/file
 
-    trun a   -al -cEs --summary
-    trun b   -al -cEs --summary
-    trun a b -al -x -celrcLRtEx --summary
+    trun a   -als
+    trun b   -als
+    trun a b -alxs
 
     (set -x; sudo umount a/tmp)
     tclean
@@ -314,7 +392,7 @@ test_x05 () {
     mkdir a/tmp/three
     touch a/tmp/one a/tmp/a a/tmp/three/file
 
-    trun -al -X tmp -cEsx --format="{arrow}  {mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}" a --summary
+    trun -als -X tmp --format="{arrow}  {mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}" a
 
     tclean
 }
@@ -326,9 +404,9 @@ test_x06 () {
     mkdir a/tmp/three b/tmp/three
     touch a/tmp/one a/tmp/a a/tmp/three/file b/tmp/one b/tmp/b b/tmp/three/file
 
-    #trun a   -al -cEs --summary
-    #trun b   -al -cEs --summary
-    trun a b -al -X tmp -celrcLRtEx --summary
+    #trun a   -als
+    #trun b   -als
+    trun a b -als -X tmp
 
     tclean
 }
@@ -338,12 +416,18 @@ test_x06 () {
 
 
 # Basic tests
-tests="$tests 01 01b 02 02b 03 03b 04 04b 05"
+tests="$tests 01 01b 02 02b 03 03b 04 04b"
+
+# Coverage tests
+tests="$tests c01"
+
+# Scan-file tests
+tests="$tests s01 s02 s03 s04 s05 s06"
 
 # Ordering tests
 tests="$tests o01 o02"
 
-# Top-level tests
+# Top-level type tests
 tests="$tests t01 t02 t03 t04"
 
 # Permission tests

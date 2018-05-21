@@ -16,80 +16,18 @@ from __future__ import absolute_import, division, print_function
 import sys
 import os
 import argparse
-import datetime
 
 from . import __version__
 from . import dirscan
 from . import fileinfo
+from .scanfile import SCANFILE_FORMAT, readscanfile
 
 
 #
-# SCAN FILE READER
-# ================
-#
-SCANFILE_FORMAT = "{type},{size},{mode},{uid},{gid},{mtime_n},{data},{path}"
+# OBJECT COMPARATORS
+# ==================
 
-def readscanfile(fname):
-    ''' Read fname scan file and return a DirObj() with the file tree root '''
-
-    dirtree = {}
-    rootobj = None
-
-    with open(fname, 'r') as f:
-        lineno = 0
-        for line in f:
-            lineno += 1
-
-            # Read/parse the parameters (must be aliged with SCANFILE_FORMAT)
-            args = [fileinfo.unquote(e) for e in line.rstrip().split(',')]
-            otype = args[0]
-            osize = int(args[1] or '0')
-            omode = int(args[2])
-            ouid = int(args[3])
-            ogid = int(args[4])
-            otime = datetime.datetime.fromtimestamp(float(args[5]))
-            odata = args[6] or None
-            opath = args[7]
-
-            if opath == '.':
-                opath = fname
-            elif opath.startswith('./'):
-                opath = opath.replace('./', fname+'/', 1)
-
-            # Split path into path and name
-            (path, name) = os.path.split(opath)
-            if path.endswith('/'):
-                path = path[:-1]
-
-            # Create new object.
-            obj = dirscan.create_from_data(path, name, otype, osize, omode,
-                                           ouid, ogid, otime, odata)
-
-            # The first object is special
-            if path == '':
-                rootobj = obj
-                dirtree[opath] = obj
-            else:
-                # Add the object into the parent's children
-                dirtree[path][name] = obj
-
-            # Make sure we make an entry into the dirtree to ensure
-            # we have a list of the parents
-            if otype == 'd':
-                dirtree[opath] = obj
-
-    if not rootobj:
-        raise dirscan.DirscanException("Scanfile '%s' is empty" %(fname,))
-
-    # Now the tree should be populated
-    return rootobj
-
-
-
-#
-# OBJECT COMPARATOR
-# =================
-def dir_compare1(objs, ignores='', compare_dates=False):
+def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
     ''' Object comparator for 1 dir. Returns tuple with (change, text) '''
 
     # Comparison matrix for 1 dir
@@ -105,7 +43,8 @@ def dir_compare1(objs, ignores='', compare_dates=False):
     return ('scan', 'scan')
 
 
-def dir_compare2(objs, ignores='', compare_dates=False):
+
+def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     ''' Object comparator for two dirs. Returns a tuple with (change, text) '''
 
     # Comparison matrix for 2 dirs
@@ -134,6 +73,8 @@ def dir_compare2(objs, ignores='', compare_dates=False):
         # File present RIGHT only
         # =======================
         text = "%s only in right" %(objs[1].objname,)
+        if objs[1].excluded:
+            return ('excluded', 'excluded, only in right')
         if objs[0].excluded:
             text += ", left is excluded"
         return ('right_only', text)
@@ -143,6 +84,8 @@ def dir_compare2(objs, ignores='', compare_dates=False):
         # ======================
         text = "%s only in left" %(objs[0].objname,)
         if objs[0].excluded:
+            return ('excluded', 'excluded, only in left')
+        if objs[1].excluded:
             text += ", right is excluded"
         return ('left_only', text)
 
@@ -156,6 +99,12 @@ def dir_compare2(objs, ignores='', compare_dates=False):
 
     # File type EQUAL
     # ===============
+
+    # Unless we're not intersted in these comparetypes, then we don't have
+    # to spend time on making the compare (which can be time consuming)
+    needcompare=set('cLRe')
+    if not needcompare.intersection(comparetypes):
+        return ('skipped', 'compare skipped')
 
     # compare returns a list of differences. If None, they are equal
     # This might fail, so be prepared to catch any errors
@@ -210,6 +159,13 @@ def dir_compare2(objs, ignores='', compare_dates=False):
 def scandirs(left, right, opts):
     ''' Scan dirs '''
 
+
+    # Create the list of directories to traverse
+    dirs = [left]
+    if right is not None:
+        dirs.append(right)
+
+
     #
     # Determine print format
     # ----------------------
@@ -250,14 +206,15 @@ def scandirs(left, right, opts):
     else:
         dir_comparator = dir_compare2
         fmt = '{arrow}  {path}  :  {text}'
-        comparetypes = 'rldcLR'
-        filetypes = 'fdlbxps'
+        comparetypes = 'rltcLR'
+        filetypes = 'fdlbcps'
 
         # Does outfile make any sense in compare mode?
 
-        if opts.all:
-            comparetypes = ''.join([
-                fileinfo.COMPARE_ARROWS[x][0] for x in fileinfo.COMPARE_ARROWS])
+    # The all option will show all compare types
+    if opts.all:
+        comparetypes = ''.join([
+            fileinfo.COMPARE_ARROWS[x][0] for x in fileinfo.COMPARE_ARROWS])
 
     # User provided format overrides any defaults
     fmt = opts.format or fmt
@@ -267,15 +224,21 @@ def scandirs(left, right, opts):
 
 
     # Prepare the histograms to collect statistics
-    comparehist = fileinfo.CompareHistogram(left, right)
+    s_left = left.fullpath if isinstance(left, dirscan.BaseObj) else left
+    s_right = right.fullpath if isinstance(right, dirscan.BaseObj) else right
+    comparehist = fileinfo.CompareHistogram(s_left, s_right)
     if right is None:
-        filehist = [fileinfo.FileHistogram(left)]
+        filehist = [fileinfo.FileHistogram(s_left)]
         prefixlist = ['']
     else:
-        filehist = [fileinfo.FileHistogram(left), fileinfo.FileHistogram(right)]
+        filehist = [fileinfo.FileHistogram(s_left), fileinfo.FileHistogram(s_right)]
         prefixlist = ['l_', 'r_']
 
 
+    #
+    # Directory scanning
+    # -------------------
+    #
 
     f = None
     try:
@@ -302,20 +265,8 @@ def scandirs(left, right, opts):
                 formatlist.append(fmt)
 
 
-        # If either left or write is file, they should be parsed as scan files
-        if os.path.isfile(left):
-            left = readscanfile(left)
-        if right and os.path.isfile(right):
-            right = readscanfile(right)
-
-
-        # Create the list of directories to traverse
-        dirs = [left]
-        if right is not None:
-            dirs.append(right)
-
-
         def error_handler(exception):
+            ''' Callback for handling scanning errors during parsing '''
             comparehist.add('err')
             if not opts.realquiet:
                 sys.stderr.write('%s: %s\n' %(opts.prog, exception))
@@ -330,55 +281,55 @@ def scandirs(left, right, opts):
                 traverse_oneside=opts.traverse_oneside,
                 exception_fn=error_handler):
 
-            show = True
-            fields = {}
-
-            # Save file histogram info
-            for (o, fh) in zip(objs, filehist):
-                ot = 'x' if o.excluded else o.objtype
-                fh.add(ot)
-                if ot == 'f':
-                    fh.add_size(o.size)
-
             # Compare the objects
             try:
                 (change, text) = dir_comparator(
                     objs,
                     ignores=opts.ignore,
+                    comparetypes=comparetypes,
                     compare_dates=opts.compare_dates)
             except IOError as err:
-                # Errors here are due to comparisons that fail. Add them
-                # as errors
+                # Errors here are due to comparisons that fail.
                 error_handler(err)
                 change = 'error'
-                fields['change'] = change
+                #fields['change'] = change
                 text = 'Compare failed: ' + str(err)
+
+            show = True
 
             # Show this file type?
             if not any([o.objtype in filetypes for o in objs]):
                 show = False
+
+            # Show this compare type?
+            if fileinfo.COMPARE_ARROWS[change][0] not in comparetypes:
+                show = False
+
+            # Save file histogram info only if the object is about to be
+            # Printed
+            if show:
+                for (o, fh) in zip(objs, filehist):
+                    ot = 'x' if o.excluded else o.objtype
+                    fh.add(ot)
+                    if ot == 'f':
+                        fh.add_size(o.size)
 
             # Get dict of file info fields used by the formatlist
             if show:
                 (err, fields) = fileinfo.get_fileinfo(path, objs, change, text,
                                                       prefixlist, formatlist)
                 if err:
-                    # Errors here is because the field could not be read, e.g.
-                    # hashsum
+                    # Errors here is because the field could not be read,
+                    # e.g. from hashsum
                     error_handler(err)
 
-            # Bail out if the change type is excluded from the show filter
-            if fileinfo.COMPARE_ARROWS[change][0] not in comparetypes:
-                show = False
+                # Print to default stdout (used if writing to file)
+                if doprint:
+                    fileinfo.write_fileinfo(printfmt, fields)
 
-            # Print to stdout (used if writing to file)
-            if show and doprint:
-                fileinfo.write_fileinfo(fields, printfmt, quoter=lambda a: a,
-                                        out=sys.stdout)
-
-            # Write to stdout or file
-            if show and dowrite:
-                fileinfo.write_fileinfo(fields, fmt, quoter=quoter, out=f)
+                # Write to stdout or file
+                if dowrite:
+                    fileinfo.write_fileinfo(fmt, fields, quoter=quoter, file=f)
 
             # Save histogram info for the change type
             comparehist.add(change)
@@ -390,27 +341,31 @@ def scandirs(left, right, opts):
             f.close()
 
 
-    #has_errors = False
-    if opts.summary is not None:
+    #
+    # Summary printing
+    # ----------------
+    #
 
-        summary_fields = {
-            'prog':  opts.prog,
-        }
+    summary_text = []
+    summary_fields = {
+        'prog':  opts.prog,
+    }
 
-        # Get the global comparison summary
-        summary_fields.update(comparehist.get_summary_fields())
+    # Get the global comparison summary
+    summary_fields.update(comparehist.get_summary_fields())
 
-        # Assemble the per-directory summaries
-        for (fh, pre) in zip(filehist, prefixlist):
-            for field, data in fh.get_summary_fields().items():
+    # Assemble the per-directory summaries
+    for (fh, pre) in zip(filehist, prefixlist):
+        for field, data in fh.get_summary_fields().items():
 
-                # Replace 'n_' with specified prefix
-                if field.startswith('n_') and pre:
-                    field = field[2:]
-                summary_fields[pre + field] = data
+            # Replace 'n_' with specified prefix
+            if field.startswith('n_') and pre:
+                field = field[2:]
+            summary_fields[pre + field] = data
 
-        # Get the summary texts
-        if any(opts.summary):
+    # Get the summary texts
+    if opts.enable_summary:
+        if opts.summary:
             summary_text = [(True, s) for s in opts.summary]
         else:
             if right is None:
@@ -418,25 +373,24 @@ def scandirs(left, right, opts):
             else:
                 summary_text = list(fileinfo.SUMMARY_COMPARE)
 
-            if not opts.realquiet:
-                summary_text.append(
-                    ('n_err',
-                     "\n{prog}: **** {n_err} files or directories could not be read")
-                )
+    # Append final warning for errors
+    summary_text.append(
+        ('n_err',
+            "\n{prog}: **** {n_err} files or directories could not be read")
+    )
 
-        # Print the summary text
-        try:
-            # Use the pre-defined summary_text
-            for (doprint, line) in summary_text:
-                # d.get(n,n) will return the d value for n if n exists, otherwise return n.
-                # Thus if n is True, True will be returned
-                if line is not None and summary_fields.get(doprint, doprint):
-                    sys.stderr.write(line.format(**summary_fields)+'\n')
+    # Print the summary text
+    try:
+        # Use the pre-defined summary_text
+        for (doprint, line) in summary_text:
+            # d.get(n,n) will return the d value for n if n exists, otherwise return n.
+            # Thus if n is True, True will be returned
+            if line is not None and summary_fields.get(doprint, doprint):
+                sys.stderr.write(line.format(**summary_fields)+'\n')
 
-        # .format() might fail
-        except (KeyError, IndexError, ValueError) as err:
-            raise SyntaxError("Format error: %s" %(err))
-
+    # .format() might fail
+    except (KeyError, IndexError, ValueError) as err:
+        raise SyntaxError("Format error: %s" %(err))
 
     # Return error code if we have encountered any errors scanning
     if comparehist.get('err'):
@@ -462,8 +416,8 @@ Tool for scanning and comparing directories.
 
 A single DIR argument will traverse the given directory and print the contents,
 similar to ls or find, and can provide a summary of the found files. It can
-save the file list with file metadata, including sha256 hashsum of the file,
-using the -o option.
+save the file list into a scanfile with the -o option. The scanfile stores
+all files metadata, including sha256 hashsum of the file.
 
 A DIR1 DIR2 argument is used to compare directories, showing differences
 between DIR1 and DIR2. DIR1 or DIR2 can be either a directory or a previous
@@ -475,47 +429,227 @@ free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 
 '''
-    epilog = ''
+    format_help = '''
+format template:
+  The --format, -F, option enables printing custom lines for each of the
+  scanned files. The argument is a string using Python str.format() syntax.
 
-    ap = argparse.ArgumentParser(description=description, epilog=epilog, add_help=False)
+  The scan/compare fields:
+    {path}              Common, relative path
+    {change}            Compare relationship, e.g. 'equal'
+    {arrow}             ASCII graphics for ease of indication
+    {text}              Human readable text for the change
+
+  Supported file fields:
+    {name}              Name of the file or directory
+    {fullpath}          Full path of the file or directory
+    {user}              Username
+    {uid}               User ID
+    {group}             The group name
+    {gid}               Group ID
+    {mode}              The mode fields as a number
+    {mode_t}            Text representation of the mode field
+    {type}              File type, f=file, d=dir, l=link, b=block device,
+                        c=char device, p=pipe, s=socket
+    {size}              File size
+    {size_h}            File size in human readable size
+    {mtime}             Modify time
+    {mtime_n}           Modify time in integer
+    {data}              Data field. The hashsum for files and the link target
+                        for symlinks
+    {dev}               The device number for the filesystem
+  In compare mode, the fields for the left and right file objects can be
+  accessed by prefixing with 'l_' or 'r_'. e.g. {l_name}.
+
+summary template:
+  The --summary option enables custom output fields when printing the
+  statistics at the end of execution.
+
+  Supported summary fields when scanning:
+    {dir}               The base directory
+    {n_files}           Count of ordinary files
+    {n_dirs}            Count of directories
+    {n_symlinks}        Count of symlinks
+    {n_special}         Count of special files
+    {n_blkdev}          Count of block device nodes
+    {n_chrdev}          Count of character device nodes
+    {n_fifos}           Count of fifos
+    {n_sockets}         Count of sockets
+    {n_missing}         Count of missing files (in compare)
+    {n_exclude}         Count of excluded objects
+    {n_objects}         Sum of all objects
+    {sum_bytes}         Total number of bytes
+    {sum_bytes_t}       Number of bytes in human readable form
+  In compare mode, the summary fields for the left and right file objects can
+  be accessed by replacing 'n_' with 'l_' or 'r_', e.g. {l_sum_bytes} and
+  {l_files}.
+
+  Supported summary fields in compare mode:
+    {left}              Left side directory
+    {right}             Right side directory
+    {n_equal}           Count of equal comparisons
+    {n_changed}         Count of changed files or directory
+    {n_different_type}  Count of different types
+    {n_left_only}       Count of files only in left side
+    {n_right_only}      Count of files only in right side
+    {n_left_newer}      Count of changed files where left is newest
+    {n_right_newer}     Count of changed files where right is newest
+    {n_scan}            Count of scanned files or folders (not compare)
+    {n_excludes}        Count of excluded files or folders
+    {n_errors}          Count of compare errors
+    {n_skipped}         Count of skipped compares
+    {n_err}             Total number of OS errors
+    {sum_objects}       Total number of objects compared
+'''
+
+    ap = argparse.ArgumentParser(description=description,
+                                 #epilog=format_help,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 add_help=False)
     ap.add_argument('--version', action='version', version='%(prog)s ' + __version__)
     ap.add_argument('--help', action='help')
 
     # Common options
-    ap.add_argument('-a', '--all', action='store_true', dest='all', default=False, help='Print all file info')
-    ap.add_argument('-c', '--compare', metavar='TYPES', action='store', dest='comparetypes', default='', help='Show only compare types e=equal, l=only left, r=only right, c=changed, L=left is newest, R=right is newest, t=different type, E=error, x=excluded')
-    ap.add_argument('-d', '--compare-dates', action='store_true', dest='compare_dates', default=False, help='Compare dates on files which are otherwise equal')
-    ap.add_argument('-f', '--file-types', metavar='TYPES', action='store', dest='filetypes', default='', help='Show only file types. f=files, d=dirs, l=links, b=blkdev, c=chrdev, p=pipes, s=sockets')
-    ap.add_argument('-F', '--format', metavar='TEMPLATE', dest='format', default=None, help='Custom file info line template')
-    ap.add_argument('-h', '--human', action='store_true', dest='human', default=False, help='Display human readable sizes')
-    ap.add_argument('-i', '--ignore', metavar='IGNORES', action='store', dest='ignore', default='', help='Ignore compare differences in u=uid, g=gid, p=permissions, t=time')
-    ap.add_argument('-l', '--long', action='store_true', dest='long', default=False, help='Dump file in extended format')
-    ap.add_argument('-o', '--output', metavar='FILE', action='store', dest='outfile', help='Store scan output in FILE')
-    ap.add_argument('-q', '--quiet', action='store_true', dest='quiet', default=False, help='Quiet operation')
-    ap.add_argument('-Q', '--suppress-errors', action='store_true', dest='realquiet', default=False, help='Suppress error messages')
-    ap.add_argument('-r', '--reverse', action='store_true', dest='reverse', default=False, help='Traverse directories in reverse order')
-    ap.add_argument('-s', '--summary', metavar='SUMMARY_TEMPLATE', nargs='?', action='append', dest='summary', default=None, help='Print scan statistics summary. Optional argument specified custom summary template. The option can be used multiple times for multiple template lines')
-    ap.add_argument('-t', '--traverse-oneside', action='store_true', dest='traverse_oneside', default=False, help='Traverse directories that exists on only one side of comparison')
-    ap.add_argument('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Verbose printing')
-    ap.add_argument('-x', '--one-file-system', action='store_true', dest='onefs', default=False, help="Don't cross filesystem boundaries")
-    ap.add_argument('-X', '--exclude', metavar='PATH', action='append', dest='exclude', default=[], help='Exclude PATH from scan. PATH is relative to DIR')
+    ap.add_argument('-a', '--all', action='store_true', dest='all', default=False,
+                    help='''
+        Print all file info
+        ''')
+    ap.add_argument('-c', '--compare', metavar='TYPES', action='store',
+                    dest='comparetypes', default='', help='''
+        Show only compare relationship TYPES:
+            e=equal,
+            l=left only,
+            r=right only,
+            c=changed,
+            L=left is newest,
+            R=right is newest,
+            t=different type,
+            E=error,
+            x=excluded
+        ''')
+    ap.add_argument('-d', '--compare-dates', action='store_true',
+                    dest='compare_dates', default=False, help='''
+        Compare dates on files which are otherwise equal
+        ''')
+    ap.add_argument('-f', '--file-types', metavar='TYPES', action='store',
+                    dest='filetypes', default='', help='''
+        Show only file types.
+            f=files,
+            d=dirs,
+            l=links,
+            b=blkdev,
+            c=chrdev,
+            p=pipes,
+            s=sockets
+        ''')
+    ap.add_argument('-F', '--format', metavar='TEMPLATE', dest='format',
+                    default=None, help='''
+        Custom file info line template. See FORMAT  ''')
+    ap.add_argument('-h', '--human', action='store_true', dest='human',
+                    default=False, help='''
+        Display human readable sizes
+        ''')
+    ap.add_argument('-i', '--ignore', metavar='IGNORES', action='store',
+                    dest='ignore', default='', help='''
+        Ignore compare differences in u=uid, g=gid, p=permissions, t=time
+        ''')
+    ap.add_argument('-l', '--long', action='store_true', dest='long',
+                    default=False, help='''
+        Dump file in extended format
+        ''')
+    ap.add_argument('-o', '--output', metavar='FILE', action='store',
+                    dest='outfile', help='''
+        Store scan output in FILE
+        ''')
+    ap.add_argument('-q', '--quiet', action='store_true', dest='quiet',
+                    default=False, help='''
+        Quiet operation
+        ''')
+    ap.add_argument('-Q', '--suppress-errors', action='store_true',
+                    dest='realquiet', default=False, help='''
+        Suppress error messages
+        ''')
+    ap.add_argument('-r', '--reverse', action='store_true', dest='reverse',
+                    default=False, help='''
+        Traverse directories in reverse order
+        ''')
+    ap.add_argument('-s', action='store_true', dest='enable_summary',
+                    default=False, help='''
+        Print scan statistics summary.
+        ''')
+    ap.add_argument('--summary', metavar='SUMMARY_TEMPLATE', nargs='*',
+                    action='append', dest='summary', default=None, help='''
+        Print scan statistics summary and provide custom template.
+        ''')
+    ap.add_argument('-t', '--traverse-oneside', action='store_true',
+                    dest='traverse_oneside', default=False, help='''
+        Traverse directories that exists on only one side of comparison
+        ''')
+    ap.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+                    default=False, help='''
+        Verbose printing
+        ''')
+    ap.add_argument('-x', '--one-file-system', action='store_true', dest='onefs',
+                    default=False, help='''
+        Don't cross filesystem boundaries
+        ''')
+    ap.add_argument('-X', '--exclude', metavar='PATH', action='append',
+                    dest='exclude', default=[], help='''
+        Exclude PATH from scan. PATH is relative to DIR
+        ''')
+    ap.add_argument('--left', '--input', action='store_true', dest='left', default=None,
+                    help='''
+        Read LEFT_DIR argument as a scanfile
+        ''')
+    ap.add_argument('--right', action='store_true', dest='right', default=None,
+                    help='''
+        Read RIGHT_DIR argument as a scanfile
+        ''')
+    ap.add_argument('--format-help', action='store_true', dest='formathelp', default=None,
+                    help='''
+        Show help for --format and --summary
+        ''')
 
     # Main arguments
-    ap.add_argument('dir1', metavar='LEFT_DIR', help='Directory to scan/traverse, or LEFT side of comparison')
-    ap.add_argument('dir2', metavar='RIGHT_DIR', help='RIGHT side of comparison if preset', default=None, nargs='?')
-
-    # FIXME:  Other possible options:
-    #   --print0  to safely interact with xargs -0
-    #   --filter  on scan to show only certain kind of file types
+    ap.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',
+                    help='''
+        Directory to scan/traverse, or LEFT side of comparison
+        ''')
+    ap.add_argument('dir2', metavar='RIGHT_DIR', default=None, nargs='?',
+                    help='''
+        RIGHT side of comparison if preset
+        ''')
 
 
     # -- Parsing and washing
     opts = ap.parse_args()
     opts.prog = ap.prog
 
+    # Requested more help?
+    if opts.formathelp:
+        ap.print_help()
+        print(format_help)
+        ap.exit(1)
+
     # Not having onesided traversion in scan mode does not print anything
     if opts.dir2 is None:
         opts.traverse_oneside = True
+
+    # Enable summary if summary templates are given
+    if opts.summary:
+        opts.enable_summary = True
+
+    # Missing options
+    if not opts.dir1:
+        ap.error("Missing LEFT_DIR argument")
+    if opts.right and not opts.dir2:
+        ap.error("Missing RIGHT_DIR argument")
+
+    # Read the scan files
+    if opts.left:
+        opts.dir1 = readscanfile(opts.dir1)
+    if opts.right:
+        opts.dir2 = readscanfile(opts.dir2)
 
 
     # -- COMMAND HANDLING

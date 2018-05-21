@@ -257,6 +257,10 @@ class DirObj(BaseObj):
         return self.dir.get(k, v)
 
 
+    def set_child(self, child):
+        self.dir[child.name] = child
+
+
 
 class SpecialObj(BaseObj):
     ''' Device (block or char) device '''
@@ -368,6 +372,7 @@ def create_from_data(path, name, objtype, size, mode, uid, gid, mtime, data=None
 
     elif objtype == 'd':
         o = DirObj(path, name)
+        o.dir_parsed = True
 
     elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
         o = SpecialObj(path, name, dtype=objtype)
@@ -436,6 +441,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         except OSError as err:
             raise DirscanException(str(err))
 
+    baserepl = './' if base[0].name.startswith('/') else '.'
+
     # Start the queue
     queue = [tuple(base)]
 
@@ -445,8 +452,10 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         # Get the next set of objects
         objs = queue.pop(-1)
 
-        # Relative path: Gives '.', './a', './b'
-        path = objs[0].fullpath.replace(base[0].name, '.', 1)
+        # Relative path: Gives './', './a', './b'
+        path = objs[0].fullpath.replace(base[0].name, baserepl, 1)
+        if path == './':
+            path = '.'
 
         # Parse the objects, getting object metadata
         for o, b in zip(objs, base):

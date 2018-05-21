@@ -13,6 +13,7 @@ extent permitted by law.
 '''
 from __future__ import absolute_import, division, print_function
 
+import sys
 import stat
 import time
 import string
@@ -50,7 +51,7 @@ FILE_FIELDS = {
 
     # The object size
     'size': lambda o: o.size,
-    'size_h': lambda o: format_bytes(o.szie),
+    'size_h': lambda o: format_bytes(o.size),
 
     # Modification time
     'mtime': lambda o: o.mtime.strftime("%Y-%m-%d %H:%M:%S"),
@@ -77,6 +78,7 @@ COMPARE_ARROWS = {
     'right_newer'    : ('R', '<-->>'),
     'equal'          : ('e', '     '),
     'scan'           : ('s', '     '),
+    'skipped'        : ('i', '    -'),
 }
 
 
@@ -94,17 +96,18 @@ SUMMARY_SCAN = (
 
 SUMMARY_COMPARE = (
     # Condition,    Text.  Condition is a lookup into summary_dict
-    (True,               "\nSummary of compare between '{left}' and '{right}':"),
+    (True,               "\nSummary of compare between left '{left}' and right '{right}':"),
     ('n_equal',          "    {n_equal}  equal files or directories"),
     ('n_changed',        "    {n_changed}  changed files or directories"),
     ('n_different_type', "    {n_different_type}  files of same name but different type"),
-    ('n_left_only',      "    {n_left_only}  files or directories only in '{left}'"),
-    ('n_right_only',     "    {n_right_only}  files or directories only in '{right}'"),
-    ('n_left_newer',     "    {n_left_newer}  newer files in '{left}'"),
-    ('n_right_newer',    "    {n_right_newer}  newer files in '{right}'"),
+    ('n_left_only',      "    {n_left_only}  files or directories only in left '{left}'"),
+    ('n_right_only',     "    {n_right_only}  files or directories only in right '{right}'"),
+    ('n_left_newer',     "    {n_left_newer}  newer files in left '{left}'"),
+    ('n_right_newer',    "    {n_right_newer}  newer files in right '{right}'"),
     ('n_scan',           "    {n_scan}  scanned objects in '{left}'"),
     ('n_excludes',       "    {n_excludes}  excluded files or directories"),
     ('n_errors',         "    {n_errors}  compare errors"),
+    ('n_skipped',        "    {n_skipped}  skipped comparisons"),
     (True,               "In total {sum_objects} file objects"),
 )
 
@@ -272,8 +275,6 @@ def format_data(obj):
         their symlink target.
     '''
     if obj.objtype == 'f' and obj.size:
-        # FIXME: This might fail if we can't read the file. The error needs
-        #        to bubble up to the mainloop.
         return obj.hashsum()
     elif obj.objtype == 'l':
         return obj.link
@@ -299,23 +300,23 @@ def format_group(gid):
 # ====================
 #
 def get_fileinfo(path, objs, change, text, prefixlist, formatlist):
+    ''' Get the fileinfo fields. '''
 
     # The base fields
     fields = {
         'path'  : str(path),
         'change': str(change),
         'arrow' : COMPARE_ARROWS[change][1],
-        'text'  : text[0].upper() + text[1:],
+        'text'  : text.capitalize(),
     }
 
-
     formatter = string.Formatter()
-    err = None
+    error = None
 
-    for fmt in formatlist:
+    for fme in formatlist:
 
         # Iterate over the formatter fields and get the used fields
-        for (text, field, fmt, conv) in formatter.parse(fmt):
+        for (text, field, fmt, conv) in formatter.parse(fme):
 
             # Empty and already existing fields are ignored
             if field is None or field in fields:
@@ -337,24 +338,24 @@ def get_fileinfo(path, objs, change, text, prefixlist, formatlist):
                     data = FILE_FIELDS[fi](obj)
                     if data is None:
                         data = ''
-                except (IOError, OSError) as e:
+                except (IOError, OSError) as err:
                     data = '**-ERROR-**'
-                    err = e
+                    error = err
 
                 # Store the field (as string)
                 fields[field] = str(data)
 
-    return (err, fields)
+    return (error, fields)
 
 
 
-def write_fileinfo(fields, fmt, quoter, out):
+def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
     ''' Write fileinfo fields '''
 
-    fields = fields.copy()
-    for field in fields:
-        fields[field] = quoter(fields[field])
-    out.write(fmt.format(**fields) + '\n')
+    if not quoter:
+        quoter = lambda a: a
+    wfields = {k: quoter(v) for k, v in fields.items()}
+    file.write(fmt.format(**wfields) + '\n')
 
 
 
@@ -425,6 +426,7 @@ class CompareHistogram(Histogram):
             'n_scan': self.get('scan'),
             'n_excludes': self.get('excluded'),
             'n_errors': self.get('error'),
+            'n_skipped': self.get('skipped'),
             'n_err': self.get('err'),
             'sum_objects': sum(self.d.values())-self.get('err'),
         }
