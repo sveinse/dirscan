@@ -188,6 +188,35 @@ test_s06 () {
 
 }
 
+test_s07 () {  # Similar to p02
+    tsetup $FUNCNAME "Permission denied in scan test"
+    mkdir -p a/one a/two
+    touch a/one/file a/two/file
+    echo "file" >a/file
+    chmod 0000 a/one a/file
+
+    trun a -o scanfile.txt
+    cat scanfile.txt
+
+    chmod +rwx a/one a/file
+    tclean
+}
+
+test_s08 () {
+    tsetup $FUNCNAME "Permission denied in two scan files"
+    mkdir -p a/one
+    techo "file" a/one/file
+    techo "file" a/file
+    chmod 0000 a/one a/file
+
+    trun a -o scanfile.txt
+    cat scanfile.txt
+    trun -als --right a scanfile.txt
+
+    chmod +rwx a/one a/file
+    tclean
+}
+
 
 #=============================================================================
 # Ordering tests
@@ -422,7 +451,7 @@ tests="$tests 01 01b 02 02b 03 03b 04 04b"
 tests="$tests c01"
 
 # Scan-file tests
-tests="$tests s01 s02 s03 s04 s05 s06"
+tests="$tests s01 s02 s03 s04 s05 s06 s07 s08"
 
 # Ordering tests
 tests="$tests o01 o02"

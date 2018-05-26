@@ -247,8 +247,8 @@ def dirscan_main(argv=None):
             if printfmt:
                 fileinfo.write_fileinfo(printfmt, fields)
 
-            # Write to file
-            if writefmt:
+            # Write to file -- don't write if we couldn't get all fields
+            if writefmt and not errs:
                 fileinfo.write_fileinfo(writefmt, fields, quoter=quote, file=outfile)
 
 

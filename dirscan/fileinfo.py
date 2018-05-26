@@ -123,6 +123,10 @@ FINAL_SUMMARY = (
 )
 
 
+# Error contents
+ERROR_FIELD = '**-ERROR-**'
+
+
 
 def split_number(number):
     ''' Split a number into groups of 3 chars. E.g "1234776" will be
@@ -265,7 +269,7 @@ def get_fields(objs, prefixes, fieldnames):
                 if data is None:
                     data = ''
             except (IOError, OSError) as err:
-                data = '**-ERROR-**'
+                data = ERROR_FIELD
                 errs.append(err)
 
             # Store the field (as string)
