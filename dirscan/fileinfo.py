@@ -59,7 +59,7 @@ FILE_FIELDS = {
                                   float(o.mtime.strftime("%f"))/1000000.0,),
 
     # Special data-payload of the file. For files: the hashsum, links: the link destination
-    'data': lambda o: format_data(o),
+    'data': lambda o: format_data(o),  # pylint: disable=W0108
 
     # The device node which the file resides
     'dev': lambda o: o.dev,
@@ -82,20 +82,25 @@ COMPARE_ARROWS = {
 }
 
 
+ # pylint: disable=C0326
 SCAN_SUMMARY = (
-    # Condition,    Text.  Condition is a lookup into summary_dict
+    # Condition,         Line to print
     (True,               "\nSummary of '{dir}':"),
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
     ('n_dirs',           "    {n_dirs}  directories"),
     ('n_symlinks',       "    {n_symlinks}  symbolic links"),
-    ('n_special',        "    {n_special}  special files  ({n_blkdev} block devices, {n_chrdev} char devices, {n_fifos} fifos, {n_sockets} sockets)"),
+    ('n_special',        "    {n_special}  special files  " \
+                                "({n_blkdev} block devices, " \
+                                "{n_chrdev} char devices, " \
+                                "{n_fifos} fifos, " \
+                                "{n_sockets} sockets)"),
     ('n_exclude',        "    {n_exclude}  excluded files or directories"),
     (True,               "In total {n_objects} file objects"),
 )
 
 
 COMPARE_SUMMARY = (
-    # Condition,    Text.  Condition is a lookup into summary_dict
+    # Condition,         Line to print
     (True,               "\nSummary of compare between left '{left}' and right '{right}':"),
     ('n_equal',          "    {n_equal}  equal files or directories"),
     ('n_changed',        "    {n_changed}  changed files or directories"),
@@ -113,7 +118,8 @@ COMPARE_SUMMARY = (
 
 
 FINAL_SUMMARY = (
-    ('n_err', "\n{prog}: **** {n_err} files or directories could not be read"),
+    # Condition,         Line to print
+    ('n_err',            "\n{prog}: **** {n_err} files or directories could not be read"),
 )
 
 
@@ -273,13 +279,14 @@ def get_fieldnames(formatstr):
     ''' Get a set of {fields} used in formatstr '''
 
     fieldnames = set()
-    for (text, field, fmt, conv) in string.Formatter().parse(formatstr):
+    for (_text, field, _fmt, _conv) in string.Formatter().parse(formatstr):
         if field:
             fieldnames.add(field)
     return fieldnames
 
 
 
+# pylint: disable=W0622
 def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
     ''' Write fileinfo fields '''
 
@@ -308,6 +315,7 @@ def write_summary(summary, fields, file=sys.stdout):
 #
 
 class FileHistogram(object):
+    ''' Histogram for counting file objects '''
 
     def __init__(self, dir):
         self.dir = dir
@@ -315,15 +323,19 @@ class FileHistogram(object):
         self.d = {}
 
     def add(self, v):
+        ''' Increase count of variable v '''
         self.d[v] = self.d.get(v, 0) + 1
 
     def get(self, v):
+        ''' Return count value of v '''
         return self.d.get(v, 0)
 
     def add_size(self, size):
+        ''' Add size variable '''
         self.size += size
 
     def get_summary_fields(self):
+        ''' Return a dict with all histogram fields '''
         return {
             'dir': self.dir,
             'n_files': self.get('f'),
@@ -343,6 +355,7 @@ class FileHistogram(object):
 
 
 class CompareHistogram(object):
+    ''' Histogram for counting compare relationship '''
 
     def __init__(self, left, right):
         self.left = left
@@ -350,12 +363,15 @@ class CompareHistogram(object):
         self.d = {}
 
     def add(self, v):
+        ''' Increase count of variable v '''
         self.d[v] = self.d.get(v, 0) + 1
 
     def get(self, v):
+        ''' Return count value of v '''
         return self.d.get(v, 0)
 
     def get_summary_fields(self):
+        ''' Return a dict with all histogram fields '''
         return {
             'left': self.left,
             'right': self.right,
@@ -376,6 +392,7 @@ class CompareHistogram(object):
 
 
 class Statistics(object):
+    ''' Class for collecting dirscan statistics '''
 
     def __init__(self, left, right):
         self.compare = CompareHistogram(left, right)
@@ -384,10 +401,13 @@ class Statistics(object):
         else:
             self.filehist = [FileHistogram(left), FileHistogram(right)]
 
-    def add(self, change):
+    def add_stats(self, change):
+        ''' Collect compare statistics '''
         self.compare.add(change)
 
-    def add_filehist(self, objs):
+    def add_filestats(self, objs):
+        ''' Collect file statistics from objs list '''
+
         for (o, fh) in zip(objs, self.filehist):
             ot = 'x' if o.excluded else o.objtype
             fh.add(ot)
@@ -395,6 +415,7 @@ class Statistics(object):
                 fh.add_size(o.size)
 
     def get_fields(self, prefixes):
+        ''' Get the summary fields '''
 
         # Get the main comparison fields
         fields = self.compare.get_summary_fields()

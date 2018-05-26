@@ -116,20 +116,23 @@ summary template:
 
 
 def dirscan_argumentparser():
+    ''' Return argument parser object for dirscan, and setting all command-line
+        options
+    '''
 
-    ap = argparse.ArgumentParser(description=DIRSCAN_DESCRIPTION,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter,
-                                 add_help=False)
+    argp = argparse.ArgumentParser(description=DIRSCAN_DESCRIPTION,
+                                   formatter_class=argparse.RawDescriptionHelpFormatter,
+                                   add_help=False)
 
-    ap.add_argument('--version', action='version', version='%(prog)s ' + __version__)
-    ap.add_argument('--help', action='help')
+    argp.add_argument('--version', action='version', version='%(prog)s ' + __version__)
+    argp.add_argument('--help', action='help')
 
-    ap.add_argument('-a', '--all', action='store_true', dest='all', default=False,
-                    help='''
+    argp.add_argument('-a', '--all', action='store_true', dest='all', default=False,
+                      help='''
         Print all file info
         ''')
-    ap.add_argument('-c', '--compare', metavar='TYPES', action='store',
-                    dest='comparetypes', default='', help='''
+    argp.add_argument('-c', '--compare', metavar='TYPES', action='store',
+                      dest='comparetypes', default='', help='''
         Show only compare relationship TYPES:
             e=equal,
             l=left only,
@@ -141,12 +144,12 @@ def dirscan_argumentparser():
             E=error,
             x=excluded
         ''')
-    ap.add_argument('-d', '--compare-dates', action='store_true',
-                    dest='compare_dates', default=False, help='''
+    argp.add_argument('-d', '--compare-dates', action='store_true',
+                      dest='compare_dates', default=False, help='''
         Compare dates on files which are otherwise equal
         ''')
-    ap.add_argument('-f', '--file-types', metavar='TYPES', action='store',
-                    dest='filetypes', default='', help='''
+    argp.add_argument('-f', '--file-types', metavar='TYPES', action='store',
+                      dest='filetypes', default='', help='''
         Show only file types.
             f=files,
             d=dirs,
@@ -156,82 +159,82 @@ def dirscan_argumentparser():
             p=pipes,
             s=sockets
         ''')
-    ap.add_argument('-F', '--format', metavar='TEMPLATE', dest='format',
-                    default=None, help='''
+    argp.add_argument('-F', '--format', metavar='TEMPLATE', dest='format',
+                      default=None, help='''
         Custom file info line template. See FORMAT  ''')
-    ap.add_argument('-h', '--human', action='store_true', dest='human',
-                    default=False, help='''
+    argp.add_argument('-h', '--human', action='store_true', dest='human',
+                      default=False, help='''
         Display human readable sizes
         ''')
-    ap.add_argument('-i', '--ignore', metavar='IGNORES', action='store',
-                    dest='ignore', default='', help='''
+    argp.add_argument('-i', '--ignore', metavar='IGNORES', action='store',
+                      dest='ignore', default='', help='''
         Ignore compare differences in u=uid, g=gid, p=permissions, t=time
         ''')
-    ap.add_argument('-l', '--long', action='store_true', dest='long',
-                    default=False, help='''
+    argp.add_argument('-l', '--long', action='store_true', dest='long',
+                      default=False, help='''
         Dump file in extended format
         ''')
-    ap.add_argument('-o', '--output', metavar='FILE', action='store',
-                    dest='outfile', help='''
+    argp.add_argument('-o', '--output', metavar='FILE', action='store',
+                      dest='outfile', help='''
         Store scan output in FILE
         ''')
-    ap.add_argument('-q', '--quiet', action='store_true', dest='quiet',
-                    default=False, help='''
+    argp.add_argument('-q', '--quiet', action='store_true', dest='quiet',
+                      default=False, help='''
         Quiet operation
         ''')
-    ap.add_argument('-Q', '--suppress-errors', action='store_true',
-                    dest='realquiet', default=False, help='''
+    argp.add_argument('-Q', '--suppress-errors', action='store_true',
+                      dest='realquiet', default=False, help='''
         Suppress error messages
         ''')
-    ap.add_argument('-r', '--reverse', action='store_true', dest='reverse',
-                    default=False, help='''
+    argp.add_argument('-r', '--reverse', action='store_true', dest='reverse',
+                      default=False, help='''
         Traverse directories in reverse order
         ''')
-    ap.add_argument('-s', action='store_true', dest='enable_summary',
-                    default=False, help='''
+    argp.add_argument('-s', action='store_true', dest='enable_summary',
+                      default=False, help='''
         Print scan statistics summary.
         ''')
-    ap.add_argument('--summary', metavar='SUMMARY_TEMPLATE',
-                    action='append', dest='summary', default=None, help='''
+    argp.add_argument('--summary', metavar='SUMMARY_TEMPLATE',
+                      action='append', dest='summary', default=None, help='''
         Print scan statistics summary and provide custom template.
         ''')
-    ap.add_argument('-t', '--traverse-oneside', action='store_true',
-                    dest='traverse_oneside', default=False, help='''
+    argp.add_argument('-t', '--traverse-oneside', action='store_true',
+                      dest='traverse_oneside', default=False, help='''
         Traverse directories that exists on only one side of comparison
         ''')
-    ap.add_argument('-v', '--verbose', action='store_true', dest='verbose',
-                    default=False, help='''
+    argp.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+                      default=False, help='''
         Verbose printing
         ''')
-    ap.add_argument('-x', '--one-file-system', action='store_true', dest='onefs',
-                    default=False, help='''
+    argp.add_argument('-x', '--one-file-system', action='store_true', dest='onefs',
+                      default=False, help='''
         Don't cross filesystem boundaries
         ''')
-    ap.add_argument('-X', '--exclude', metavar='PATH', action='append',
-                    dest='exclude', default=[], help='''
+    argp.add_argument('-X', '--exclude', metavar='PATH', action='append',
+                      dest='exclude', default=[], help='''
         Exclude PATH from scan. PATH is relative to DIR
         ''')
-    ap.add_argument('--left', '--input', action='store_true', dest='left', default=None,
-                    help='''
+    argp.add_argument('--left', '--input', action='store_true', dest='left', default=None,
+                      help='''
         Read LEFT_DIR argument as a scanfile
         ''')
-    ap.add_argument('--right', action='store_true', dest='right', default=None,
-                    help='''
+    argp.add_argument('--right', action='store_true', dest='right', default=None,
+                      help='''
         Read RIGHT_DIR argument as a scanfile
         ''')
-    ap.add_argument('--format-help', action='store_true', dest='formathelp', default=None,
-                    help='''
+    argp.add_argument('--format-help', action='store_true', dest='formathelp', default=None,
+                      help='''
         Show help for --format and --summary
         ''')
 
     # Main arguments
-    ap.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',
-                    help='''
+    argp.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',
+                      help='''
         Directory to scan/traverse, or LEFT side of comparison
         ''')
-    ap.add_argument('dir2', metavar='RIGHT_DIR', default=None, nargs='?',
-                    help='''
+    argp.add_argument('dir2', metavar='RIGHT_DIR', default=None, nargs='?',
+                      help='''
         RIGHT side of comparison if preset
         ''')
 
-    return ap
+    return argp

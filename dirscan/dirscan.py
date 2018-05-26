@@ -110,7 +110,8 @@ class BaseObj(object):
 
 
     #pylint: disable=unused-argument
-    def get(self, k, v):
+    def get(self, v, d=None):
+        ''' Return child object v '''
         return v
 
 
@@ -193,7 +194,8 @@ class LinkObj(BaseObj):
 
     def parse(self, done=True):
         # Execute super
-        if self.parsed: return
+        if self.parsed:
+            return
         BaseObj.parse(self, done=False)
 
         # Read the contents of the link
@@ -226,7 +228,8 @@ class DirObj(BaseObj):
     def parse(self, done=True):
         ''' Parse the directory tree and add children to self '''
         # Call super, but we're not done (i.e. False)
-        if self.parsed: return
+        if self.parsed:
+            return
         BaseObj.parse(self, done=False)
         self.size = None
 
@@ -253,11 +256,13 @@ class DirObj(BaseObj):
         return self.dir.copy()
 
 
-    def get(self, k, v):
-        return self.dir.get(k, v)
+    def get(self, v, d=None):
+        ''' Return child object v '''
+        return self.dir.get(v, d)
 
 
-    def set_child(self, child):
+    def add_child(self, child):
+        ''' Add child object '''
         self.dir[child.name] = child
 
 
@@ -285,7 +290,8 @@ class SpecialObj(BaseObj):
 
     def parse(self, done=True):
         # Execute super
-        if self.parsed: return
+        if self.parsed:
+            return
         BaseObj.parse(self, done=False)
         self.size = None
 

@@ -30,9 +30,9 @@ def readscanfile(fname):
     rootobj = None
     base_fname = os.path.basename(fname)
 
-    with open(fname, 'r') as f:
+    with open(fname, 'r') as infile:
         lineno = 0
-        for line in f:
+        for line in infile:
             lineno += 1
 
             # Read/parse the parameters (must be aliged with SCANFILE_FORMAT)
@@ -66,7 +66,7 @@ def readscanfile(fname):
                 dirtree[opath] = obj
             else:
                 # Add the object into the parent's children
-                dirtree[path].set_child(obj)
+                dirtree[path].add_child(obj)
 
             # Make sure we make an entry into the dirtree to ensure
             # we have a list of the parents
@@ -89,18 +89,18 @@ def readscanfile(fname):
 #     28 -> \<
 #     31 -> \?
 #     <32 to \@ to \^ (with the exception for 28 and 31)
-def quote(st):
+def quote(text):
     ''' Simple text quoter for the scan files '''
 
     needquote = False
-    for s in st:
+    for s in text:
         if ord(s) <= 32 or ord(s) == 44 or ord(s) == 92:
             needquote = True
             break
     if not needquote:
-        return st
+        return text
     ns = ''
-    for s in st:
+    for s in text:
         if ',' in s:
             ns += '\\-'
         elif '\\' in s:
@@ -116,14 +116,14 @@ def quote(st):
     return ns
 
 
-def unquote(st):
+def unquote(text):
     ''' Simple text un-quoter for the scan files '''
 
-    if '\\' not in st:
-        return st
+    if '\\' not in text:
+        return text
     ns = ''
     escape = False
-    for s in st:
+    for s in text:
         if escape:
             if '\\' in s:
                 ns += '\\'

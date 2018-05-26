@@ -37,21 +37,21 @@ def dirscan_main(argv=None):
 
 
     # -- Set command line arguments and get the parser
-    ap = dirscan_argumentparser()
+    argp = dirscan_argumentparser()
 
 
     # -- Parsing
-    opts = ap.parse_args()
-    prog = ap.prog
+    opts = argp.parse_args()
+    prog = argp.prog
     left = opts.dir1
     right = opts.dir2
 
 
     # -- Requested more help?
     if opts.formathelp:
-        ap.print_help()
+        argp.print_help()
         print(DIRSCAN_FORMAT_HELP)
-        ap.exit(1)
+        argp.exit(1)
 
 
     # -- Not having onesided traversion in scan mode does not print anything
@@ -59,16 +59,11 @@ def dirscan_main(argv=None):
         opts.traverse_oneside = True
 
 
-    # -- Enable summary if any summary templates are given
-    #if opts.summary:
-    #    opts.enable_summary = True
-
-
     # -- Missing options
     if not left:
-        ap.error("Missing LEFT_DIR argument")
+        argp.error("Missing LEFT_DIR argument")
     if opts.right and not right:
-        ap.error("Missing RIGHT_DIR argument")
+        argp.error("Missing RIGHT_DIR argument")
 
 
     # -- Read the scan files
@@ -164,7 +159,7 @@ def dirscan_main(argv=None):
         if writefmt:
             fieldnames.update(fileinfo.get_fieldnames(writefmt))
     except ValueError as err:
-        print(ap.prog + ': Print format error: ' + str(err))
+        print(prog + ': Print format error: ' + str(err))
         return 1
 
 
@@ -177,17 +172,17 @@ def dirscan_main(argv=None):
     # -------------------
     #
 
-    f = None
+    outfile = None
     try:
 
         # -- Open output file
         if opts.outfile:
-            f = open(opts.outfile, 'w')
+            outfile = open(opts.outfile, 'w')
 
 
         def error_handler(exception):
             ''' Callback for handling scanning errors during parsing '''
-            stats.add('err')
+            stats.add_stats('err')
             if not opts.realquiet:
                 sys.stderr.write('%s: %s\n' %(prog, exception))
             return True
@@ -224,14 +219,14 @@ def dirscan_main(argv=None):
                 show = False
 
             # Save histogram info for the change type
-            stats.add(change)
+            stats.add_stats(change)
 
             # Skip this entry if its not going to be printed
             if not show:
                 continue
 
             # Save file histogram info
-            stats.add_filehist(objs)
+            stats.add_filestats(objs)
 
             # Set the base fields
             fields = {
@@ -254,18 +249,18 @@ def dirscan_main(argv=None):
 
             # Write to file
             if writefmt:
-                fileinfo.write_fileinfo(writefmt, fields, quoter=quote, file=f)
+                fileinfo.write_fileinfo(writefmt, fields, quoter=quote, file=outfile)
 
 
     except DirscanException as err:
         # Handle user-specific errors
-        print(ap.prog + ': ' + str(err))
+        print(prog + ': ' + str(err))
         return 1
 
     finally:
         # Close any open output file
-        if f:
-            f.close()
+        if outfile:
+            outfile.close()
 
 
     #

@@ -11,8 +11,6 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-#from __future__ import absolute_import
-#from .dirscan import *
 
 __version__ = '0.9.1'
 

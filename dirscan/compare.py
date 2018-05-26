@@ -15,6 +15,7 @@ from __future__ import absolute_import, division, print_function
 
 
 
+#pylint: disable=unused-argument
 def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
     ''' Object comparator for 1 dir. Returns tuple with (change, text) '''
 
@@ -51,9 +52,9 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     if all([o.excluded for o in objs]):
         # File EXCLUDED
         # =============
-        if objs[0].objtype  == '-':
+        if objs[0].objtype == '-':
             return ('excluded', 'Right excluded, not present in left')
-        if objs[1].objtype  == '-':
+        if objs[1].objtype == '-':
             return ('excluded', 'Left excluded, not present in right')
         return ('excluded', 'excluded')
 
@@ -90,7 +91,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
 
     # Unless we're not intersted in these comparetypes, then we don't have
     # to spend time on making the compare (which can be time consuming)
-    needcompare=set('cLRe')
+    needcompare = set('cLRe')
     if not needcompare.intersection(comparetypes):
         return ('skipped', 'compare skipped')
 
