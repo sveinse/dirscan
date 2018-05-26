@@ -112,7 +112,7 @@ class BaseObj(object):
     #pylint: disable=unused-argument
     def get(self, v, d=None):
         ''' Return child object v '''
-        return v
+        return d
 
 
     def __repr__(self):
