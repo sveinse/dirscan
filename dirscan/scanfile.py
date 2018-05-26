@@ -17,7 +17,6 @@ import os
 import datetime
 
 from . import dirscan
-from . import fileinfo
 
 
 # File format for serialized data-file
@@ -37,7 +36,7 @@ def readscanfile(fname):
             lineno += 1
 
             # Read/parse the parameters (must be aliged with SCANFILE_FORMAT)
-            args = [fileinfo.unquote(e) for e in line.rstrip().split(',')]
+            args = [unquote(e) for e in line.rstrip().split(',')]
             otype = args[0]
             osize = int(args[1] or '0')
             omode = int(args[2])
@@ -79,3 +78,69 @@ def readscanfile(fname):
 
     # Now the tree should be populated
     return rootobj
+
+
+# SIMPLE TEXT QUOTER
+# ==================
+#
+#     \ -> \\
+#     space -> \_
+#     , -> \-
+#     28 -> \<
+#     31 -> \?
+#     <32 to \@ to \^ (with the exception for 28 and 31)
+def quote(st):
+    ''' Simple text quoter for the scan files '''
+
+    needquote = False
+    for s in st:
+        if ord(s) <= 32 or ord(s) == 44 or ord(s) == 92:
+            needquote = True
+            break
+    if not needquote:
+        return st
+    ns = ''
+    for s in st:
+        if ',' in s:
+            ns += '\\-'
+        elif '\\' in s:
+            ns += '\\\\'
+        elif ' ' in s:
+            ns += '\\_'
+        elif ord(s) == 28 or ord(s) == 31:
+            ns += '\\%s' %(chr(ord(s)+32))
+        elif ord(s) < 32:
+            ns += '\\%s' %(chr(ord(s)+64))
+        else:
+            ns += s
+    return ns
+
+
+def unquote(st):
+    ''' Simple text un-quoter for the scan files '''
+
+    if '\\' not in st:
+        return st
+    ns = ''
+    escape = False
+    for s in st:
+        if escape:
+            if '\\' in s:
+                ns += '\\'
+            elif '-' in s:
+                ns += ','
+            elif '_' in s:
+                ns += ' '
+            elif '<' in s:
+                ns += chr(28)
+            elif '?' in s:
+                ns += chr(31)
+            elif ord(s) >= 64 and ord(s) <= 95:
+                ns += chr(ord(s)-64)
+            # Unknown/incorrectly formatted escape char is silently ignored
+            escape = False
+        elif '\\' in s:
+            escape = True
+        else:
+            ns += s
+    return ns

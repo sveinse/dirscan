@@ -14,7 +14,7 @@ extent permitted by law.
 #from __future__ import absolute_import
 #from .dirscan import *
 
-__version__ = '0.9'
+__version__ = '0.9.1'
 
 
 from .dirscan import walkdirs, create_from_fs, create_from_data

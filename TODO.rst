@@ -2,6 +2,12 @@ sveinse 2018-05-20:
 
 - Scan-files might not be properly parsed given the change in DirObj()
 
+- Automatic script for uploading PyPi?
+   venv3/bin/python -m pip install --upgrade setuptools wheel
+   venv3/bin/python setup.py sdist bdist_wheel
+   venv3/bin/python -m pip install twine
+   venv3/bin/twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+   venv3/bin/twine upload -r pypi --repository-url https://upload.pypi.org/legacy/ dist/*
 
 sveinse 2018-05-19:
 

@@ -82,7 +82,7 @@ COMPARE_ARROWS = {
 }
 
 
-SUMMARY_SCAN = (
+SCAN_SUMMARY = (
     # Condition,    Text.  Condition is a lookup into summary_dict
     (True,               "\nSummary of '{dir}':"),
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
@@ -94,7 +94,7 @@ SUMMARY_SCAN = (
 )
 
 
-SUMMARY_COMPARE = (
+COMPARE_SUMMARY = (
     # Condition,    Text.  Condition is a lookup into summary_dict
     (True,               "\nSummary of compare between left '{left}' and right '{right}':"),
     ('n_equal',          "    {n_equal}  equal files or directories"),
@@ -112,71 +112,9 @@ SUMMARY_COMPARE = (
 )
 
 
-
-# SIMPLE TEXT QUOTER
-# ==================
-#
-#     \ -> \\
-#     space -> \_
-#     , -> \-
-#     28 -> \<
-#     31 -> \?
-#     <32 to \@ to \^ (with the exception for 28 and 31)
-def quote(st):
-    ''' Simple text quoter for the scan files '''
-
-    needquote = False
-    for s in st:
-        if ord(s) <= 32 or ord(s) == 44 or ord(s) == 92:
-            needquote = True
-            break
-    if not needquote:
-        return st
-    ns = ''
-    for s in st:
-        if ',' in s:
-            ns += '\\-'
-        elif '\\' in s:
-            ns += '\\\\'
-        elif ' ' in s:
-            ns += '\\_'
-        elif ord(s) == 28 or ord(s) == 31:
-            ns += '\\%s' %(chr(ord(s)+32))
-        elif ord(s) < 32:
-            ns += '\\%s' %(chr(ord(s)+64))
-        else:
-            ns += s
-    return ns
-
-
-def unquote(st):
-    ''' Simple text un-quoter for the scan files '''
-
-    if '\\' not in st:
-        return st
-    ns = ''
-    escape = False
-    for s in st:
-        if escape:
-            if '\\' in s:
-                ns += '\\'
-            elif '-' in s:
-                ns += ','
-            elif '_' in s:
-                ns += ' '
-            elif '<' in s:
-                ns += chr(28)
-            elif '?' in s:
-                ns += chr(31)
-            elif ord(s) >= 64 and ord(s) <= 95:
-                ns += chr(ord(s)-64)
-            # Unknown/incorrectly formatted escape char is silently ignored
-            escape = False
-        elif '\\' in s:
-            escape = True
-        else:
-            ns += s
-    return ns
+FINAL_SUMMARY = (
+    ('n_err', "\n{prog}: **** {n_err} files or directories could not be read"),
+)
 
 
 
@@ -294,68 +232,72 @@ def format_group(gid):
 
 
 
+def get_fields(objs, prefixes, fieldnames):
+    ''' Get a dict of field values from the objects using the given
+        fieldnames.
+    '''
 
-#
-# INFO PRINT FUNCTIONS
-# ====================
-#
-def get_fileinfo(path, objs, change, text, prefixlist, formatlist):
-    ''' Get the fileinfo fields. '''
+    fields = {}
+    errs = []
 
-    # The base fields
-    fields = {
-        'path'  : str(path),
-        'change': str(change),
-        'arrow' : COMPARE_ARROWS[change][1],
-        'text'  : text.capitalize(),
-    }
+    for field in fieldnames:
 
-    formatter = string.Formatter()
-    error = None
+        for (obj, prefix) in zip(objs, prefixes):
 
-    for fme in formatlist:
-
-        # Iterate over the formatter fields and get the used fields
-        for (text, field, fmt, conv) in formatter.parse(fme):
-
-            # Empty and already existing fields are ignored
-            if field is None or field in fields:
+            # Consider only fieldnames with the specific prefix
+            if not field.startswith(prefix):
                 continue
 
-            for (obj, prefix) in zip(objs, prefixlist):
+            # Get the basename of the field and find it in the FILE_FIELDS dict
+            fld = field[len(prefix):]
+            if fld not in FILE_FIELDS:
+                continue
 
-                # Consider only fieldnames with the specific prefix
-                if not field.startswith(prefix):
-                    continue
+            # Get the data for that field
+            try:
+                data = FILE_FIELDS[fld](obj)
+                if data is None:
+                    data = ''
+            except (IOError, OSError) as err:
+                data = '**-ERROR-**'
+                errs.append(err)
 
-                # Get the basename of the field and find it in the FILE_FIELDS dict
-                fi = field[len(prefix):]
-                if fi not in FILE_FIELDS:
-                    continue
+            # Store the field (as string)
+            fields[field] = str(data)
 
-                # Get the data for that field
-                try:
-                    data = FILE_FIELDS[fi](obj)
-                    if data is None:
-                        data = ''
-                except (IOError, OSError) as err:
-                    data = '**-ERROR-**'
-                    error = err
+    return (errs, fields)
 
-                # Store the field (as string)
-                fields[field] = str(data)
 
-    return (error, fields)
+
+def get_fieldnames(formatstr):
+    ''' Get a set of {fields} used in formatstr '''
+
+    fieldnames = set()
+    for (text, field, fmt, conv) in string.Formatter().parse(formatstr):
+        if field:
+            fieldnames.add(field)
+    return fieldnames
 
 
 
 def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
     ''' Write fileinfo fields '''
 
-    if not quoter:
-        quoter = lambda a: a
-    wfields = {k: quoter(v) for k, v in fields.items()}
-    file.write(fmt.format(**wfields) + '\n')
+    if quoter:
+        fields = {k: quoter(v) for k, v in fields.items()}
+    file.write(fmt.format(**fields) + '\n')
+
+
+
+def write_summary(summary, fields, file=sys.stdout):
+    ''' Write the summary '''
+
+    # Use the pre-defined summary_text
+    for (var, line) in summary:
+        # d.get(n,n) will return d[n] if n exists, otherwise return n.
+        # Thus if n is True, True will be returned
+        if line and fields.get(var, var):
+            file.write(line.format(**fields) + '\n')
 
 
 
@@ -364,24 +306,19 @@ def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
 # HISTOGRAM CLASS
 # ===============
 #
-class Histogram(object):
-    def __init__(self):
-        self.d = {}
 
-    def add(self, objtype):
-        self.d.setdefault(objtype, 0)
-        self.d[objtype] += 1
-
-    def get(self, objtype):
-        return self.d.get(objtype, 0)
-
-
-class FileHistogram(Histogram):
+class FileHistogram(object):
 
     def __init__(self, dir):
         self.dir = dir
         self.size = 0
-        Histogram.__init__(self)
+        self.d = {}
+
+    def add(self, v):
+        self.d[v] = self.d.get(v, 0) + 1
+
+    def get(self, v):
+        return self.d.get(v, 0)
 
     def add_size(self, size):
         self.size += size
@@ -405,12 +342,18 @@ class FileHistogram(Histogram):
         }
 
 
-class CompareHistogram(Histogram):
+class CompareHistogram(object):
 
     def __init__(self, left, right):
         self.left = left
         self.right = right
-        Histogram.__init__(self)
+        self.d = {}
+
+    def add(self, v):
+        self.d[v] = self.d.get(v, 0) + 1
+
+    def get(self, v):
+        return self.d.get(v, 0)
 
     def get_summary_fields(self):
         return {
@@ -430,3 +373,39 @@ class CompareHistogram(Histogram):
             'n_err': self.get('err'),
             'sum_objects': sum(self.d.values())-self.get('err'),
         }
+
+
+class Statistics(object):
+
+    def __init__(self, left, right):
+        self.compare = CompareHistogram(left, right)
+        if right is None:
+            self.filehist = [FileHistogram(left)]
+        else:
+            self.filehist = [FileHistogram(left), FileHistogram(right)]
+
+    def add(self, change):
+        self.compare.add(change)
+
+    def add_filehist(self, objs):
+        for (o, fh) in zip(objs, self.filehist):
+            ot = 'x' if o.excluded else o.objtype
+            fh.add(ot)
+            if ot == 'f':
+                fh.add_size(o.size)
+
+    def get_fields(self, prefixes):
+
+        # Get the main comparison fields
+        fields = self.compare.get_summary_fields()
+
+        # Assemble the per-directory summaries
+        for (fh, pre) in zip(self.filehist, prefixes):
+            for field, data in fh.get_summary_fields().items():
+
+                # Replace 'n_' with specified prefix
+                if field.startswith('n_') and pre:
+                    field = field[2:]
+                fields[pre + field] = data
+
+        return fields
