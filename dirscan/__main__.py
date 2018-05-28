@@ -66,13 +66,6 @@ def dirscan_main(argv=None):
         argp.error("Missing RIGHT_DIR argument")
 
 
-    # -- Read the scan files
-    if opts.left:
-        left = readscanfile(left)
-    if opts.right:
-        right = readscanfile(right)
-
-
     # -- Determine settings and print format
     if right is None:
 
@@ -120,6 +113,13 @@ def dirscan_main(argv=None):
         dir_comparator = dir_compare2
 
 
+    # -- Read the scan files
+    if opts.left:
+        dirs[0] = readscanfile(left)
+    if opts.right:
+        dirs[1] = readscanfile(right)
+
+
     # -- The all option will show all compare types
     if opts.all:
         comparetypes = ''.join([
@@ -164,7 +164,17 @@ def dirscan_main(argv=None):
 
 
     # -- Prepare the histograms to collect statistics
-    stats = fileinfo.Statistics(opts.dir1, opts.dir2)
+    stats = fileinfo.Statistics(left, right)
+
+
+    # -- Error handler
+    def error_handler(exception):
+        ''' Callback for handling scanning errors during parsing '''
+        stats.add_stats('err')
+        if not opts.realquiet:
+            sys.stderr.write('%s: %s\n' %(prog, exception))
+        # True will swallow the exception
+        return True
 
 
     #
@@ -178,14 +188,6 @@ def dirscan_main(argv=None):
         # -- Open output file
         if opts.outfile:
             outfile = open(opts.outfile, 'w')
-
-
-        def error_handler(exception):
-            ''' Callback for handling scanning errors during parsing '''
-            stats.add_stats('err')
-            if not opts.realquiet:
-                sys.stderr.write('%s: %s\n' %(prog, exception))
-            return True
 
 
         # -- TRAVERSE THE DIR(S)

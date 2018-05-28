@@ -26,6 +26,8 @@ import fnmatch
 # Select hash algorthm to use
 HASHALGORITHM = hashlib.sha256
 
+HASHCHUNKSIZE = 16*1024*1024
+
 
 class DirscanException(Exception):
     ''' Directory scan error '''
@@ -158,10 +160,10 @@ class FileObj(BaseObj):
         m = HASHALGORITHM()
         with open(self.fullpath, 'rb') as f:
             while True:
-                d = f.read(16*1024*1024)
-                if not d:
+                data = f.read(HASHCHUNKSIZE)
+                if not data:
                     break
-                m.update(d)
+                m.update(data)
             self.hashsum_cache = m.hexdigest()
         return self.hashsum_cache
 
@@ -247,11 +249,15 @@ class DirObj(BaseObj):
         ''' Return a dict of the sub objects '''
         if not self.dir_parsed:
 
+            # Setting dir_parsed first has the subtle effect that if
+            # os.lostdir() fails, it will still label the dir as parsed.
+            # This avoids rescanning and thus failing if the tree is
+            # scanned twice.
+            self.dir_parsed = True
+
             # Try to get list of sub directories and make new sub object
             for name in os.listdir(self.fullpath):
                 self.dir[name] = create_from_fs(self.fullpath, name)
-
-            self.dir_parsed = True
 
         return self.dir.copy()
 
