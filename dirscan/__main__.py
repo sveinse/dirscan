@@ -16,9 +16,10 @@ from __future__ import absolute_import, division, print_function
 import sys
 
 from . import fileinfo
+from .log import debug, set_debug
 from .scanfile import SCANFILE_FORMAT, readscanfile, quote
 from .compare import dir_compare1, dir_compare2
-from .dirscan import walkdirs, DirscanException
+from .dirscan import walkdirs, DirscanException, DirObj
 from .usage import dirscan_argumentparser, DIRSCAN_FORMAT_HELP
 
 
@@ -45,6 +46,7 @@ def dirscan_main(argv=None):
     prog = argp.prog
     left = opts.dir1
     right = opts.dir2
+    set_debug(opts.debug)
 
 
     # -- Requested more help?
@@ -70,7 +72,7 @@ def dirscan_main(argv=None):
     if right is None:
 
         # -- Setting for scanning
-        dirs = [left]
+        dirs = [DirObj(left, treeid=0)]
         printfmt = '{fullpath}'
         writefmt = None
         comparetypes = 's'
@@ -103,7 +105,7 @@ def dirscan_main(argv=None):
     else:
 
         # -- Setting for comparing
-        dirs = [left, right]
+        dirs = [DirObj(left, treeid=0), DirObj(right, treeid=1)]
         printfmt = '{arrow}  {path}  :  {text}'
         writefmt = None
         comparetypes = 'rltcLR'
@@ -115,9 +117,9 @@ def dirscan_main(argv=None):
 
     # -- Read the scan files
     if opts.left:
-        dirs[0] = readscanfile(left)
+        dirs[0] = readscanfile(left, treeid=0)
     if opts.right:
-        dirs[1] = readscanfile(right)
+        dirs[1] = readscanfile(right, treeid=1)
 
 
     # -- The all option will show all compare types

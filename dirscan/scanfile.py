@@ -23,7 +23,7 @@ from . import dirscan
 SCANFILE_FORMAT = "{type},{size},{mode},{uid},{gid},{mtime_n},{data},{path}"
 
 
-def readscanfile(fname):
+def readscanfile(fname, treeid=None):
     ''' Read fname scan file and return a DirObj() with the file tree root '''
 
     dirtree = {}
@@ -57,8 +57,10 @@ def readscanfile(fname):
                 path = path[:-1]
 
             # Create new object.
-            obj = dirscan.create_from_data(path, name, otype, osize, omode,
-                                           ouid, ogid, otime, odata)
+            obj = dirscan.create_from_data(name, path, otype, osize, omode,
+                                           ouid, ogid, otime,
+                                           data=odata,
+                                           treeid=treeid)
 
             # The first object is special
             if path == '':

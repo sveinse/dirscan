@@ -148,6 +148,10 @@ def dirscan_argumentparser():
                       dest='compare_dates', default=False, help='''
         Compare dates on files which are otherwise equal
         ''')
+    argp.add_argument('-D', '--debug', action='store_true', dest='debug',
+                      default=False, help='''
+        Enable debug output
+        ''')
     argp.add_argument('-f', '--file-types', metavar='TYPES', action='store',
                       dest='filetypes', default='', help='''
         Show only file types.

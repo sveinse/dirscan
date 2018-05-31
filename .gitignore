@@ -18,3 +18,4 @@ tags
 
 tests/test*/
 .vscode/
+__experimental/

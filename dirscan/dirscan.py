@@ -22,6 +22,8 @@ import errno
 import filecmp
 import fnmatch
 
+from .log import debug
+
 
 # Select hash algorthm to use
 HASHALGORITHM = hashlib.sha256
@@ -46,6 +48,7 @@ class BaseObj(object):
     parsed = False
     excluded = False
     objname = 'Base'
+    treeid = None
 
     # Standard file entries
     stat = None
@@ -57,10 +60,11 @@ class BaseObj(object):
     mtime = None
 
 
-    def __init__(self, path, name, stat=None):
+    def __init__(self, name, path='', stat=None, treeid=None):
         self.path = path
         self.name = name
         self.stat = stat
+        self.treeid = treeid
 
         fullpath = os.path.join(path, name)
         self.fullpath = fullpath
@@ -118,7 +122,8 @@ class BaseObj(object):
 
 
     def __repr__(self):
-        return "%s('%s')" %(type(self).__name__, self.fullpath)
+        treeid='%s:' %(self.treeid) if self.treeid is not None else ''
+        return "%s(%s'%s')" %(type(self).__name__, treeid, self.fullpath)
 
 
     def exclude_otherfs(self, base):
@@ -221,8 +226,8 @@ class DirObj(BaseObj):
     objname = 'directory'
 
 
-    def __init__(self, path, name, stat=None):
-        BaseObj.__init__(self, path, name, stat)
+    def __init__(self, name, path='', stat=None, treeid=None):
+        BaseObj.__init__(self, name, path, stat, treeid)
         self.dir = {}
         self.dir_parsed = False
 
@@ -257,7 +262,7 @@ class DirObj(BaseObj):
 
             # Try to get list of sub directories and make new sub object
             for name in os.listdir(self.fullpath):
-                self.dir[name] = create_from_fs(self.fullpath, name)
+                self.dir[name] = create_from_fs(name, self.fullpath, treeid=self.treeid)
 
         return self.dir.copy()
 
@@ -279,8 +284,8 @@ class SpecialObj(BaseObj):
     objname = 'special file'
 
 
-    def __init__(self, path, name, stat=None, dtype='s'):
-        BaseObj.__init__(self, path, name, stat)
+    def __init__(self, name, path='', stat=None, dtype='s', treeid=None):
+        BaseObj.__init__(self, name, path, stat, treeid)
         self.objtype = dtype
 
         # The known special device types
@@ -334,7 +339,7 @@ class NonExistingObj(BaseObj):
 #
 ############################################################
 
-def create_from_fs(path, name):
+def create_from_fs(name, path='', treeid=None):
     ''' Create a new object from file system path and return an
         instance of the object. The object type returned is based on
         stat of the actual file system entry.'''
@@ -343,32 +348,32 @@ def create_from_fs(path, name):
     o = None
     t = s.st_mode
     if fstat.S_ISREG(t):
-        o = FileObj(path, name, s)
+        o = FileObj(name, path, s, treeid=treeid)
     elif fstat.S_ISDIR(t):
-        o = DirObj(path, name, s)
+        o = DirObj(name, path, s, treeid=treeid)
     elif fstat.S_ISLNK(t):
-        o = LinkObj(path, name, s)
+        o = LinkObj(name, path, s, treeid=treeid)
     elif fstat.S_ISBLK(t):
-        o = SpecialObj(path, name, s, 'b')
+        o = SpecialObj(name, path, s, 'b', treeid=treeid)
     elif fstat.S_ISCHR(t):
-        o = SpecialObj(path, name, s, 'c')
+        o = SpecialObj(name, path, s, 'c', treeid=treeid)
     elif fstat.S_ISFIFO(t):
-        o = SpecialObj(path, name, s, 'p')
+        o = SpecialObj(name, path, s, 'p', treeid=treeid)
     elif fstat.S_ISSOCK(t):
-        o = SpecialObj(path, name, s, 's')
+        o = SpecialObj(name, path, s, 's', treeid=treeid)
     else:
         raise DirscanException("%s: Uknown file type" %(fullpath))
     return o
 
 
 
-def create_from_data(path, name, objtype, size, mode, uid, gid, mtime, data=None):
+def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None, treeid=None):
     ''' Create a new object from the given data and return an
         instance of the object. '''
     o = None
 
     if objtype == 'f':
-        o = FileObj(path, name)
+        o = FileObj(name, path, treeid=treeid)
         o.hashsum_cache = data
         o.size = size
 
@@ -378,16 +383,16 @@ def create_from_data(path, name, objtype, size, mode, uid, gid, mtime, data=None
             o.hashsum_cache = m.hexdigest()
 
     elif objtype == 'l':
-        o = LinkObj(path, name)
+        o = LinkObj(name, path, treeid=treeid)
         o.link = data
         o.size = size
 
     elif objtype == 'd':
-        o = DirObj(path, name)
+        o = DirObj(name, path, treeid=treeid)
         o.dir_parsed = True
 
     elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
-        o = SpecialObj(path, name, dtype=objtype)
+        o = SpecialObj(name, path, dtype=objtype, treeid=treeid)
 
     # The common fields
     o.mode = mode
@@ -424,7 +429,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         the file isn't present, will be returned as NonExistingObj() object.
     '''
 
-    # Ensure the exclusion list is a list
+   # Ensure the exclusion list is a list
     if excludes is None:
         excludes = []
 
@@ -440,7 +445,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         if isinstance(d, DirObj):
             o = d
         elif os.path.isdir(d):
-            o = DirObj('', d)
+            o = DirObj(d)
         else:
             e = OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), d)
             raise DirscanException(str(e))
@@ -490,6 +495,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         present = sum([not isinstance(o, NonExistingObj) and not o.excluded for o in objs])
 
         # Send back object list to caller
+        debug('scan %s:  %s' %(path,objs))
         yield (path, objs)
 
         # Create a list of unique children names seen across all objects, where
@@ -508,7 +514,9 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     continue
 
                 # Get and append the children names
-                subobjs.append(o.children().keys())
+                children = o.children().keys()
+                debug("  Children of %s is %s" %(o,children))
+                subobjs.append(children)
 
             # Getting the children failed
             except OSError as err:
@@ -521,7 +529,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         for name in sorted(set(itertools.chain.from_iterable(subobjs)), reverse=not reverse):
 
             # Create a list of children objects for that name
-            child = [o.get(name, NonExistingObj(o.fullpath, name)) for o in objs]
+            child = [o.get(name, NonExistingObj(name, o.fullpath, treeid=o.treeid)) for o in objs]
 
             # Append it to the processing list
             children.append(tuple(child))
