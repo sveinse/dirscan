@@ -282,7 +282,7 @@ def dirscan_main(argv=None):
     fileinfo.write_summary(summary, fields, file=sys.stderr)
 
     # Return error code if we have encountered any errors scanning
-    if fields.get('err'):
+    if fields.get('n_err'):
         return 1
 
     return 0

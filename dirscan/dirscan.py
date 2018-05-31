@@ -414,19 +414,42 @@ def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None
 ############################################################
 
 def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
-             traverse_oneside=None, exception_fn=None):
-    ''' Generator function that traverses the directories in list/tuple dirs
+             traverse_oneside=None, exception_fn=None, close_during=True):
+    ''' Generator function that traverses the directories in dirs list
         simultaneously in paralell. This function is useful for scanning a file
         system, and for comparing two or more directories.
+
+        The elements in the dirs list must either be a string pointing to a
+        physical directory path or a previously parsed DirObj() object. If a
+        path string is given, the file system will be scanned for files. If a
+        DirObj() object is given, the in-object cached data will be used for
+        traversal. The latter is useful e.g. when reading scan files from disk.
 
         As it walks down the directories, for each file object it finds it will
         it will yield a tuple containing (path, objs). path represents the
         common file path. objs is a tuple of objects representing the found
-        file/directory-object found in the directory tree from the dirs list.
-        The entries in objs represents the file objects, such as FileObj,
-        DirObj, all derived from the BaseObj class. If a file is only present
-        in one of the trees, the object returned in the other tree(s) where
-        the file isn't present, will be returned as NonExistingObj() object.
+        file/directory-object found in the respective directory tree from the
+        dirs list. The file objects returned are derived types of BaseObj, such
+        as FileObj, DirObj. If a file is only present in one of the trees, the
+        object returned in the tree(s) where the file isn't present, will be
+        NonExistingObj() object.
+
+        Options:
+        reverse          reverses the scanning order
+        excludes         a list of excluded paths, relative to the common path
+        onefs            will only scan file objects belonging to the same file
+                         system
+        traverse_onside  will walk/yield all file objects in a directory that
+                         exists on only one side
+        exception_fn     a callback with format exception_fn(exception)
+                         returning bool. It will be called with the exception
+                         if any scanning exception occur during traversal. If
+                         exception_fn returns False or is not set, an ordinary
+                         exception will be raised.
+        close_during     will close already-yielded objects to allow GC to
+                         harvest spent objects to save memory. Otherwise the
+                         directory objects contains references to their
+                         children, which keeps the whole tree in memory.
     '''
 
    # Ensure the exclusion list is a list
@@ -535,8 +558,9 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
             children.append(tuple(child))
 
         # Close objects to conserve memory
-        for o in objs:
-            o.close()
+        if close_during:
+            for o in objs:
+                o.close()
 
         # Append the newly discovered objects to the queue
         queue.extend(children)
