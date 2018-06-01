@@ -47,7 +47,6 @@ class BaseObj(object):
     ''' File Objects Base Class '''
     parsed = False
     excluded = False
-    objname = 'Base'
     treeid = None
 
     # Standard file entries
@@ -86,9 +85,9 @@ class BaseObj(object):
 
 
     def children(self):
-        ''' Return hash of sub objects. Non-directory file objects that does not
-            have any children will return an empty dict. '''
-        return {}
+        ''' Return tuple of sub objects. Non-directory file objects that does not
+            have any children will return an empty tuple. '''
+        return (,)
 
 
     def close(self):
@@ -116,8 +115,8 @@ class BaseObj(object):
 
 
     #pylint: disable=unused-argument
-    def get(self, v, d=None):
-        ''' Return child object v '''
+    def get(self, child, nochild=None):
+        ''' Return child object child, return nochild if not present '''
         return d
 
 
@@ -264,12 +263,12 @@ class DirObj(BaseObj):
             for name in os.listdir(self.fullpath):
                 self.dir[name] = create_from_fs(name, self.fullpath, treeid=self.treeid)
 
-        return self.dir.copy()
+        return tuple(self.dir.keys())
 
 
-    def get(self, v, d=None):
-        ''' Return child object v '''
-        return self.dir.get(v, d)
+    def get(self, child, nochild=None):
+        ''' Return child object child '''
+        return self.dir.get(child, nochild)
 
 
     def add_child(self, child):
@@ -415,41 +414,54 @@ def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None
 
 def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
              traverse_oneside=None, exception_fn=None, close_during=True):
-    ''' Generator function that traverses the directories in dirs list
-        simultaneously in paralell. This function is useful for scanning a file
-        system, and for comparing two or more directories.
+    '''
+    Generator function that recursively traverses the directories in
+    list ``dirs``. This function can scan a file system or compare two
+    or more directories in parallel.
 
-        The elements in the dirs list must either be a string pointing to a
-        physical directory path or a previously parsed DirObj() object. If a
-        path string is given, the file system will be scanned for files. If a
-        DirObj() object is given, the in-object cached data will be used for
-        traversal. The latter is useful e.g. when reading scan files from disk.
+    As it walks the directories, it will yield tuples containing
+    ``(path, objs)`` for each file object it finds. ``path`` represents the
+    common file path. ``objs`` is a tuple of file objects representing the
+    respective found file object from the directories given by the ``dirs``
+    list. The objects returned are derived types of ``BaseObj``, such
+    as ``FileObj``, ``DirObj``. If a file is only present in one of the
+    dirs,  the object returned in the dirs where the file isn't present will
+    be returned as a ``NonExistingObj`` object.
 
-        As it walks down the directories, for each file object it finds it will
-        it will yield a tuple containing (path, objs). path represents the
-        common file path. objs is a tuple of objects representing the found
-        file/directory-object found in the respective directory tree from the
-        dirs list. The file objects returned are derived types of BaseObj, such
-        as FileObj, DirObj. If a file is only present in one of the trees, the
-        object returned in the tree(s) where the file isn't present, will be
-        NonExistingObj() object.
+    **Arguments:**
+     ``dirs``
+        List of directories to walk. The elements must either be a path string
+        to a physical directory or a previously parsed ``DirObj`` object.
+        If a string is given, the file system given by the path will be
+        recursively scanned for files. If a ``DirObj`` object is given, the
+        in-object cached data will be used for traversal. The latter is useful
+        e.g. when reading scan files from disk.
 
-        Options:
-        reverse          reverses the scanning order
-        excludes         a list of excluded paths, relative to the common path
-        onefs            will only scan file objects belonging to the same file
-                         system
-        traverse_onside  will walk/yield all file objects in a directory that
-                         exists on only one side
-        exception_fn     a callback with format exception_fn(exception)
-                         returning bool. It will be called with the exception
-                         if any scanning exception occur during traversal. If
-                         exception_fn returns False or is not set, an ordinary
-                         exception will be raised.
-        close_during     will close already-yielded objects to allow GC to
-                         harvest spent objects to save memory. Otherwise the
-                         directory objects contains references to their
-                         children, which keeps the whole tree in memory.
+     ``reverse``
+        Reverses the scanning order
+
+     ``excludes``
+        List of excluded paths, relative to the common path
+
+     ``onefs``
+        Scan file objects belonging to the same file system only
+
+     ``traverse_onside``
+        Will walk/yield all file objects in a directory that exists on only one
+        side
+
+     ``exception_fn``
+        Exception handler callback. It has format ``exception_fn(exception)``
+        returning ``Bool``. It will be called if any scanning exceptions occur
+        during traversal. If exception_fn() returns False or is not set, an
+        ordinary exception will be raised.
+
+     ``close_during``
+        will call ``obj.close()`` on objects that have been yielded to the
+        caller. This allows freeing up parsed objects to conserve memory. Note
+        that this tears down the in-memory directory tree, making it impossible
+        to reuse the object tree after ``walkdirs()`` is complete.
+
     '''
 
    # Ensure the exclusion list is a list
@@ -537,7 +549,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     continue
 
                 # Get and append the children names
-                children = o.children().keys()
+                children = o.children()
                 debug("  Children of %s is %s" %(o,children))
                 subobjs.append(children)
 
