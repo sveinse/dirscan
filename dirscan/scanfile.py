@@ -14,6 +14,7 @@ extent permitted by law.
 from __future__ import absolute_import, division, print_function
 
 import os
+import sys
 import datetime
 
 from . import dirscan
@@ -30,7 +31,11 @@ def readscanfile(fname, treeid=None):
     rootobj = None
     base_fname = os.path.basename(fname)
 
-    with open(fname, 'r') as infile:
+    kw = {}
+    if sys.version_info[0] >= 3:
+        kw['errors']='surrogateescape'
+
+    with open(fname, 'r', **kw) as infile:
         lineno = 0
         for line in infile:
             lineno += 1
@@ -82,6 +87,7 @@ def readscanfile(fname, treeid=None):
     return rootobj
 
 
+
 # SIMPLE TEXT QUOTER
 # ==================
 #
@@ -96,26 +102,29 @@ def quote(text):
 
     needquote = False
     for s in text:
-        if ord(s) <= 32 or ord(s) == 44 or ord(s) == 92:
+        v = ord(s)
+        if v <= 32 or v == 44 or v == 92:
             needquote = True
             break
     if not needquote:
         return text
     ns = ''
     for s in text:
+        v = ord(s)
         if ',' in s:
             ns += '\\-'
         elif '\\' in s:
             ns += '\\\\'
         elif ' ' in s:
             ns += '\\_'
-        elif ord(s) == 28 or ord(s) == 31:
-            ns += '\\%s' %(chr(ord(s)+32))
-        elif ord(s) < 32:
-            ns += '\\%s' %(chr(ord(s)+64))
+        elif v == 28 or v == 31:
+            ns += '\\%s' %(chr(v+32))
+        elif v < 32:
+            ns += '\\%s' %(chr(v+64))
         else:
             ns += s
     return ns
+
 
 
 def unquote(text):

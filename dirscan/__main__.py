@@ -189,7 +189,10 @@ def dirscan_main(argv=None):
 
         # -- Open output file
         if opts.outfile:
-            outfile = open(opts.outfile, 'w')
+            kw = {}
+            if sys.version_info[0] >= 3:
+                kw['errors']='surrogateescape'
+            outfile = open(opts.outfile, 'w', **kw)
 
 
         # -- TRAVERSE THE DIR(S)
@@ -234,8 +237,8 @@ def dirscan_main(argv=None):
 
             # Set the base fields
             fields = {
-                'path'  : str(path),
-                'change': str(change),
+                'path'  : path,
+                'change': change,
                 'arrow' : fileinfo.COMPARE_ARROWS[change][1],
                 'text'  : text.capitalize(),
             }

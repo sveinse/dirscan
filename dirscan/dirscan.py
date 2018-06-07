@@ -87,7 +87,7 @@ class BaseObj(object):
     def children(self):
         ''' Return tuple of sub objects. Non-directory file objects that does not
             have any children will return an empty tuple. '''
-        return (,)
+        return tuple()
 
 
     def close(self):
@@ -117,11 +117,11 @@ class BaseObj(object):
     #pylint: disable=unused-argument
     def get(self, child, nochild=None):
         ''' Return child object child, return nochild if not present '''
-        return d
+        return nochild
 
 
     def __repr__(self):
-        treeid='%s:' %(self.treeid) if self.treeid is not None else ''
+        treeid = '%s:' %(self.treeid) if self.treeid is not None else ''
         return "%s(%s'%s')" %(type(self).__name__, treeid, self.fullpath)
 
 
@@ -530,7 +530,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         present = sum([not isinstance(o, NonExistingObj) and not o.excluded for o in objs])
 
         # Send back object list to caller
-        debug('scan %s:  %s' %(path,objs))
+        debug('scan %s:  %s' %(path, objs))
         yield (path, objs)
 
         # Create a list of unique children names seen across all objects, where
@@ -550,7 +550,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
 
                 # Get and append the children names
                 children = o.children()
-                debug("  Children of %s is %s" %(o,children))
+                debug("  Children of %s is %s" %(o, children))
                 subobjs.append(children)
 
             # Getting the children failed

@@ -12,7 +12,7 @@ free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
 
-__version__ = '0.9.1'
+__version__ = '0.9.1a1'
 
 
 from .dirscan import walkdirs, create_from_fs, create_from_data
