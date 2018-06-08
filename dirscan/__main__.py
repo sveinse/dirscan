@@ -17,7 +17,8 @@ import sys
 
 from . import fileinfo
 from .log import debug, set_debug
-from .scanfile import SCANFILE_FORMAT, readscanfile, quote
+from .scanfile import SCANFILE_FORMAT, readscanfile, fileheader
+from .scanfile import file_quoter, text_quoter
 from .compare import dir_compare1, dir_compare2
 from .dirscan import walkdirs, DirscanException, DirObj
 from .usage import dirscan_argumentparser, DIRSCAN_FORMAT_HELP
@@ -193,6 +194,7 @@ def dirscan_main(argv=None):
             if sys.version_info[0] >= 3:
                 kw['errors']='surrogateescape'
             outfile = open(opts.outfile, 'w', **kw)
+            outfile.write(fileheader())
 
 
         # -- TRAVERSE THE DIR(S)
@@ -252,11 +254,11 @@ def dirscan_main(argv=None):
 
             # Print to stdout
             if printfmt:
-                fileinfo.write_fileinfo(printfmt, fields)
+                fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter)
 
             # Write to file -- don't write if we couldn't get all fields
             if writefmt and not errs:
-                fileinfo.write_fileinfo(writefmt, fields, quoter=quote, file=outfile)
+                fileinfo.write_fileinfo(writefmt, fields, quoter=file_quoter, file=outfile)
 
 
     except DirscanException as err:

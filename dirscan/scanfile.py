@@ -23,6 +23,31 @@ from . import dirscan
 # File format for serialized data-file
 SCANFILE_FORMAT = "{type},{size},{mode},{uid},{gid},{mtime_n},{data},{path}"
 
+# Known scan file versions
+SCANFILE_VERSIONS = ( 'v1', )
+
+
+
+def fileheader():
+    ''' Return the file header of the scan-file '''
+    return '#!ds:v1\n'
+
+
+
+def checkheader(line, fname):
+
+    if not line:
+        raise dirscan.DirscanException("Scanfile '%s' is empty" %(fname,))
+    line = line.rstrip()
+
+    if not line.startswith('#!ds:v'):
+        raise dirscan.DirscanException("Scanfile '%s' does not seem to be a scan-file" %(fname,))
+
+    ver = line[5:]
+    if ver not in SCANFILE_VERSIONS:
+        raise dirscan.DirscanException("Scanfile '%s' use unknown version '%s'" %(fname, ver))
+
+
 
 def readscanfile(fname, treeid=None):
     ''' Read fname scan file and return a DirObj() with the file tree root '''
@@ -36,7 +61,11 @@ def readscanfile(fname, treeid=None):
         kw['errors']='surrogateescape'
 
     with open(fname, 'r', **kw) as infile:
-        lineno = 0
+
+        # Check the scanfile header
+        checkheader(infile.readline(), fname)
+
+        lineno = 1
         for line in infile:
             lineno += 1
 
@@ -88,42 +117,66 @@ def readscanfile(fname, treeid=None):
 
 
 
-# SIMPLE TEXT QUOTER
-# ==================
+# SIMPLE QUOTER USED IN SCAN FILES
+# ================================
 #
-#     \ -> \\
-#     space -> \_
-#     , -> \-
-#     28 -> \<
-#     31 -> \?
-#     <32 to \@ to \^ (with the exception for 28 and 31)
-def quote(text):
+#     '\' -> '\\'
+#     ' ' -> '\ '
+#     ',' -> '\-'
+#     <32 and 127-255 -> '\xNN'
+#
+
+def text_quoter(text):
+    ''' Quote the text for printing '''
+
+    out = ''
+    for s in text:
+        v = ord(s)
+        if v < 32 or v == 127:
+            out += '\\x%02x' %(v)
+        #elif v == 32:  # ' '
+        #    out += '\\ '
+        #elif v == 44:  # ','
+        #    out += '\\-'
+        elif v == 92:  # '\'
+            out += '\\\\'
+        else:
+            out += s
+
+    if sys.version_info[0] < 3:
+        try:
+            _tmp = text.decode('utf-8')
+        except UnicodeDecodeError:
+            # This takes care of escaping strings containing encoding errors.
+            # Specifically this takes care of esacaping >=128 chars into \xNN,
+            # but not correct unicode code points.
+            # [1:-1] removes the ' prefix and ' postfix
+            out = repr(out)[1:-1]
+    else:
+        try:
+            _tmp = text.encode('utf-8')
+        except UnicodeEncodeError:
+            # Strings with encoding errors will come up as surrogates, which
+            # will fail the encode. This code will make the str into a bytes
+            # object and back to a string, where surrogates will be escaped
+            # as \xNN. [2:-1] removes the b' prefix and ' postfix
+            out = str(os.fsencode(out))[2:-1]
+
+    return out
+
+
+
+def file_quoter(text):
     ''' Simple text quoter for the scan files '''
 
-    needquote = False
-    for s in text:
-        v = ord(s)
-        if v <= 32 or v == 44 or v == 92:
-            needquote = True
-            break
-    if not needquote:
-        return text
-    ns = ''
-    for s in text:
-        v = ord(s)
-        if ',' in s:
-            ns += '\\-'
-        elif '\\' in s:
-            ns += '\\\\'
-        elif ' ' in s:
-            ns += '\\_'
-        elif v == 28 or v == 31:
-            ns += '\\%s' %(chr(v+32))
-        elif v < 32:
-            ns += '\\%s' %(chr(v+64))
-        else:
-            ns += s
-    return ns
+    text = text_quoter(text)
+
+    # Special scan file escapings
+    if ',' in text:
+        text = text.replace(',', '\\-')
+    if ' ' in text:
+        text = text.replace(' ', '\\ ')
+    return text
 
 
 
@@ -132,26 +185,45 @@ def unquote(text):
 
     if '\\' not in text:
         return text
-    ns = ''
+    out = ''
+    getchars = 0
     escape = False
+    hexstr = ''
     for s in text:
-        if escape:
+
+        if getchars:
+            # Getting char value for \xNN escape codes
+            hexstr += s
+            getchars -= 1
+            if getchars == 0:
+                v = int(hexstr, 16)
+                # Code-points above 128 must be made into a surrogate on py3
+                # for the quoter to work with this values
+                if v >= 128 and sys.version_info[0] >= 3:
+                    v |= 0xdc00
+                out += chr(v)
+
+        elif escape:
+            # Getting escape code following '\'
             if '\\' in s:
-                ns += '\\'
+                out += '\\'
             elif '-' in s:
-                ns += ','
-            elif '_' in s:
-                ns += ' '
-            elif '<' in s:
-                ns += chr(28)
-            elif '?' in s:
-                ns += chr(31)
-            elif ord(s) >= 64 and ord(s) <= 95:
-                ns += chr(ord(s)-64)
-            # Unknown/incorrectly formatted escape char is silently ignored
+                out += ','
+            elif ' ' in s:
+                out += ' '
+            elif 'x' in s:
+                getchars = 2
+                hexstr = ''
+            else:
+                raise dirscan.DirscanException("Unknown escape char '%s'" %(s,))
             escape = False
+
         elif '\\' in s:
             escape = True
+
         else:
-            ns += s
-    return ns
+            out += s
+
+    if escape or getchars:
+        raise dirscan.DirscanException("Incomplete escape string '%s'" %(text))
+    return out

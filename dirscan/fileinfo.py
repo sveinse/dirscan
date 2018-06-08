@@ -14,7 +14,6 @@ extent permitted by law.
 from __future__ import absolute_import, division, print_function
 
 import sys
-import os
 import stat
 import time
 import string
@@ -165,21 +164,21 @@ def format_bytes(size, print_full=False):
         kbm = 0
         n = kbi
         # Iterate through each "decade" unit
-        for unit in ('B', 'K', 'M', 'G'):
+        for unit in ('B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'):
             n = float(kbi) + float(kbm)/1024
 
             # Various print options. If a matching value range is found then exit loop
             if kbi < 10:
-                sizestr = '%.2f%s' %(n, unit)
+                sizestr = '%.2f %s' %(n, unit)
                 break
             elif kbi < 100:
-                sizestr = '%.1f%s' %(n, unit)
+                sizestr = '%.1f %s' %(n, unit)
                 break
             elif kbi < 1000:
-                sizestr = '%.0f%s' %(n, unit)
+                sizestr = '%.0f %s' %(n, unit)
                 break
             elif kbi < 2048:
-                sizestr = '%.0f%s' %(n, unit)
+                sizestr = '%.0f %s' %(n, unit)
                 break
 
             # If kbi (remaining value) is >=2048 then we will go to
@@ -291,20 +290,8 @@ def get_fieldnames(formatstr):
 
 
 
-def quoter(text):
-    ''' Quote the text safe for printing '''
-    if sys.version_info[0] >= 3:
-        try:
-            _tmp = text.encode('utf-8')
-        except UnicodeEncodeError:
-            # To remove the b' prefix and ' postfix
-            text = str(os.fsencode(text))[2:-1]
-    return text
-
-
-
 # pylint: disable=W0622
-def write_fileinfo(fmt, fields, quoter=quoter, file=sys.stdout):
+def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
     ''' Write fileinfo fields '''
 
     if quoter:

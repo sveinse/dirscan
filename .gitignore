@@ -17,5 +17,7 @@ venv*/
 tags
 
 tests/test*/
+tests/venv*/
+
 .vscode/
 __experimental/

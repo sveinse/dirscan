@@ -1,8 +1,143 @@
 #!/bin/bash
 
-ds="$(realpath ../venv3/bin/dirscan)"
+ME="$(basename "$0")"
+HERE="$(dirname "$0")"
+
+cleanvenv=
+py3=1
 
 
+# -- Helpers
+log () {
+    echo "$ME: $*"
+}
+quit () {
+    err=$1
+    shift
+    [[ $# -gt 0 ]] && log "$@"
+    exit $err
+}
+
+usage () {
+    cat <<EOF
+$ME -- Dirscan tester
+(C) 2018 Svein Seldal <sveinse@seldal.com>
+
+  Run dirscan tests
+
+Usage: $ME [OPTION] TESTS...
+
+Options:
+  -h, --help         Print this help
+  -2, --py2          Test using python2
+  -3, --py3          Test using python3
+  --clean            Clean previous venvs
+EOF
+}
+
+
+main() {
+    declare -A opts
+    while [[ "$#" -gt 0 ]]
+    do
+        case "$1" in
+            --clean)
+                cleanvenv=1
+                ;;
+            --debug)
+                export PS4='   --->  $LINENO:  '
+                set -x
+                ;;
+            -h|--help)
+                usage
+                exit 1
+                ;;
+            -2|--py2)
+                py3=
+                ;;
+            -3|--py3)
+                py3=1
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                quit 1 "Unknown argument '$1'"
+                ;;
+            *)
+                args+=("$1")
+                ;;
+        esac
+        shift
+    done
+    # Catch up any args after -- as well
+    while [[ "$#" -gt 0 ]]; do
+        args+=("$1")
+        shift
+    done
+
+    # -- Check remaining arg count
+    if [[ ${#args[@]} -lt 1 ]]; then
+        usage
+        quit 1 "Too few arguments"
+    fi
+
+
+    # -- Setup the testing venvs
+    if [[ "$py3" ]]; then
+        venv="$(pwd)/venv3"
+        [[ "$cleanvenv" ]] && rm -rf $venv
+        if [[ ! -d "$venv" ]]; then
+            log "Setting up py3 virtual environment in $venv"
+            (set -ex;
+            python3 -m venv $venv
+            cd $HERE/..
+            $venv/bin/pip install -e .
+            ) || exit 1
+        fi
+    else
+        venv="$(pwd)/venv2"
+        [[ "$cleanvenv" ]] && rm -rf $venv
+        if [[ ! -d "$venv" ]]; then
+            log "Setting up py2 virtual environment in $venv"
+            (set -ex;
+            virtualenv $venv
+            cd $HERE/..
+            $venv/bin/pip install -e .
+            ) || exit 1
+        fi
+    fi
+    ds="$venv/bin/dirscan"
+
+
+    # -- Read all test files
+    testfiles=(??-*.sh)
+    alltests=()
+    for testfile in "${testfiles[@]}"; do
+        [[ ! -f "$testfile" ]] && continue
+        source "$testfile"
+        if [[ "$all" ]]; then
+            alltests+=("${all[@]}")
+        fi
+    done
+
+    # -- Execute the tests
+    for name in "${args[@]}"; do
+        test_${name}
+        tclean
+    done
+
+    #    # Execute all tests
+    #    for name in "${alltests[@]}"; do
+    #        test_${name}
+    #        tclean
+    #    done
+}
+
+
+
+# -- Test functions
 tsetup() {
     dstest="$1"
     shift
@@ -54,27 +189,6 @@ techo() {
 }
 
 
-testfiles=(??-*.sh)
-alltests=()
-for testfile in "${testfiles[@]}"; do
-    [[ ! -f "$testfile" ]] && continue
-    source "$testfile"
-    if [[ "$all" ]]; then
-        alltests+=("${all[@]}")
-    fi
-done
 
-
-
-if [[ $# -gt 0 ]]; then
-    for name in "$@"; do
-        test_${name}
-        tclean
-    done
-else
-    # Execute all tests
-    for name in "${alltests[@]}"; do
-        test_${name}
-        tclean
-    done
-fi
+# -- RUN
+main "$@"
