@@ -14,7 +14,6 @@ extent permitted by law.
 from __future__ import absolute_import, division, print_function
 
 import sys
-import datetime
 
 from . import fileinfo
 from .log import debug, set_debug
@@ -23,31 +22,8 @@ from .scanfile import file_quoter, text_quoter
 from .compare import dir_compare1, dir_compare2
 from .dirscan import walkdirs, DirscanException, DirObj
 from .usage import dirscan_argumentparser, DIRSCAN_FORMAT_HELP
+from .progress import PrintProgress
 
-
-
-class PrintProgress(object):
-    ''' A simple wrapper for print() to output a progress line '''
-
-    next_clear = False
-
-    def __init__(self, file=sys.stdout):
-        self.file = file
-
-    def print(self, *args, progress=False, **kwargs):
-        end = kwargs.get('end', '\n')
-
-        if progress:
-            end = ''
-            print('\r\x1b[K', end='', file=self.file)
-            self.next_clear = True
-
-        elif self.next_clear:
-            print('\r\x1b[K', end='', file=self.file)
-            self.next_clear = False
-
-        print(*args, **kwargs, end=end, file=self.file)
-        self.file.flush()
 
 
 
@@ -107,6 +83,7 @@ def dirscan_main(argv=None):
         prefixes = ['']
         summary = list(fileinfo.SCAN_SUMMARY)
         dir_comparator = dir_compare1
+        name = 'Scanned'
 
         if opts.outfile:
             writefmt = SCANFILE_FORMAT
@@ -140,6 +117,10 @@ def dirscan_main(argv=None):
         prefixes = ['l_', 'r_']
         summary = list(fileinfo.COMPARE_SUMMARY)
         dir_comparator = dir_compare2
+        name = 'Compared'
+
+        if opts.outfile:
+            argp.error("Writing to an outfile is not supported when comparing directories")
 
 
     # -- Read the scan files
@@ -193,7 +174,7 @@ def dirscan_main(argv=None):
 
 
     # -- Handler for printing progress to stderr
-    stderr = PrintProgress(file=sys.stderr)
+    progress = PrintProgress(file=sys.stderr, delta_ms=200, show_progress=opts.progress)
 
 
     # -- Prepare the histograms to collect statistics
@@ -205,7 +186,7 @@ def dirscan_main(argv=None):
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
-            stderr.print('%s: %s' %(prog, exception))
+            progress.print('%s: %s' %(prog, exception))
         # True will swallow the exception
         return True
 
@@ -228,8 +209,6 @@ def dirscan_main(argv=None):
 
         # Prepare progress values
         count = 0
-        laststamp = datetime.datetime.now()
-        timedelta = datetime.timedelta(milliseconds=200)
 
         # -- TRAVERSE THE DIR(S)
         for (path, objs) in walkdirs(
@@ -242,10 +221,8 @@ def dirscan_main(argv=None):
 
             # Progress printing
             count += 1
-            stamp = datetime.datetime.now()
-            if opts.progress and (stamp - laststamp) > timedelta:
-                laststamp = stamp
-                stderr.print("Scanned %s files:  %s " %(count, path), progress=True)
+            cur = objs[0].fullpath if len(objs) == 1 else path
+            progress.progress("%s %s files:  %s " %(name, count, cur))
 
             # Compare the objects
             try:
@@ -311,6 +288,9 @@ def dirscan_main(argv=None):
         # Close any open output file
         if outfile:
             outfile.close()
+
+        # Close the progress output
+        progress.close()
 
 
     #
