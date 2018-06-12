@@ -187,7 +187,7 @@ def dirscan_argumentparser():
         Quiet operation
         ''')
     argp.add_argument('-Q', '--suppress-errors', action='store_true',
-                      dest='realquiet', default=False, help='''
+                      dest='quieterr', default=False, help='''
         Suppress error messages
         ''')
     argp.add_argument('-r', '--reverse', action='store_true', dest='reverse',
@@ -229,6 +229,10 @@ def dirscan_argumentparser():
     argp.add_argument('--format-help', action='store_true', dest='formathelp', default=None,
                       help='''
         Show help for --format and --summary
+        ''')
+    argp.add_argument('-p', '--progress', action='store_true', dest='progress',
+                      default=False, help='''
+        Show progress while scanning
         ''')
 
     # Main arguments
