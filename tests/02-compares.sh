@@ -41,7 +41,8 @@ test_0204 () {
 test_0205 () {
     tsetup $FUNCNAME "Compare test, file changed"
     mkdir a b
-    techo "one" a/file b/file
+    techo "one" a/file
+    techo "two" b/file
 
     dirscan a b
 }

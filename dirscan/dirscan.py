@@ -60,6 +60,11 @@ class BaseObj(object):
 
 
     def __init__(self, name, path='', stat=None, treeid=None):
+
+        # Ensure the name does not end with a slash, that messes up path
+        # calculations later in directory compares
+        name = name.rstrip('/')
+
         self.path = path
         self.name = name
         self.stat = stat
@@ -493,8 +498,6 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         except OSError as err:
             raise DirscanException(str(err))
 
-    baserepl = './' if base[0].name.startswith('/') else '.'
-
     # Start the queue
     queue = [tuple(base)]
 
@@ -504,10 +507,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         # Get the next set of objects
         objs = queue.pop(-1)
 
-        # Relative path: Gives './', './a', './b'
-        path = objs[0].fullpath.replace(base[0].name, baserepl, 1)
-        if path == './':
-            path = '.'
+        # Relative path: Gives '.', './a', './b'
+        path = objs[0].fullpath.replace(base[0].name, '.', 1)
 
         # Parse the objects, getting object metadata
         for o, b in zip(objs, base):
