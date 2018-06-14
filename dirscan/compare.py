@@ -78,8 +78,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
             text += ", right is excluded"
         return ('left_only', text)
 
-    s = set([o.objtype for o in objs])
-    if len(s) > 1:
+    if len(set(o.objtype for o in objs)) > 1:
         # File type DIFFERENT
         # ===================
         text = "Different type, %s in left and %s in right" %(
@@ -97,41 +96,42 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
 
     # compare returns a list of differences. If None, they are equal
     # This might fail, so be prepared to catch any errors
-    rl = objs[0].compare(objs[1])
-    if rl:
+    changes = objs[0].compare(objs[1])
+    if changes:
         # Make a new list and filter out the ignored differences
-        el = []
-        change = 'changed'
-        for r in rl:
-            if 'newer' in r:
-                if len(rl) == 1 and not compare_dates:
+        filtered_changes = []
+        change_type = 'changed'
+        for change in changes:
+            if 'newer' in change:
+                if len(changes) == 1 and not compare_dates:
                     continue
                 if 't' in ignores:
                     continue
-                r = 'left is newer'
-                change = 'left_newer'
-            elif 'older' in r:
-                if len(rl) == 1 and not compare_dates:
+                change = 'left is newer'
+                change_type = 'left_newer'
+            elif 'older' in change:
+                if len(changes) == 1 and not compare_dates:
                     continue
                 if 't' in ignores:
                     continue
-                r = 'right is newer'
-                change = 'right_newer'
-            elif 'u' in ignores and 'UID differs' in r:
+                change = 'right is newer'
+                change_type = 'right_newer'
+            elif 'u' in ignores and 'UID differs' in change:
                 continue
-            elif 'g' in ignores and 'GID differs' in r:
+            elif 'g' in ignores and 'GID differs' in change:
                 continue
-            elif 'p' in ignores and 'permissions differs' in r:
+            elif 'p' in ignores and 'permissions differs' in change:
                 continue
-            el.append(r)
+            filtered_changes.append(change)
 
-        if el:  # else from this test indicates file changed, but all
-                # changes have been masked with above ignore settings
+        if filtered_changes:  # else from this test indicates file changed,
+                              # but all changes have been masked with
+                              # ignore settings
 
             # File contents CHANGED
             # =====================
-            text = "%s changed: %s" %(objs[0].objname, ", ".join(el))
-            return (change, text)
+            text = "%s changed: %s" %(objs[0].objname, ", ".join(filtered_changes))
+            return (change_type, text)
 
         # Compares with changes may fall through here because of
         # ignore settings

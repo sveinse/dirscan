@@ -132,14 +132,15 @@ def split_number(number):
     ''' Split a number into groups of 3 chars. E.g "1234776" will be
         returned as "1 234 776".
     '''
-    s = str(number)
-    n = []
-    for i in range(-1, -len(s)-1, -1):
-        n.append(s[i])
+    text = str(number)
+    group = []
+    # Traverse the string in reverse and insert a space foreach 3rd group
+    for i in range(-1, -len(text)-1, -1):
+        group.append(text[i])
         if i % 3 == 0:
-            n.append(' ')
-    n.reverse()
-    return ''.join(n).lstrip()
+            group.append(' ')
+    group.reverse()
+    return ''.join(group).lstrip()
 
 
 
@@ -158,34 +159,34 @@ def format_bytes(size, print_full=False):
         sizestr = '%s' %(size)
 
     else:
-        # Kbi = integer part, kbm = modulus part
-        # n = reconstructed float
-        kbi = size
-        kbm = 0
-        n = kbi
+        # kb_int = integer part, kb_mod = modulus part
+        # scaled_size = reconstructed float
+        kb_int = size
+        kb_mod = 0
+        scaled_size = kb_int
         # Iterate through each "decade" unit
         for unit in ('B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'):
-            n = float(kbi) + float(kbm)/1024
+            scaled_size = float(kb_int) + float(kb_mod)/1024
 
             # Various print options. If a matching value range is found then exit loop
-            if kbi < 10:
-                sizestr = '%.2f %s' %(n, unit)
+            if kb_int < 10:
+                sizestr = '%.2f %s' %(scaled_size, unit)
                 break
-            elif kbi < 100:
-                sizestr = '%.1f %s' %(n, unit)
+            elif kb_int < 100:
+                sizestr = '%.1f %s' %(scaled_size, unit)
                 break
-            elif kbi < 1000:
-                sizestr = '%.0f %s' %(n, unit)
+            elif kb_int < 1000:
+                sizestr = '%.0f %s' %(scaled_size, unit)
                 break
-            elif kbi < 2048:
-                sizestr = '%.0f %s' %(n, unit)
+            elif kb_int < 2048:
+                sizestr = '%.0f %s' %(scaled_size, unit)
                 break
 
-            # If kbi (remaining value) is >=2048 then we will go to
+            # If kb_int (remaining value) is >=2048 then we will go to
             # next unit. Hence we need to divide by 1024 for the next
             # round.
-            kbm = kbi % 1024
-            kbi = kbi >> 10
+            kb_mod = kb_int % 1024
+            kb_int = kb_int >> 10
 
     if print_full:
         extra = ' bytes'
@@ -198,22 +199,33 @@ def format_bytes(size, print_full=False):
 
 def format_mode(objtype, mode):
     ''' Return a human readable string of the mode permission bits '''
-    text = list('-') * 9
-    ev = [
-        (stat.S_IRUSR, 0, 'r'), (stat.S_IWUSR, 1, 'w'), (stat.S_IXUSR, 2, 'x'),
-        (stat.S_ISUID, 2, 'S'), (stat.S_IXUSR|stat.S_ISUID, 2, 's'),
-        (stat.S_IRGRP, 3, 'r'), (stat.S_IWGRP, 4, 'w'), (stat.S_IXGRP, 5, 'x'),
-        (stat.S_ISGID, 5, 'S'), (stat.S_IXGRP|stat.S_ISGID, 5, 's'),
-        (stat.S_IROTH, 6, 'r'), (stat.S_IWOTH, 7, 'w'), (stat.S_IXOTH, 8, 'x'),
-        (stat.S_ISVTX, 8, 'T'), (stat.S_IXOTH|stat.S_ISVTX, 8, 't'),
-        ]
-    for (m, p, c) in ev:
-        if mode & m == m:
-            text[p] = c
-    ot = objtype
+
+    mode_sequence = (
+        # Posistion, character, condition
+        (0, 'r', stat.S_IRUSR),
+        (1, 'w', stat.S_IWUSR),
+        (2, 'x', stat.S_IXUSR),
+        (2, 'S', stat.S_ISUID),
+        (2, 's', stat.S_IXUSR|stat.S_ISUID),
+        (3, 'r', stat.S_IRGRP),
+        (4, 'w', stat.S_IWGRP),
+        (5, 'x', stat.S_IXGRP),
+        (5, 'S', stat.S_ISGID),
+        (5, 's', stat.S_IXGRP|stat.S_ISGID),
+        (6, 'r', stat.S_IROTH),
+        (7, 'w', stat.S_IWOTH),
+        (8, 'x', stat.S_IXOTH),
+        (8, 'T', stat.S_ISVTX),
+        (8, 't', stat.S_IXOTH|stat.S_ISVTX),
+    )
+
+    mode_text = list('-') * 9
+    for (pos, char, cond) in mode_sequence:
+        if mode & cond == cond:
+            mode_text[pos] = char
     if objtype == 'f':
-        ot = '-'
-    return ot + ''.join(text)
+        objtype = '-'
+    return objtype + ''.join(mode_text)
 
 
 
@@ -324,15 +336,15 @@ class FileHistogram(object):
     def __init__(self, dir):
         self.dir = dir
         self.size = 0
-        self.d = {}
+        self.bins = {}
 
-    def add(self, v):
-        ''' Increase count of variable v '''
-        self.d[v] = self.d.get(v, 0) + 1
+    def add(self, item):
+        ''' Increase count of variable item '''
+        self.bins[item] = self.bins.get(item, 0) + 1
 
-    def get(self, v):
+    def get(self, item):
         ''' Return count value of v '''
-        return self.d.get(v, 0)
+        return self.bins.get(item, 0)
 
     def add_size(self, size):
         ''' Add size variable '''
@@ -352,7 +364,7 @@ class FileHistogram(object):
             'n_sockets': self.get('s'),
             'n_missing': self.get('-'),
             'n_exclude': self.get('x'),
-            'n_objects': sum(self.d.values()),
+            'n_objects': sum(self.bins.values()),
             'sum_bytes': self.size,
             'sum_bytes_t': format_bytes(self.size, print_full=True),
         }
@@ -364,15 +376,15 @@ class CompareHistogram(object):
     def __init__(self, left, right):
         self.left = left
         self.right = right
-        self.d = {}
+        self.bins = {}
 
-    def add(self, v):
-        ''' Increase count of variable v '''
-        self.d[v] = self.d.get(v, 0) + 1
+    def add(self, item):
+        ''' Increase count of variable item '''
+        self.bins[item] = self.bins.get(item, 0) + 1
 
-    def get(self, v):
-        ''' Return count value of v '''
-        return self.d.get(v, 0)
+    def get(self, item):
+        ''' Return count value of item '''
+        return self.bins.get(item, 0)
 
     def get_summary_fields(self):
         ''' Return a dict with all histogram fields '''
@@ -391,7 +403,7 @@ class CompareHistogram(object):
             'n_errors': self.get('error'),
             'n_skipped': self.get('skipped'),
             'n_err': self.get('err'),
-            'sum_objects': sum(self.d.values())-self.get('err'),
+            'sum_objects': sum(self.bins.values())-self.get('err'),
         }
 
 
@@ -412,11 +424,11 @@ class Statistics(object):
     def add_filestats(self, objs):
         ''' Collect file statistics from objs list '''
 
-        for (o, fh) in zip(objs, self.filehist):
-            ot = 'x' if o.excluded else o.objtype
-            fh.add(ot)
-            if ot == 'f':
-                fh.add_size(o.size)
+        for (obj, filehist) in zip(objs, self.filehist):
+            objtype = 'x' if obj.excluded else obj.objtype
+            filehist.add(objtype)
+            if objtype == 'f':
+                filehist.add_size(obj.size)
 
     def get_fields(self, prefixes):
         ''' Get the summary fields '''
@@ -425,12 +437,13 @@ class Statistics(object):
         fields = self.compare.get_summary_fields()
 
         # Assemble the per-directory summaries
-        for (fh, pre) in zip(self.filehist, prefixes):
-            for field, data in fh.get_summary_fields().items():
+        for (filehist, prefix) in zip(self.filehist, prefixes):
+
+            for field, data in filehist.get_summary_fields().items():
 
                 # Replace 'n_' with specified prefix
-                if field.startswith('n_') and pre:
+                if field.startswith('n_') and prefix:
                     field = field[2:]
-                fields[pre + field] = data
+                fields[prefix + field] = data
 
         return fields

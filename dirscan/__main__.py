@@ -16,7 +16,7 @@ from __future__ import absolute_import, division, print_function
 import sys
 
 from . import fileinfo
-from .log import debug, set_debug
+from .log import set_debug
 from .scanfile import SCANFILE_FORMAT, readscanfile, fileheader
 from .scanfile import file_quoter, text_quoter
 from .compare import dir_compare1, dir_compare2
@@ -24,6 +24,16 @@ from .dirscan import walkdirs, DirscanException, DirObj
 from .usage import dirscan_argumentparser, DIRSCAN_FORMAT_HELP
 from .progress import PrintProgress
 
+
+
+# Print formats in scan mode
+#     A = --all,  H = --human,  L = --long
+FMT_AHL = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {mtime}  {type}  {fullpath}'
+FMT_AL = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {mtime}  {type}  {fullpath}'
+FMT_AH = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {type}  {fullpath}'
+FMT_A = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {type}  {fullpath}'
+FMT_HL = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {type}  {fullpath}'
+FMT_L = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}'
 
 
 
@@ -87,24 +97,12 @@ def dirscan_main(argv=None):
 
         if opts.outfile:
             writefmt = SCANFILE_FORMAT
-
         elif opts.all and opts.long:
-            if opts.human:
-                printfmt = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {mtime}  {type}  {fullpath}'
-            else:
-                printfmt = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {mtime}  {type}  {fullpath}'
-
+            printfmt = FMT_AHL if opts.human else FMT_AL
         elif opts.all:
-            if opts.human:
-                printfmt = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {type}  {fullpath}'
-            else:
-                printfmt = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {type}  {fullpath}'
-
+            printfmt = FMT_AH if opts.human else FMT_A
         elif opts.long:
-            if opts.human:
-                printfmt = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {type}  {fullpath}'
-            else:
-                printfmt = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}'
+            printfmt = FMT_HL if opts.human else FMT_L
 
     else:
 
@@ -201,10 +199,10 @@ def dirscan_main(argv=None):
 
         # -- Open output file
         if opts.outfile:
-            kw = {}
+            kwargs = {}
             if sys.version_info[0] >= 3:
-                kw['errors']='surrogateescape'
-            outfile = open(opts.outfile, 'w', **kw)
+                kwargs['errors'] = 'surrogateescape'
+            outfile = open(opts.outfile, 'w', **kwargs)
             outfile.write(fileheader())
 
         # Prepare progress values

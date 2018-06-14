@@ -23,7 +23,7 @@ from . import dirscan
 SCANFILE_FORMAT = "{type},{size},{mode},{uid},{gid},{mtime_n},{data},{path}"
 
 # Known scan file versions
-SCANFILE_VERSIONS = ( 'v1', )
+SCANFILE_VERSIONS = ('v1',)
 
 
 
@@ -34,6 +34,7 @@ def fileheader():
 
 
 def checkheader(line, fname):
+    ''' Check if line from fname is a correct dirscan scanfile header '''
 
     if not line:
         raise dirscan.DirscanException("Scanfile '%s' is empty" %(fname,))
@@ -55,11 +56,11 @@ def readscanfile(fname, treeid=None):
     rootobj = None
     base_fname = os.path.basename(fname)
 
-    kw = {}
+    kwargs = {}
     if sys.version_info[0] >= 3:
-        kw['errors']='surrogateescape'
+        kwargs['errors'] = 'surrogateescape'
 
-    with open(fname, 'r', **kw) as infile:
+    with open(fname, 'r', **kwargs) as infile:
 
         # Check the scanfile header
         checkheader(infile.readline(), fname)
@@ -71,12 +72,6 @@ def readscanfile(fname, treeid=None):
             # Read/parse the parameters (must be aliged with SCANFILE_FORMAT)
             args = [unquote(e) for e in line.rstrip().split(',')]
             otype = args[0]
-            osize = int(args[1] or '0')
-            omode = int(args[2])
-            ouid = int(args[3])
-            ogid = int(args[4])
-            otime = float(args[5])
-            odata = args[6] or None
             opath = args[7]
 
             if opath == '.':
@@ -90,9 +85,14 @@ def readscanfile(fname, treeid=None):
                 path = path[:-1]
 
             # Create new object.
-            obj = dirscan.create_from_data(name, path, otype, osize, omode,
-                                           ouid, ogid, otime,
-                                           data=odata,
+            obj = dirscan.create_from_data(name, path,
+                                           objtype=otype,
+                                           size=int(args[1] or '0'),
+                                           mode=int(args[2]),
+                                           uid=int(args[3]),
+                                           gid=int(args[4]),
+                                           mtime=float(args[5]),
+                                           data=args[6] or None,
                                            treeid=treeid)
 
             # The first object is special
@@ -129,18 +129,18 @@ def text_quoter(text):
     ''' Quote the text for printing '''
 
     out = ''
-    for s in text:
-        v = ord(s)
-        if v < 32 or v == 127:
-            out += '\\x%02x' %(v)
+    for char in text:
+        value = ord(char)
+        if value < 32 or value == 127:
+            out += '\\x%02x' %(value)
         #elif v == 32:  # ' '
         #    out += '\\ '
         #elif v == 44:  # ','
         #    out += '\\-'
-        elif v == 92:  # '\'
+        elif value == 92:  # '\'
             out += '\\\\'
         else:
-            out += s
+            out += char
 
     if sys.version_info[0] < 3:
         try:
@@ -188,40 +188,40 @@ def unquote(text):
     getchars = 0
     escape = False
     hexstr = ''
-    for s in text:
+    for char in text:
 
         if getchars:
             # Getting char value for \xNN escape codes
-            hexstr += s
+            hexstr += char
             getchars -= 1
             if getchars == 0:
-                v = int(hexstr, 16)
+                value = int(hexstr, 16)
                 # Code-points above 128 must be made into a surrogate on py3
                 # for the quoter to work with this values
-                if v >= 128 and sys.version_info[0] >= 3:
-                    v |= 0xdc00
-                out += chr(v)
+                if value >= 128 and sys.version_info[0] >= 3:
+                    value |= 0xdc00
+                out += chr(value)
 
         elif escape:
             # Getting escape code following '\'
-            if '\\' in s:
+            if '\\' in char:
                 out += '\\'
-            elif '-' in s:
+            elif '-' in char:
                 out += ','
-            elif ' ' in s:
+            elif ' ' in char:
                 out += ' '
-            elif 'x' in s:
+            elif 'x' in char:
                 getchars = 2
                 hexstr = ''
             else:
-                raise dirscan.DirscanException("Unknown escape char '%s'" %(s,))
+                raise dirscan.DirscanException("Unknown escape char '%s'" %(char,))
             escape = False
 
-        elif '\\' in s:
+        elif '\\' in char:
             escape = True
 
         else:
-            out += s
+            out += char
 
     if escape or getchars:
         raise dirscan.DirscanException("Incomplete escape string '%s'" %(text))

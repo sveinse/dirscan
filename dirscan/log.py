@@ -17,11 +17,15 @@ import sys
 
 _ENABLE_DEBUG = False
 
+
 def set_debug(debug):
+    ''' Set global debug mode '''
     global _ENABLE_DEBUG
     _ENABLE_DEBUG = debug
 
+
 def debug(*args, **kwargs):
+    ''' Print debug text, if enabled '''
     if not _ENABLE_DEBUG:
         return
     sys.stderr.write('DEBUG:   ')

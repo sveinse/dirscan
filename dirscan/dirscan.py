@@ -29,7 +29,8 @@ from .log import debug
 # Select hash algorthm to use
 HASHALGORITHM = hashlib.sha256
 
-HASHCHUNKSIZE = 16*1024*1024
+# Number of bytes to read per round in the hash reader
+HASHCHUNKSIZE = 16*4096
 
 
 class DirscanException(Exception):
@@ -65,30 +66,37 @@ class BaseObj(object):
 
     @property
     def fullpath(self):
+        ''' Return the complete path of the object '''
         return os.path.join(self.path, self.name)
 
     @property
     def mode(self):
+        ''' Return the file mode bits '''
         return self.stat.st_mode
 
     @property
     def uid(self):
+        ''' Return the file user ID '''
         return self.stat.st_uid
 
     @property
     def gid(self):
+        ''' Return the file group ID '''
         return self.stat.st_gid
 
     @property
     def dev(self):
+        ''' Return the device ID for the file '''
         return self.stat.st_dev
 
     @property
     def size(self):
+        ''' Return the size of the file '''
         return self.stat.st_size
 
     @property
     def mtime(self):
+        ''' Return the modified timestamp of the file '''
         return datetime.datetime.fromtimestamp(self.stat.st_mtime)
 
 
@@ -112,23 +120,23 @@ class BaseObj(object):
         self.parsed = False
 
 
-    def compare(self, other, s=None):
+    def compare(self, other, changes=None):
         ''' Return a list of differences '''
-        if s is None:
-            s = []
+        if changes is None:
+            changes = []
         if type(other) is not type(self):
             return ['type mismatch']
         if self.uid != other.uid:
-            s.append('UID differs')
+            changes.append('UID differs')
         if self.gid != other.gid:
-            s.append('GID differs')
+            changes.append('GID differs')
         if self.mode != other.mode:
-            s.append('permissions differs')
+            changes.append('permissions differs')
         if self.mtime > other.mtime:
-            s.append('newer')
+            changes.append('newer')
         elif self.mtime < other.mtime:
-            s.append('older')
-        return s
+            changes.append('older')
+        return changes
 
 
     #pylint: disable=unused-argument
@@ -179,36 +187,37 @@ class FileObj(BaseObj):
         if self.hashsum_cache:
             return self.hashsum_cache
 
-        m = HASHALGORITHM()
-        with open(self.fullpath, 'rb') as f:
+        shahash = HASHALGORITHM()
+        with open(self.fullpath, 'rb') as shafile:
             while True:
-                data = f.read(HASHCHUNKSIZE)
+                data = shafile.read(HASHCHUNKSIZE)
                 if not data:
                     break
-                m.update(data)
-            self.hashsum_cache = m.digest()
+                shahash.update(data)
+            self.hashsum_cache = shahash.digest()
         return self.hashsum_cache
 
 
     def hashsum_hex(self):
+        ''' Return the hex hashsum of the file '''
         return binascii.hexlify(self.hashsum()).decode('ascii')
 
 
-    def compare(self, other, s=None):
+    def compare(self, other, changes=None):
         ''' Compare two file objects '''
-        if s is None:
-            s = []
+        if changes is None:
+            changes = []
         if self.size != other.size:
-            s.append('size differs')
+            changes.append('size differs')
         elif self.hashsum_cache or other.hashsum_cache:
             # Does either of them have hashsum_cache set? If yes, make use of
             # hashsum based compare. filecmp might be more efficient, but if we
             # read from listfiles, we have to use hashsums.
             if self.hashsum() != other.hashsum():
-                s.append('contents differs')
+                changes.append('contents differs')
         elif not filecmp.cmp(self.fullpath, other.fullpath, shallow=False):
-            s.append('contents differs')
-        return BaseObj.compare(self, other, s)
+            changes.append('contents differs')
+        return BaseObj.compare(self, other, changes)
 
 
 
@@ -231,13 +240,13 @@ class LinkObj(BaseObj):
         self.parsed = True
 
 
-    def compare(self, other, s=None):
+    def compare(self, other, changes=None):
         ''' Compare two link objects '''
-        if s is None:
-            s = []
+        if changes is None:
+            changes = []
         if self.link != other.link:
-            s.append('link differs')
-        return BaseObj.compare(self, other, s)
+            changes.append('link differs')
+        return BaseObj.compare(self, other, changes)
 
 
 
@@ -313,13 +322,13 @@ class SpecialObj(BaseObj):
             self.objname = 'socket'
 
 
-    def compare(self, other, s=None):
+    def compare(self, other, changes=None):
         ''' Compare two link objects '''
-        if s is None:
-            s = []
+        if changes is None:
+            changes = []
         if self.objtype != other.objtype:
-            s.append('device type differs')
-        return BaseObj.compare(self, other, s)
+            changes.append('device type differs')
+        return BaseObj.compare(self, other, changes)
 
 
 
@@ -348,26 +357,24 @@ def create_from_fs(name, path='', treeid=None):
         instance of the object. The object type returned is based on
         stat of the actual file system entry.'''
     fullpath = os.path.join(path, name)
-    s = os.lstat(fullpath)
-    o = None
-    t = s.st_mode
-    if fstat.S_ISREG(t):
-        o = FileObj(name, path, s, treeid=treeid)
-    elif fstat.S_ISDIR(t):
-        o = DirObj(name, path, s, treeid=treeid)
-    elif fstat.S_ISLNK(t):
-        o = LinkObj(name, path, s, treeid=treeid)
-    elif fstat.S_ISBLK(t):
-        o = SpecialObj(name, path, s, 'b', treeid=treeid)
-    elif fstat.S_ISCHR(t):
-        o = SpecialObj(name, path, s, 'c', treeid=treeid)
-    elif fstat.S_ISFIFO(t):
-        o = SpecialObj(name, path, s, 'p', treeid=treeid)
-    elif fstat.S_ISSOCK(t):
-        o = SpecialObj(name, path, s, 's', treeid=treeid)
+    stat = os.lstat(fullpath)
+    mode = stat.st_mode
+    if fstat.S_ISREG(mode):
+        return FileObj(name, path, stat, treeid=treeid)
+    elif fstat.S_ISDIR(mode):
+        return DirObj(name, path, stat, treeid=treeid)
+    elif fstat.S_ISLNK(mode):
+        return LinkObj(name, path, stat, treeid=treeid)
+    elif fstat.S_ISBLK(mode):
+        return SpecialObj(name, path, stat, 'b', treeid=treeid)
+    elif fstat.S_ISCHR(mode):
+        return SpecialObj(name, path, stat, 'c', treeid=treeid)
+    elif fstat.S_ISFIFO(mode):
+        return SpecialObj(name, path, stat, 'p', treeid=treeid)
+    elif fstat.S_ISSOCK(mode):
+        return SpecialObj(name, path, stat, 's', treeid=treeid)
     else:
         raise DirscanException("%s: Uknown file type" %(fullpath))
-    return o
 
 
 
@@ -380,31 +387,30 @@ def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None
     fakestat = os.stat_result((mode, None, None, None, uid, gid, size, None, mtime, None))
 
     if objtype == 'f':
-        o = FileObj(name, path, stat=fakestat, treeid=treeid)
-        o.hashsum_cache = binascii.unhexlify(data) if data else None
+        fileobj = FileObj(name, path, stat=fakestat, treeid=treeid)
+        fileobj.hashsum_cache = binascii.unhexlify(data) if data else None
 
         # Hashsum is normally not defined if the size is 0.
         if not data and size == 0:
-            m = HASHALGORITHM()
-            o.hashsum_cache = m.digest()
+            fileobj.hashsum_cache = HASHALGORITHM().digest()
 
     elif objtype == 'l':
-        o = LinkObj(name, path, stat=fakestat, treeid=treeid)
-        o.link = data
+        fileobj = LinkObj(name, path, stat=fakestat, treeid=treeid)
+        fileobj.link = data
 
     elif objtype == 'd':
-        o = DirObj(name, path, stat=fakestat, treeid=treeid)
-        o.dir_parsed = True
+        fileobj = DirObj(name, path, stat=fakestat, treeid=treeid)
+        fileobj.dir_parsed = True
 
     elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
-        o = SpecialObj(name, path, stat=fakestat, dtype=objtype, treeid=treeid)
+        fileobj = SpecialObj(name, path, stat=fakestat, dtype=objtype, treeid=treeid)
 
     else:
         raise DirscanException("Unknown object type '%s'" %(objtype))
 
     # Ensure we don't go out on the FS
-    o.parsed = True
-    return o
+    fileobj.parsed = True
+    return fileobj
 
 
 
@@ -479,20 +485,20 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
     # Check list of dirs indeed are dirs and create initial object list to
     # start from
     base = []
-    for d in dirs:
-        if isinstance(d, DirObj):
-            o = d
-        elif os.path.isdir(d):
-            o = DirObj(d)
+    for dirobj in dirs:
+        if isinstance(dirobj, DirObj):
+            obj = dirobj
+        elif os.path.isdir(dirobj):
+            obj = DirObj(dirobj)
         else:
-            e = OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), d)
-            raise DirscanException(str(e))
-        base.append(o)
+            err = OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), dirobj)
+            raise DirscanException(str(err))
+        base.append(obj)
 
         # Parse the object to get the device.
         try:
-            o.parse()
-            o.children()   # To force an exception here if permission denied
+            obj.parse()
+            obj.children()   # To force an exception here if permission denied
         except OSError as err:
             raise DirscanException(str(err))
 
@@ -517,15 +523,15 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
             path = '.'
 
         # Parse the objects, getting object metadata
-        for o, b in zip(objs, base):
+        for obj, baseobj in zip(objs, base):
             try:
                 # Get file object metadata
-                o.parse()
+                obj.parse()
 
                 # Test for exclusions
-                o.exclude_files(excludes, base=b)
+                obj.exclude_files(excludes, base=baseobj)
                 if onefs:
-                    o.exclude_otherfs(base=b)
+                    obj.exclude_otherfs(base=baseobj)
 
             # Parsing the object failed
             except OSError as err:
@@ -534,7 +540,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     raise
 
         # How many objects are present?
-        present = sum([not isinstance(o, NonExistingObj) and not o.excluded for o in objs])
+        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded \
+            for obj in objs)
 
         # Send back object list to caller
         debug('scan %s:  %s' %(path, objs))
@@ -543,12 +550,12 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         # Create a list of unique children names seen across all objects, where
         # excluded objects are removed from parsing
         subobjs = []
-        for o in objs:
+        for obj in objs:
             try:
                 # Skip the children if...
 
                 # ...the parent is excluded
-                if o.excluded:
+                if obj.excluded:
                     continue
 
                 # ..the parent is the only one
@@ -556,8 +563,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     continue
 
                 # Get and append the children names
-                children = o.children()
-                debug("  Children of %s is %s" %(o, children))
+                children = obj.children()
+                debug("  Children of %s is %s" %(obj, children))
                 subobjs.append(children)
 
             # Getting the children failed
@@ -571,15 +578,19 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         for name in sorted(set(itertools.chain.from_iterable(subobjs)), reverse=not reverse):
 
             # Create a list of children objects for that name
-            child = [o.get(name, NonExistingObj(name, o.fullpath, treeid=o.treeid)) for o in objs]
+            child = tuple(obj.get(name,
+                                  NonExistingObj(name,
+                                                 obj.fullpath,
+                                                 treeid=obj.treeid)) \
+                for obj in objs)
 
             # Append it to the processing list
-            children.append(tuple(child))
+            children.append(child)
 
         # Close objects to conserve memory
         if close_during:
-            for o in objs:
-                o.close()
+            for obj in objs:
+                obj.close()
 
         # Append the newly discovered objects to the queue
         queue.extend(children)
