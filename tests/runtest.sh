@@ -5,6 +5,7 @@ HERE="$(dirname "$0")"
 
 cleanvenv=
 py3=1
+runall=
 
 
 # -- Helpers
@@ -41,6 +42,9 @@ main() {
     while [[ "$#" -gt 0 ]]
     do
         case "$1" in
+            --all)
+                runall=1
+                ;;
             --clean)
                 cleanvenv=1
                 ;;
@@ -78,7 +82,7 @@ main() {
     done
 
     # -- Check remaining arg count
-    if [[ ${#args[@]} -lt 1 ]]; then
+    if [[ ${#args[@]} -lt 1 ]] && [[ -z "$runall" ]]; then
         usage
         quit 1 "Too few arguments"
     fi
@@ -123,16 +127,16 @@ main() {
     done
 
     # -- Execute the tests
-    for name in "${args[@]}"; do
+    if [[ "$runall" ]]; then
+        tests=("${alltests[@]}")
+    else
+        tests=("${args[@]}")
+    fi
+
+    for name in "${tests[@]}"; do
         test_${name}
         tclean
     done
-
-    #    # Execute all tests
-    #    for name in "${alltests[@]}"; do
-    #        test_${name}
-    #        tclean
-    #    done
 }
 
 

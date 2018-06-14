@@ -25,7 +25,7 @@ test_0101 () {
 
 test_0102 () {
     tsetup $FUNCNAME "Simple directory scan, verbose" \
-        "- List all file contents including sha and print summary"
+        "- List scan listing with sha info and print summary"
     mk_dir a
 
     dirscan a -als
@@ -41,7 +41,7 @@ test_0103 () {
 
 test_0104 () {
     tsetup $FUNCNAME "Simple equal directory comparison, verbose" \
-        "- Shall list entries as equal"
+        "- Shall list all entries as equal"
     mk_dir a b
 
     dirscan a b -als
@@ -58,7 +58,7 @@ test_0105 () {
 
 test_0106 () {
     tsetup $FUNCNAME "Basic compare difference, verbose" \
-        "- Shall list all and show d only in right"
+        "- Shall list all entries and show d only in right"
     mk_dir a b
     rm -rf a/d
 
@@ -85,8 +85,7 @@ test_0108 () {
 
 test_0109 () {
     tsetup $FUNCNAME "Simple directory scan, descending" \
-        "- List all files in reverse" \
-        "- Ref test 0101"
+        "- List all files in reverse order" \
     mk_dir a
 
     dirscan a --reverse

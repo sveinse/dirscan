@@ -15,7 +15,6 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
-import datetime
 
 from . import dirscan
 
@@ -76,7 +75,7 @@ def readscanfile(fname, treeid=None):
             omode = int(args[2])
             ouid = int(args[3])
             ogid = int(args[4])
-            otime = datetime.datetime.fromtimestamp(float(args[5]))
+            otime = float(args[5])
             odata = args[6] or None
             opath = args[7]
 

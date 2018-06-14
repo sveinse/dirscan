@@ -21,6 +21,7 @@ import hashlib
 import errno
 import filecmp
 import fnmatch
+import binascii
 
 from .log import debug
 
@@ -45,19 +46,6 @@ class DirscanException(Exception):
 
 class BaseObj(object):
     ''' File Objects Base Class '''
-    parsed = False
-    excluded = False
-    treeid = None
-
-    # Standard file entries
-    stat = None
-    mode = None
-    uid = None
-    gid = None
-    size = None
-    dev = None
-    mtime = None
-
 
     def __init__(self, name, path='', stat=None, treeid=None):
 
@@ -71,8 +59,37 @@ class BaseObj(object):
         self.stat = stat
         self.treeid = treeid
 
-        fullpath = os.path.join(path, name)
-        self.fullpath = fullpath
+        self.parsed = False
+        self.excluded = False
+
+
+    @property
+    def fullpath(self):
+        return os.path.join(self.path, self.name)
+
+    @property
+    def mode(self):
+        return self.stat.st_mode
+
+    @property
+    def uid(self):
+        return self.stat.st_uid
+
+    @property
+    def gid(self):
+        return self.stat.st_gid
+
+    @property
+    def dev(self):
+        return self.stat.st_dev
+
+    @property
+    def size(self):
+        return self.stat.st_size
+
+    @property
+    def mtime(self):
+        return datetime.datetime.fromtimestamp(self.stat.st_mtime)
 
 
     def parse(self, done=True):
@@ -81,12 +98,6 @@ class BaseObj(object):
             return
         if not self.stat:
             self.stat = os.lstat(self.fullpath)
-        self.mode = self.stat.st_mode
-        self.uid = self.stat.st_uid
-        self.gid = self.stat.st_gid
-        self.size = self.stat.st_size
-        self.dev = self.stat.st_dev
-        self.mtime = datetime.datetime.fromtimestamp(self.stat.st_mtime)
         self.parsed = done
 
 
@@ -150,6 +161,7 @@ class BaseObj(object):
                 return
 
 
+
 class FileObj(BaseObj):
     ''' Regular File Object '''
     objtype = 'f'
@@ -174,8 +186,12 @@ class FileObj(BaseObj):
                 if not data:
                     break
                 m.update(data)
-            self.hashsum_cache = m.hexdigest()
+            self.hashsum_cache = m.digest()
         return self.hashsum_cache
+
+
+    def hashsum_hex(self):
+        return binascii.hexlify(self.hashsum()).decode('ascii')
 
 
     def compare(self, other, s=None):
@@ -230,22 +246,13 @@ class DirObj(BaseObj):
     objtype = 'd'
     objname = 'directory'
 
+    size = None
+
 
     def __init__(self, name, path='', stat=None, treeid=None):
         BaseObj.__init__(self, name, path, stat, treeid)
         self.dir = {}
         self.dir_parsed = False
-
-
-    def parse(self, done=True):
-        ''' Parse the directory tree and add children to self '''
-        # Call super, but we're not done (i.e. False)
-        if self.parsed:
-            return
-        BaseObj.parse(self, done=False)
-        self.size = None
-
-        self.parsed = True
 
 
     def close(self):
@@ -288,6 +295,8 @@ class SpecialObj(BaseObj):
     objtype = 's'
     objname = 'special file'
 
+    size = None
+
 
     def __init__(self, name, path='', stat=None, dtype='s', treeid=None):
         BaseObj.__init__(self, name, path, stat, treeid)
@@ -302,17 +311,6 @@ class SpecialObj(BaseObj):
             self.objname = 'fifo'
         elif dtype == 's':
             self.objname = 'socket'
-
-
-    def parse(self, done=True):
-        # Execute super
-        if self.parsed:
-            return
-        BaseObj.parse(self, done=False)
-        self.size = None
-
-        # Read the contents of the device
-        self.parsed = True
 
 
     def compare(self, other, s=None):
@@ -333,7 +331,8 @@ class NonExistingObj(BaseObj):
     objname = 'missing file'
 
     def parse(self, done=True):
-        self.parsed = False
+        self.stat = os.stat_result((None, None, None, None, None, None, None, None, None, None))
+        self.parsed = True
 
 
 
@@ -375,35 +374,33 @@ def create_from_fs(name, path='', treeid=None):
 def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None, treeid=None):
     ''' Create a new object from the given data and return an
         instance of the object. '''
-    o = None
+
+    # Make a fake stat element from the given meta-data
+    # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
+    fakestat = os.stat_result((mode, None, None, None, uid, gid, size, None, mtime, None))
 
     if objtype == 'f':
-        o = FileObj(name, path, treeid=treeid)
-        o.hashsum_cache = data
-        o.size = size
+        o = FileObj(name, path, stat=fakestat, treeid=treeid)
+        o.hashsum_cache = binascii.unhexlify(data) if data else None
 
         # Hashsum is normally not defined if the size is 0.
         if not data and size == 0:
             m = HASHALGORITHM()
-            o.hashsum_cache = m.hexdigest()
+            o.hashsum_cache = m.digest()
 
     elif objtype == 'l':
-        o = LinkObj(name, path, treeid=treeid)
+        o = LinkObj(name, path, stat=fakestat, treeid=treeid)
         o.link = data
-        o.size = size
 
     elif objtype == 'd':
-        o = DirObj(name, path, treeid=treeid)
+        o = DirObj(name, path, stat=fakestat, treeid=treeid)
         o.dir_parsed = True
 
     elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
-        o = SpecialObj(name, path, dtype=objtype, treeid=treeid)
+        o = SpecialObj(name, path, stat=fakestat, dtype=objtype, treeid=treeid)
 
-    # The common fields
-    o.mode = mode
-    o.uid = uid
-    o.gid = gid
-    o.mtime = mtime
+    else:
+        raise DirscanException("Unknown object type '%s'" %(objtype))
 
     # Ensure we don't go out on the FS
     o.parsed = True

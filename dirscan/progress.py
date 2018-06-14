@@ -49,13 +49,14 @@ class PrintProgress(object):
             print('\r\x1b[K', end='', file=self.file)
             self.next_clear = False
 
-        print(*args, **kwargs, file=self.file)
+        print(*args, file=self.file, **kwargs)
         self.file.flush()
 
 
-    def progress(self, *args, force=False, **kwargs):
+    def progress(self, *args, **kwargs):
         ''' Print a progress message. force will print the
             progress message regardless of time '''
+        force = kwargs.get('false')
 
         if self.show_progress:
             stamp = datetime.datetime.now()

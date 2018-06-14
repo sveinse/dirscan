@@ -223,7 +223,7 @@ def format_data(obj):
         their symlink target.
     '''
     if obj.objtype == 'f' and obj.size:
-        return obj.hashsum()
+        return obj.hashsum_hex()
     elif obj.objtype == 'l':
         return obj.link
     return None
