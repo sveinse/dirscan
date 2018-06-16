@@ -304,11 +304,13 @@ def get_fieldnames(formatstr):
 
 # pylint: disable=W0622
 def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
-    ''' Write fileinfo fields '''
+    ''' Write fileinfo fields. And field keys that starts with '_' will
+        be renamed to without the '_' prefix, and will not be quoted. '''
 
     if quoter:
-        fields = {k: quoter(v) for k, v in fields.items()}
-    file.write(fmt.format(**fields) + '\n')
+        p_fields = {k: quoter(v) for k, v in fields.items() if not k.startswith('_')}
+        p_fields.update({k[1:]: v for k, v in fields.items() if k.startswith('_')})
+    file.write(fmt.format(**p_fields) + '\n')
 
 
 

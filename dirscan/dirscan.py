@@ -62,6 +62,7 @@ class BaseObj(object):
 
         self.parsed = False
         self.excluded = False
+        self.selected = False
 
 
     @property

@@ -103,6 +103,8 @@ def dirscan_main(argv=None):
             printfmt = FMT_AH if opts.human else FMT_A
         elif opts.long:
             printfmt = FMT_HL if opts.human else FMT_L
+        elif opts.verbose:
+            printfmt = '{fullpath}{extra}'
 
     else:
 
@@ -194,6 +196,7 @@ def dirscan_main(argv=None):
     # -------------------
     #
 
+    hide_unselected = False
     outfile = None
     try:
 
@@ -236,11 +239,18 @@ def dirscan_main(argv=None):
                 change = 'error'
                 text = 'Compare failed: ' + str(err)
 
-            # Show this file and compare types?
             show = True
-            if not any([o.objtype in filetypes for o in objs]):
+
+            # Show this filetype?
+            if not any(o.objtype in filetypes for o in objs):
                 show = False
+
+            # Show this compare type?
             if fileinfo.COMPARE_ARROWS[change][0] not in comparetypes:
+                show = False
+
+            # Is none selected?
+            if hide_unselected and not any(o.selected for o in objs):
                 show = False
 
             # Save histogram info for the change type
@@ -259,6 +269,7 @@ def dirscan_main(argv=None):
                 'change': change,
                 'arrow' : fileinfo.COMPARE_ARROWS[change][1],
                 'text'  : text.capitalize(),
+                'extra' : '',
             }
 
             # Update the fields from the file objects
@@ -270,7 +281,7 @@ def dirscan_main(argv=None):
 
             # Print to stdout
             if printfmt:
-                fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter)
+                fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter, file=sys.stdout)
 
             # Write to file -- don't write if we couldn't get all fields
             if writefmt and not errs:

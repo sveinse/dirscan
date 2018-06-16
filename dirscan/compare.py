@@ -49,7 +49,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     #         right_newer
     #    aa   Equal
 
-    if all([o.excluded for o in objs]):
+    if all(o.excluded for o in objs):
         # File EXCLUDED
         # =============
         if objs[0].objtype == '-':
