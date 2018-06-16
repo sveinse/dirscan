@@ -14,6 +14,7 @@ extent permitted by law.
 from __future__ import absolute_import, division, print_function
 
 import sys
+import time
 
 from . import fileinfo
 from .log import set_debug
@@ -34,6 +35,45 @@ FMT_AH = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {type}  {fullpath
 FMT_A = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {type}  {fullpath}'
 FMT_HL = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {type}  {fullpath}'
 FMT_L = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}'
+
+
+def scan_shadb(dirs, opts, error_handler, progress):
+
+    # -- Build the sha database
+    shadb = {}
+
+    # Prepare progress values
+    count = 0
+
+    for sdir in dirs:
+        for (path, objs) in walkdirs(
+                [sdir],
+                reverse=opts.reverse,
+                excludes=opts.exclude,
+                onefs=opts.onefs,
+                exception_fn=error_handler,
+                close_during=False):
+
+            # Progress printing
+            count += 1
+            progress.progress("Scanning %s files:  %s " %(count, objs[0].fullpath))
+
+            # Evaluate the hashsum for each of the objects and store in
+            # sha database
+            for o in objs:
+                if o.objtype != 'f' or o.excluded:
+                    continue
+
+                try:
+                    # Get the hashsum and store it to the shadb list
+                    sha = o.hashsum()
+                    _t = shadb.get(sha, [])
+                    _t.append(o)
+                    shadb[sha] = _t
+                except IOError as err:
+                    error_handler(err)
+
+    return shadb
 
 
 
@@ -103,6 +143,8 @@ def dirscan_main(argv=None):
             printfmt = FMT_AH if opts.human else FMT_A
         elif opts.long:
             printfmt = FMT_HL if opts.human else FMT_L
+        elif opts.verbose:
+            printfmt = '{fullpath}{extra}'
 
     else:
 
@@ -188,14 +230,45 @@ def dirscan_main(argv=None):
         # True will swallow the exception
         return True
 
+    #
+    # Directory scanning
+    # -------------------
+    #
+    if opts.shadiff:
+        # Want to look at the entire trees on both sides to show any
+        # duplicates
+        opts.traverse_oneside = True
+
 
     #
     # Directory scanning
     # -------------------
     #
 
+    hide_unselected = False
     outfile = None
     try:
+
+        shadb = {}
+
+        # -- Scan the database
+        if opts.duplicates or opts.shadiff:
+
+            # -- Build the sha database
+            shadb = scan_shadb(dirs, opts, error_handler, progress)
+
+            # -- Select duplicates
+            if opts.duplicates:
+                hide_unselected = True
+
+                if right is None:
+                    for objs in shadb.values():
+                        if len(objs) > opts.duplicates:
+                            for obj in objs:
+                                obj.selected = True
+                else:
+                    raise DirscanException("Showing duplicated in compares is not implemented yet")
+                    #if len(set(o.treeid for o in objs)) == len(objs):
 
         # -- Open output file
         if opts.outfile:
@@ -228,7 +301,8 @@ def dirscan_main(argv=None):
                     objs,
                     ignores=opts.ignore,
                     comparetypes=comparetypes,
-                    compare_dates=opts.compare_dates)
+                    compare_dates=opts.compare_dates,
+                    shadb=shadb)
 
             except IOError as err:
                 # Errors here are due to comparisons that fail.
@@ -236,11 +310,18 @@ def dirscan_main(argv=None):
                 change = 'error'
                 text = 'Compare failed: ' + str(err)
 
-            # Show this file and compare types?
             show = True
-            if not any([o.objtype in filetypes for o in objs]):
+
+            # Show this filetype?
+            if not any(o.objtype in filetypes for o in objs):
                 show = False
+
+            # Show this compare type?
             if fileinfo.COMPARE_ARROWS[change][0] not in comparetypes:
+                show = False
+
+            # Is none selected?
+            if hide_unselected and not any(o.selected for o in objs):
                 show = False
 
             # Save histogram info for the change type
@@ -259,7 +340,20 @@ def dirscan_main(argv=None):
                 'change': change,
                 'arrow' : fileinfo.COMPARE_ARROWS[change][1],
                 'text'  : text.capitalize(),
+                'extra' : '',
             }
+
+            # Write list of duplicates to the _extra field
+            if opts.duplicates and right is None:
+                sha = objs[0].hashsum()
+                compares = []
+                for same in  shadb[sha]:
+                    if same is objs[0]:
+                        continue
+                    compares.append(text_quoter(same.fullpath))
+                del fields['extra']
+                fields['_extra'] = '    duplicated in:\n    ' + \
+                    '\n    '.join(compares) + '\n'
 
             # Update the fields from the file objects
             (errs, filefields) = fileinfo.get_fields(objs, prefixes, fieldnames)
@@ -270,7 +364,7 @@ def dirscan_main(argv=None):
 
             # Print to stdout
             if printfmt:
-                fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter)
+                fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter, file=sys.stdout)
 
             # Write to file -- don't write if we couldn't get all fields
             if writefmt and not errs:

@@ -234,6 +234,15 @@ def dirscan_argumentparser():
                       default=False, help='''
         Show progress while scanning
         ''')
+    argp.add_argument('--shadiff', action='store_true', dest='shadiff', default=None,
+                      help='''
+        Turn on comparing using the calculated sha hashsum of the files. This enables
+        showing files that have been renamed.
+        ''')
+    argp.add_argument('--duplicates', action='count', dest='duplicates', default=False,
+                      help='''
+        Find and show duplicate files (scan mode)
+        ''')
 
     # Main arguments
     argp.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',

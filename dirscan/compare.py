@@ -16,7 +16,7 @@ from __future__ import absolute_import, division, print_function
 
 
 #pylint: disable=unused-argument
-def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
+def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False, shadb=None):
     ''' Object comparator for 1 dir. Returns tuple with (change, text) '''
 
     # Comparison matrix for 1 dir
@@ -33,7 +33,7 @@ def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
 
 
 
-def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
+def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False, shadb=None):
     ''' Object comparator for two dirs. Returns a tuple with (change, text) '''
 
     # Comparison matrix for 2 dirs
@@ -49,7 +49,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     #         right_newer
     #    aa   Equal
 
-    if all([o.excluded for o in objs]):
+    if all(o.excluded for o in objs):
         # File EXCLUDED
         # =============
         if objs[0].objtype == '-':
@@ -66,6 +66,16 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
             return ('excluded', 'excluded, only in right')
         if objs[0].excluded:
             text += ", left is excluded"
+        elif shadb and objs[1].objtype == 'f':
+            sha = objs[1].hashsum()
+            shalist = shadb.get(sha, [])
+            other = None
+            for o in shalist:
+                if o.treeid == 0:
+                    other = o
+            if other:
+                text = "only in right, found in left as %s" %(other.fullpath)
+                return ('right_renamed', text)
         return ('right_only', text)
 
     if objs[1].objtype == '-' or objs[1].excluded:
@@ -76,6 +86,16 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
             return ('excluded', 'excluded, only in left')
         if objs[1].excluded:
             text += ", right is excluded"
+        elif shadb and objs[0].objtype == 'f':
+            sha = objs[0].hashsum()
+            shalist = shadb.get(sha, [])
+            other = None
+            for o in shalist:
+                if o.treeid == 1:
+                    other = o
+            if other:
+                text = "only in left, found in right as %s" %(other.fullpath)
+                return ('left_renamed', text)
         return ('left_only', text)
 
     if len(set(o.objtype for o in objs)) > 1:
