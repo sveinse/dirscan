@@ -2,7 +2,7 @@
 echo "Loading $testfile: Scanfile tests"
 
 all=(0301 0302 0303 0304 0305 0306 0307 0308 0309 0310 0311 0312 0313 0314\
-     0315 0316 0317 0318 0319 0320 0321 0322 0323)
+     0315 0316 0317 0318 0319 0320 0321 0322 0323 0324)
 
 
 test_0301 () {
@@ -211,4 +211,15 @@ test_0323 () {
 
     dirscan a -o scanfile.txt
     dirscan -als --prefix d scanfile.txt a/d
+}
+
+test_0324 () {
+    tsetup $FUNCNAME "Generate scanfile from scanfile with prefix" \
+        "- Shall only list the content of a/d/"
+    mk_dir a
+
+    dirscan a -o scanfile.txt
+    tcmd cat scanfile.txt
+    dirscan -als scanfile.txt --prefix d -o scanfile2.txt
+    tcmd cat scanfile2.txt
 }
