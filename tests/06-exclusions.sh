@@ -123,7 +123,7 @@ test_0610 () {
     touch a/tmp/one a/tmp/a a/tmp/three/file
 
     dirscan -x -o scanfile.txt a
-    dirscan -alsx --input scanfile.txt a
+    dirscan -alsx scanfile.txt a
 
     tcmd sudo umount a/tmp
 }

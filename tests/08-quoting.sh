@@ -37,7 +37,7 @@ test_0803 () {
     mk_chars a
 
     dirscan -o scanfile.txt a
-    dirscan --input scanfile.txt
+    dirscan scanfile.txt
 }
 
 test_0804 () {
@@ -45,5 +45,5 @@ test_0804 () {
     mk_chars a
 
     dirscan -o scanfile.txt a
-    dirscan -a --input scanfile.txt a
+    dirscan -a scanfile.txt a
 }
