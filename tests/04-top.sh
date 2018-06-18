@@ -1,7 +1,8 @@
 
 echo "Loading $testfile: Top-file tests"
 
-all=(0401 0402 0403 0404 0405 0406 0407 0408 0409 0410 0411 0412 0413)
+all=(0401 0402 0403 0404 0405 0406 0407 0408 0409 0410 0411 0412 0413 0414 0415 \
+     0416)
 
 
 test_0401 () {
@@ -34,7 +35,7 @@ test_0403 () {
 
 test_0404 () {
     tsetup $FUNCNAME "File top-level object" \
-        "- Shall fail with: Not a directory: 'a'"
+        "- Shall fail with: Invalid scanfile"
     techo "file" a
 
     dirscan a
@@ -113,10 +114,33 @@ test_0412 () {
     dirscan -a $PWD/a $PWD/a
 }
 
+# FIXME: This isn't pretty
+xdirs="-X bin -X usr -X lib -X var -X opt -X tmp -X sbin -X etc -X snap -X boot -X root"
+
 test_0413 () {
     tsetup $FUNCNAME "Scan root path" \
         "- A bug where files had incorrect slash, e.g. '.file' (WRONG)"
 
-    # FIXME: This isn't pretty
-    dirscan -x / -X bin -X usr -X lib -X var -X opt -X tmp -X sbin -X etc -X snap -X boot -X root
+    dirscan -x / $xdirs
+}
+
+test_0414 () {
+    tsetup $FUNCNAME "Scan root path to scan-file"
+
+    dirscan -o scanfile.txt -x / $xdirs
+    tcmd cat scanfile.txt
+}
+
+test_0415 () {
+    tsetup $FUNCNAME "Scan root path to scan-file, read back"
+
+    dirscan -o scanfile.txt -x / $xdirs
+    dirscan -als scanfile.txt
+}
+
+test_0416 () {
+    tsetup $FUNCNAME "Scan root path to scan-file, compare with root"
+
+    dirscan -o scanfile.txt -x / $xdirs
+    dirscan -ax scanfile.txt / $xdirs
 }

@@ -1,7 +1,8 @@
 
 echo "Loading $testfile: Scanfile tests"
 
-all=(0301 0302 0303 0304 0305 0306 0307 0308 0309 0310)
+all=(0301 0302 0303 0304 0305 0306 0307 0308 0309 0310 0311 0312 0313 0314\
+     0315 0316 0317 0318 0319 0320 0321 0322 0323 0324)
 
 
 test_0301 () {
@@ -18,7 +19,7 @@ test_0302 () {
     mk_dir a
 
     dirscan a -o scanfile.txt
-    dirscan -als --input scanfile.txt
+    dirscan -als scanfile.txt
 }
 
 test_0303 () {
@@ -27,7 +28,7 @@ test_0303 () {
     mk_dir a
 
     dirscan a -o scanfile.txt
-    dirscan -als --input scanfile.txt a
+    dirscan -als scanfile.txt a
 }
 
 test_0304 () {
@@ -36,7 +37,7 @@ test_0304 () {
     mk_dir a
 
     dirscan a -o scanfile.txt
-    dirscan -als --right a scanfile.txt
+    dirscan -als a scanfile.txt
 }
 
 test_0305 () {
@@ -46,7 +47,7 @@ test_0305 () {
 
     dirscan a -o scanfile.txt
     rm -r a/d
-    dirscan -als --input scanfile.txt a
+    dirscan -als scanfile.txt a
 }
 
 test_0306 () {
@@ -56,7 +57,7 @@ test_0306 () {
 
     dirscan a -o scanfile.txt
     rm -r a/d
-    dirscan -alst --input scanfile.txt a
+    dirscan -alst scanfile.txt a
 }
 
 test_0307 () {
@@ -66,7 +67,7 @@ test_0307 () {
 
     dirscan a -o scanfile.txt
     rm -r a/d
-    dirscan -als --right a scanfile.txt
+    dirscan -als a scanfile.txt
 }
 
 test_0308 () {
@@ -76,7 +77,7 @@ test_0308 () {
 
     dirscan a -o scanfile.txt
     rm -r a/d
-    dirscan -alst --right a scanfile.txt
+    dirscan -alst a scanfile.txt
 }
 
 test_0309 () {
@@ -85,7 +86,7 @@ test_0309 () {
     mk_dir a
 
     dirscan a -o scanfile.txt
-    dirscan -als --input --right scanfile.txt scanfile.txt
+    dirscan -als scanfile.txt scanfile.txt
 }
 
 test_0310 () {
@@ -94,6 +95,131 @@ test_0310 () {
     mk_dir a
 
     dirscan a -o scanfile.txt
-    dirscan -als --input scanfile.txt -o scanfile2.txt
+    dirscan -als scanfile.txt -o scanfile2.txt
     tcmd diff scanfile.txt scanfile2.txt
+}
+
+test_0311 () {
+    tsetup $FUNCNAME "Empty scan file"
+    touch scanfile.txt
+
+    dirscan -als scanfile.txt
+}
+
+test_0312 () {
+    tsetup $FUNCNAME "Scan file with permission denied"
+    touch scanfile.txt
+    chmod 000 scanfile.txt
+
+    dirscan -als scanfile.txt
+}
+
+test_0313 () {
+    tsetup $FUNCNAME "Non-existing scan file"
+
+    dirscan -als scanfile.txt
+}
+
+test_0314 () {
+    tsetup $FUNCNAME "Corrupt scan file, missing header"
+    cat <<EOF >scanfile.txt
+Foobar
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0315 () {
+    tsetup $FUNCNAME "Corrupt scan file, unknown version"
+    cat <<EOF >scanfile.txt
+#!ds:v7
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0316 () {
+    tsetup $FUNCNAME "Test empty scan-file"
+    cat <<EOF >scanfile.txt
+#!ds:v1
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0317 () {
+    tsetup $FUNCNAME "Incorrect top-level scanfile entry"
+    cat <<EOF >scanfile.txt
+#!ds:v1
+d,,16877,1000,1000,1529323497,,foo
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0318 () {
+    tsetup $FUNCNAME "Testing orphan in scanfile"
+    cat <<EOF >scanfile.txt
+#!ds:v1
+d,,16877,1000,1000,1529323497,,./foo
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0319 () {
+    tsetup $FUNCNAME "Testing incorrect file"
+    cat <<EOF >scanfile.txt
+#!ds:v1
+d,,16877,1000,1000,1529323497
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0320 () {
+    tsetup $FUNCNAME "Testing incorrect size"
+    cat <<EOF >scanfile.txt
+#!ds:v1
+d,error,16877,1000,1000,1529323497,,.
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0321 () {
+    tsetup $FUNCNAME "Testing incorrect mode"
+    cat <<EOF >scanfile.txt
+#!ds:v1
+d,,,1000,1000,1529323497,,.
+EOF
+
+    dirscan -als scanfile.txt
+}
+
+test_0322 () {
+    tsetup $FUNCNAME "Simple directory scan using prefix"
+    mk_dir a
+
+    dirscan a -o scanfile.txt
+    dirscan -als --prefix d scanfile.txt
+}
+
+test_0323 () {
+    tsetup $FUNCNAME "Compare directory scan using prefix"
+    mk_dir a
+
+    dirscan a -o scanfile.txt
+    dirscan -als --prefix d scanfile.txt a/d
+}
+
+test_0324 () {
+    tsetup $FUNCNAME "Generate scanfile from scanfile with prefix" \
+        "- Shall only list the content of a/d/"
+    mk_dir a
+
+    dirscan a -o scanfile.txt
+    tcmd cat scanfile.txt
+    dirscan -als scanfile.txt --prefix d -o scanfile2.txt
+    tcmd cat scanfile2.txt
 }

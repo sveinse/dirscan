@@ -504,7 +504,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
             raise DirscanException(str(err))
 
     # Handle the special cases with '/' -> './'
-    basename = base[0].name
+    basename = base[0].fullpath
     baserepl = '.'
     if basename == '/':
         baserepl = './'

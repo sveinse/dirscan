@@ -33,7 +33,7 @@ test_0703 () {
     mk_encerr a
 
     dirscan -o scanfile.txt a
-    dirscan --input scanfile.txt
+    dirscan scanfile.txt
 }
 
 test_0704 () {
@@ -41,5 +41,5 @@ test_0704 () {
     mk_encerr a
 
     dirscan -o scanfile.txt a
-    dirscan -a --input scanfile.txt a
+    dirscan -a scanfile.txt a
 }

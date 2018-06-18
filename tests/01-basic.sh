@@ -85,7 +85,7 @@ test_0108 () {
 
 test_0109 () {
     tsetup $FUNCNAME "Simple directory scan, descending" \
-        "- List all files in reverse order" \
+        "- List all files in reverse order"
     mk_dir a
 
     dirscan a --reverse

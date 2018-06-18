@@ -15,15 +15,46 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
+import stat
 
 from . import dirscan
+from .dirscan import DirscanException
 
 
-# File format for serialized data-file
-SCANFILE_FORMAT = "{type},{size},{mode},{uid},{gid},{mtime_n},{data},{path}"
+class ScanFIleException(DirscanException):
+    ''' Scan-file exceptions '''
+
 
 # Known scan file versions
 SCANFILE_VERSIONS = ('v1',)
+
+
+
+def checkscanfile(filename):
+    ''' Check if the given file is a scanfile. It will return a boolean with
+        the results, unless there is an error with the scanfile header, which
+        it will raise a DirscanException()
+    '''
+
+    if not filename:
+        return False
+    try:
+        fstat = os.stat(filename)
+    except OSError:
+        return False
+    if not stat.S_ISREG(fstat.st_mode):
+        return False
+
+    try:
+        kwargs = {}
+        if sys.version_info[0] >= 3:
+            kwargs['errors'] = 'surrogateescape'
+        with open(filename, 'r', **kwargs) as infile:
+            checkheader(infile.readline(), filename)
+    except OSError as err:
+        raise DirscanException(str(err))
+
+    return True
 
 
 
@@ -33,86 +64,134 @@ def fileheader():
 
 
 
-def checkheader(line, fname):
-    ''' Check if line from fname is a correct dirscan scanfile header '''
+def checkheader(line, filename):
+    ''' Check if line from filename is a correct dirscan scanfile header '''
 
     if not line:
-        raise dirscan.DirscanException("Scanfile '%s' is empty" %(fname,))
+        raise DirscanException("Invalid scanfile '%s', missing header" %(filename,))
     line = line.rstrip()
 
     if not line.startswith('#!ds:v'):
-        raise dirscan.DirscanException("Scanfile '%s' does not seem to be a scan-file" %(fname,))
+        raise DirscanException("Invalid scanfile '%s', incorrect header" %(filename,))
 
     ver = line[5:]
     if ver not in SCANFILE_VERSIONS:
-        raise dirscan.DirscanException("Scanfile '%s' use unknown version '%s'" %(fname, ver))
+        raise DirscanException("Invalid scanfile '%s', unsupported version '%s'" %(filename, ver))
 
 
 
-def readscanfile(fname, treeid=None):
-    ''' Read fname scan file and return a DirObj() with the file tree root '''
+class ScanfileRecord(object):
+    ''' Scan file record '''
+
+    # File format for serialized data-file
+    FORMAT = "{type},{size},{mode},{uid},{gid},{mtime_n},{data},{path}"
+
+    def __init__(self, parse):
+        args = [unquote(e) for e in parse.rstrip().split(',')]
+        length = len(args)
+        if length != 8:
+            raise DirscanException("missing file fields (got %s of 8)" %(length,))
+        try:
+            # Must be kept in sync with self.FORMAT
+            self.type = args[0]
+            self.size = int(args[1] or '0')
+            self.mode = int(args[2])
+            self.uid = int(args[3])
+            self.gid = int(args[4])
+            self.mtime = float(args[5])
+            self.data = args[6] or None
+            self.path = args[7]
+        except ValueError as err:
+            raise DirscanException(str(err))
+        if not self.type:
+            raise DirscanException("'type' field cannot be omitted")
+        if not self.path:
+            raise DirscanException("'path' field cannot be omitted")
+
+
+
+def readscanfile(filename, treeid=None, root=None):
+    ''' Read filename scan file and return a DirObj() with the file tree root '''
+
+    # Set a default value
+    if not root:
+        root = ''
+        droot = '.'
+    else:
+        droot = os.path.join('.', root)
 
     dirtree = {}
-    rootobj = None
-    base_fname = os.path.basename(fname)
+    base_fname = os.path.basename(filename)
 
     kwargs = {}
     if sys.version_info[0] >= 3:
         kwargs['errors'] = 'surrogateescape'
 
-    with open(fname, 'r', **kwargs) as infile:
+    with open(filename, 'r', **kwargs) as infile:
 
         # Check the scanfile header
-        checkheader(infile.readline(), fname)
+        checkheader(infile.readline(), filename)
 
         lineno = 1
         for line in infile:
             lineno += 1
 
-            # Read/parse the parameters (must be aliged with SCANFILE_FORMAT)
-            args = [unquote(e) for e in line.rstrip().split(',')]
-            otype = args[0]
-            opath = args[7]
+            try:
+                # Read/parse the record
+                data = ScanfileRecord(line)
 
-            if opath == '.':
-                opath = base_fname
-            elif opath.startswith('./'):
-                opath = opath.replace('./', base_fname+'/', 1)
+                # Split path into path and name
+                opath = data.path
+                (path, name) = os.path.split(opath)
 
-            # Split path into path and name
-            (path, name) = os.path.split(opath)
-            if path.endswith('/'):
-                path = path[:-1]
+                # Set file object path and name
+                if path == '':
+                    if name != '.':
+                        raise DirscanException("unexpected top-level entity '%s'" %(name,))
+                    fpath = path
+                    fname = base_fname
+                else:
+                    fpath = os.path.join(base_fname, path[2:])
+                    fname = name
 
-            # Create new object.
-            obj = dirscan.create_from_data(name, path,
-                                           objtype=otype,
-                                           size=int(args[1] or '0'),
-                                           mode=int(args[2]),
-                                           uid=int(args[3]),
-                                           gid=int(args[4]),
-                                           mtime=float(args[5]),
-                                           data=args[6] or None,
-                                           treeid=treeid)
+                # Create new file object
+                fileobj = dirscan.create_from_data(fname, fpath,
+                                                   objtype=data.type,
+                                                   size=data.size,
+                                                   mode=data.mode,
+                                                   uid=data.uid,
+                                                   gid=data.gid,
+                                                   mtime=data.mtime,
+                                                   data=data.data,
+                                                   treeid=treeid)
 
-            # The first object is special
-            if path == '':
-                rootobj = obj
-                dirtree[opath] = obj
-            else:
-                # Add the object into the parent's children
-                dirtree[path].add_child(obj)
+                # The first object is special
+                if opath == '.':
+                    dirtree[opath] = fileobj
+                else:
+                    if path not in dirtree:
+                        raise DirscanException("'%s' is an orphan" %(opath))
 
-            # Make sure we make an entry into the dirtree to ensure
-            # we have a list of the parents
-            if otype == 'd':
-                dirtree[opath] = obj
+                    # Add the object into the parent's children
+                    dirtree[path].add_child(fileobj)
 
-    if not rootobj:
-        raise dirscan.DirscanException("Scanfile '%s' is empty" %(fname,))
+                # Make sure we make an entry into the dirtree to ensure
+                # we have a list of the parents
+                if data.type == 'd':
+                    dirtree[opath] = fileobj
+
+            except DirscanException as err:
+                raise DirscanException("%s:%s: Data error, " %(
+                    filename, lineno) + str(err))
+
+    if not dirtree:
+        raise DirscanException("Scanfile '%s' contains no data" %(filename,))
+
+    if droot not in dirtree:
+        raise DirscanException("No such directory '%s' in scanfile '%s" %(root, filename))
 
     # Now the tree should be populated
-    return rootobj
+    return dirtree[droot]
 
 
 
@@ -214,7 +293,7 @@ def unquote(text):
                 getchars = 2
                 hexstr = ''
             else:
-                raise dirscan.DirscanException("Unknown escape char '%s'" %(char,))
+                raise DirscanException("Unknown escape char '%s'" %(char,))
             escape = False
 
         elif '\\' in char:
@@ -224,5 +303,5 @@ def unquote(text):
             out += char
 
     if escape or getchars:
-        raise dirscan.DirscanException("Incomplete escape string '%s'" %(text))
+        raise DirscanException("Incomplete escape string '%s'" %(text))
     return out

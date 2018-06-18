@@ -21,14 +21,15 @@ from . import __version__
 DIRSCAN_DESCRIPTION = '''
 Tool for scanning and comparing directories.
 
-A single DIR argument will traverse the given directory and print the contents,
-similar to ls or find, and can provide a summary of the found files. It can
-save the file list into a scanfile with the -o option. The scanfile stores
-all files metadata, including sha256 hashsum of the file.
+A single LEFT_DIR argument will traverse the given directory or scan file and
+print the contents, similar to ls or find, and can provide a customizable
+summary of the found files. It can save the file list into a scan file with the
+-o option. The scan file stores all files metadata, including sha256 hashsum
+of the files.
 
-A DIR1 DIR2 argument is used to compare directories, showing differences
-between DIR1 and DIR2. DIR1 or DIR2 can be either a directory or a previous
-generated scan file.
+A LEFT_DIR RIGHT_DIR argument is used to compare directories, showing
+differences between LEFT_DIR and RIGHT_DIR. Either *_DIR can be paths to
+directories or to previous generated scan files.
 
 (C) 2010-2018 Svein Seldal. This application is licensed under GNU GPL version 3
 <http://gnu.org/licenses/gpl.html>. This is free software: you are
@@ -218,14 +219,6 @@ def dirscan_argumentparser():
                       dest='exclude', default=[], help='''
         Exclude PATH from scan. PATH is relative to DIR
         ''')
-    argp.add_argument('--left', '--input', action='store_true', dest='left', default=None,
-                      help='''
-        Read LEFT_DIR argument as a scanfile
-        ''')
-    argp.add_argument('--right', action='store_true', dest='right', default=None,
-                      help='''
-        Read RIGHT_DIR argument as a scanfile
-        ''')
     argp.add_argument('--format-help', action='store_true', dest='formathelp', default=None,
                       help='''
         Show help for --format and --summary
@@ -233,6 +226,21 @@ def dirscan_argumentparser():
     argp.add_argument('-p', '--progress', action='store_true', dest='progress',
                       default=False, help='''
         Show progress while scanning
+        ''')
+    argp.add_argument('--prefix', metavar='PATH', dest='prefix', default=None,
+                      help='''
+        When reading from scanfiles on either sides, use the given prefix PATH
+        to read a subsection of the scan file(s).
+        ''')
+    argp.add_argument('--left-prefix', metavar='PATH', dest='leftprefix', default=None,
+                      help='''
+        When reading from a scanfile on the left side, use the given prefix PATH
+        to read a subsection of the scan file.
+        ''')
+    argp.add_argument('--right-prefix', metavar='PATH', dest='rightprefix', default=None,
+                      help='''
+        When reading from a scanfiles on the right side, use the given prefix PATH
+        to read a subsection of the scan file.
         ''')
     argp.add_argument('--shadiff', action='store_true', dest='shadiff', default=None,
                       help='''
@@ -245,7 +253,7 @@ def dirscan_argumentparser():
         ''')
 
     # Main arguments
-    argp.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',
+    argp.add_argument('dir1', metavar='LEFT_DIR', default=None, #nargs='?',
                       help='''
         Directory to scan/traverse, or LEFT side of comparison
         ''')

@@ -14,11 +14,10 @@ extent permitted by law.
 from __future__ import absolute_import, division, print_function
 
 import sys
-import time
 
 from . import fileinfo
 from .log import set_debug
-from .scanfile import SCANFILE_FORMAT, readscanfile, fileheader
+from .scanfile import ScanfileRecord, readscanfile, fileheader, checkscanfile
 from .scanfile import file_quoter, text_quoter
 from .compare import dir_compare1, dir_compare2
 from .dirscan import walkdirs, DirscanException, DirObj
@@ -114,13 +113,6 @@ def dirscan_main(argv=None):
         opts.traverse_oneside = True
 
 
-    # -- Missing options
-    if not left:
-        argp.error("Missing LEFT_DIR argument")
-    if opts.right and not right:
-        argp.error("Missing RIGHT_DIR argument")
-
-
     # -- Determine settings and print format
     if right is None:
 
@@ -136,7 +128,7 @@ def dirscan_main(argv=None):
         name = 'Scanned'
 
         if opts.outfile:
-            writefmt = SCANFILE_FORMAT
+            writefmt = ScanfileRecord.FORMAT
         elif opts.all and opts.long:
             printfmt = FMT_AHL if opts.human else FMT_AL
         elif opts.all:
@@ -163,11 +155,9 @@ def dirscan_main(argv=None):
             argp.error("Writing to an outfile is not supported when comparing directories")
 
 
-    # -- Read the scan files
-    if opts.left:
-        dirs[0] = readscanfile(left, treeid=0)
-    if opts.right:
-        dirs[1] = readscanfile(right, treeid=1)
+    # -- Scanfile prefix settings
+    opts.leftprefix = opts.leftprefix or opts.prefix
+    opts.rightprefix = opts.rightprefix or opts.prefix
 
 
     # -- The all option will show all compare types
@@ -249,9 +239,15 @@ def dirscan_main(argv=None):
     outfile = None
     try:
 
-        shadb = {}
+        # -- Check and read the scan files (may raise DirscanException)
+        if checkscanfile(left):
+            dirs[0] = readscanfile(left, treeid=0, root=opts.leftprefix)
+        if checkscanfile(right):
+            dirs[1] = readscanfile(right, treeid=1, root=opts.rightprefix)
+
 
         # -- Scan the database
+        shadb = {}
         if opts.duplicates or opts.shadiff:
 
             # -- Build the sha database
