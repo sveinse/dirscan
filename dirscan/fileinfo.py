@@ -55,8 +55,7 @@ FILE_FIELDS = {
 
     # Modification time
     'mtime': lambda o: o.mtime.strftime("%Y-%m-%d %H:%M:%S"),
-    'mtime_n': lambda o: '%.6f' %(time.mktime(o.mtime.timetuple())+
-                                  float(o.mtime.strftime("%f"))/1000000.0,),
+    'mtime_n': lambda o: str(format_timestamp(o.mtime)),
 
     # Special data-payload of the file. For files: the hashsum, links: the link destination
     'data': lambda o: format_data(o),  # pylint: disable=W0108
@@ -251,6 +250,16 @@ def format_user(uid):
 def format_group(gid):
     ''' Return the group name for the given gid '''
     return grp.getgrgid(gid).gr_name
+
+
+
+def format_timestamp(timestamp):
+    ''' Return the float timestamp '''
+    if sys.version_info[0] < 3:
+        return time.mktime(timestamp.timetuple()) + \
+            float(timestamp.strftime("%f"))/1000000.0
+    else:
+        return timestamp.timestamp()
 
 
 
