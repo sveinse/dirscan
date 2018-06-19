@@ -17,8 +17,9 @@ import sys
 import stat
 import time
 import string
-import pwd
-import grp
+if sys.platform.startswith('linux'):
+    import pwd
+    import grp
 
 
 
