@@ -13,8 +13,9 @@ extent permitted by law.
 import sys
 import stat
 import string
-import pwd
-import grp
+if sys.platform.startswith('linux'):
+    import pwd
+    import grp
 
 
 # Print formats in scan mode
