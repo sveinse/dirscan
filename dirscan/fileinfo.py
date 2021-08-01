@@ -3,7 +3,7 @@
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2021 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -81,7 +81,6 @@ COMPARE_ARROWS = {
 }
 
 
- # pylint: disable=C0326
 SCAN_SUMMARY = (
     # Condition,         Line to print
     (True,               "\nSummary of '{dir}':"),

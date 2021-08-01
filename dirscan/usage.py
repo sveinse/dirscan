@@ -3,7 +3,7 @@
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2021 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -31,7 +31,7 @@ A LEFT_DIR RIGHT_DIR argument is used to compare directories, showing
 differences between LEFT_DIR and RIGHT_DIR. Either *_DIR can be paths to
 directories or to previous generated scan files.
 
-(C) 2010-2018 Svein Seldal. This application is licensed under GNU GPL version 3
+(C) 2010-2021 Svein Seldal. This application is licensed under GNU GPL version 3
 <http://gnu.org/licenses/gpl.html>. This is free software: you are
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.

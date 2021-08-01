@@ -3,7 +3,7 @@
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2021 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -12,7 +12,7 @@ free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
 
-__version__ = '0.9.1a1'
+__version__ = '0.9.2a1'
 
 
 from .dirscan import walkdirs, create_from_fs, create_from_data
