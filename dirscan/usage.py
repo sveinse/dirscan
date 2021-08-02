@@ -11,8 +11,6 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import argparse
 
 from . import __version__
@@ -116,7 +114,7 @@ summary template:
 '''
 
 
-def dirscan_argumentparser():
+def argument_parser():
     ''' Return argument parser object for dirscan, and setting all command-line
         options
     '''
@@ -244,7 +242,7 @@ def dirscan_argumentparser():
         ''')
 
     # Main arguments
-    argp.add_argument('dir1', metavar='LEFT_DIR', default=None, #nargs='?',
+    argp.add_argument('dir1', metavar='LEFT_DIR', default=None,
                       help='''
         Directory to scan/traverse, or LEFT side of comparison
         ''')

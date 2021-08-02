@@ -11,15 +11,11 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import sys
 import stat
-import time
 import string
 import pwd
 import grp
-
 
 
 #
@@ -87,10 +83,10 @@ SCAN_SUMMARY = (
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
     ('n_dirs',           "    {n_dirs}  directories"),
     ('n_symlinks',       "    {n_symlinks}  symbolic links"),
-    ('n_special',        "    {n_special}  special files  " \
-                                "({n_blkdev} block devices, " \
-                                "{n_chrdev} char devices, " \
-                                "{n_fifos} fifos, " \
+    ('n_special',        "    {n_special}  special files  "
+                                "({n_blkdev} block devices, "
+                                "{n_chrdev} char devices, "
+                                "{n_fifos} fifos, "
                                 "{n_sockets} sockets)"),
     ('n_exclude',        "    {n_exclude}  excluded files or directories"),
     (True,               "In total {n_objects} file objects"),
@@ -125,7 +121,6 @@ FINAL_SUMMARY = (
 ERROR_FIELD = '**-ERROR-**'
 
 
-
 def split_number(number):
     ''' Split a number into groups of 3 chars. E.g "1234776" will be
         returned as "1 234 776".
@@ -141,7 +136,6 @@ def split_number(number):
     return ''.join(group).lstrip()
 
 
-
 def format_bytes(size, print_full=False):
     ''' Return a string with a human printable representation of a
         (file) size.  The print_full option will append "(26 552 946
@@ -153,8 +147,8 @@ def format_bytes(size, print_full=False):
     if size is None:
         return None
 
-    elif size < 10000:
-        sizestr = '%s' %(size)
+    if size < 10000:
+        sizestr = '%s' % (size)
 
     else:
         # kb_int = integer part, kb_mod = modulus part
@@ -168,16 +162,16 @@ def format_bytes(size, print_full=False):
 
             # Various print options. If a matching value range is found then exit loop
             if kb_int < 10:
-                sizestr = '%.2f %s' %(scaled_size, unit)
+                sizestr = '%.2f %s' % (scaled_size, unit)
                 break
-            elif kb_int < 100:
-                sizestr = '%.1f %s' %(scaled_size, unit)
+            if kb_int < 100:
+                sizestr = '%.1f %s' % (scaled_size, unit)
                 break
-            elif kb_int < 1000:
-                sizestr = '%.0f %s' %(scaled_size, unit)
+            if kb_int < 1000:
+                sizestr = '%.0f %s' % (scaled_size, unit)
                 break
-            elif kb_int < 2048:
-                sizestr = '%.0f %s' %(scaled_size, unit)
+            if kb_int < 2048:
+                sizestr = '%.0f %s' % (scaled_size, unit)
                 break
 
             # If kb_int (remaining value) is >=2048 then we will go to
@@ -189,10 +183,9 @@ def format_bytes(size, print_full=False):
     if print_full:
         extra = ' bytes'
         if size >= 10000:
-            extra = ' (%s bytes)' %(split_number(size))
+            extra = ' (%s bytes)' % (split_number(size))
         sizestr += extra
     return sizestr
-
 
 
 def format_mode(objtype, mode):
@@ -204,17 +197,17 @@ def format_mode(objtype, mode):
         (1, 'w', stat.S_IWUSR),
         (2, 'x', stat.S_IXUSR),
         (2, 'S', stat.S_ISUID),
-        (2, 's', stat.S_IXUSR|stat.S_ISUID),
+        (2, 's', stat.S_IXUSR | stat.S_ISUID),
         (3, 'r', stat.S_IRGRP),
         (4, 'w', stat.S_IWGRP),
         (5, 'x', stat.S_IXGRP),
         (5, 'S', stat.S_ISGID),
-        (5, 's', stat.S_IXGRP|stat.S_ISGID),
+        (5, 's', stat.S_IXGRP | stat.S_ISGID),
         (6, 'r', stat.S_IROTH),
         (7, 'w', stat.S_IWOTH),
         (8, 'x', stat.S_IXOTH),
         (8, 'T', stat.S_ISVTX),
-        (8, 't', stat.S_IXOTH|stat.S_ISVTX),
+        (8, 't', stat.S_IXOTH | stat.S_ISVTX),
     )
 
     mode_text = list('-') * 9
@@ -226,7 +219,6 @@ def format_mode(objtype, mode):
     return objtype + ''.join(mode_text)
 
 
-
 def format_data(obj):
     ''' Return the information for the special field 'data', which return various
         information, depending on type. Files return their sha256 hashsum, links
@@ -234,10 +226,9 @@ def format_data(obj):
     '''
     if obj.objtype == 'f' and obj.size:
         return obj.hashsum_hex()
-    elif obj.objtype == 'l':
+    if obj.objtype == 'l':
         return obj.link
     return None
-
 
 
 def format_user(uid):
@@ -245,21 +236,14 @@ def format_user(uid):
     return pwd.getpwuid(uid).pw_name
 
 
-
 def format_group(gid):
     ''' Return the group name for the given gid '''
     return grp.getgrgid(gid).gr_name
 
 
-
 def format_timestamp(timestamp):
     ''' Return the float timestamp '''
-    if sys.version_info[0] < 3:
-        return time.mktime(timestamp.timetuple()) + \
-            float(timestamp.strftime("%f"))/1000000.0
-    else:
-        return timestamp.timestamp()
-
+    return timestamp.timestamp()
 
 
 def get_fields(objs, prefixes, fieldnames):
@@ -288,7 +272,7 @@ def get_fields(objs, prefixes, fieldnames):
                 data = FILE_FIELDS[fld](obj)
                 if data is None:
                     data = ''
-            except (IOError, OSError) as err:
+            except OSError as err:
                 data = ERROR_FIELD
                 errs.append(err)
 
@@ -296,7 +280,6 @@ def get_fields(objs, prefixes, fieldnames):
             fields[field] = str(data)
 
     return (errs, fields)
-
 
 
 def get_fieldnames(formatstr):
@@ -307,7 +290,6 @@ def get_fieldnames(formatstr):
         if field:
             fieldnames.add(field)
     return fieldnames
-
 
 
 # pylint: disable=W0622
@@ -321,7 +303,6 @@ def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
     file.write(fmt.format(**p_fields) + '\n')
 
 
-
 def write_summary(summary, fields, file=sys.stdout):
     ''' Write the summary '''
 
@@ -333,14 +314,12 @@ def write_summary(summary, fields, file=sys.stdout):
             file.write(line.format(**fields) + '\n')
 
 
-
-
 #
 # HISTOGRAM CLASS
 # ===============
 #
 
-class FileHistogram(object):
+class FileHistogram:
     ''' Histogram for counting file objects '''
 
     def __init__(self, dir):
@@ -380,7 +359,7 @@ class FileHistogram(object):
         }
 
 
-class CompareHistogram(object):
+class CompareHistogram:
     ''' Histogram for counting compare relationship '''
 
     def __init__(self, left, right):
@@ -417,7 +396,7 @@ class CompareHistogram(object):
         }
 
 
-class Statistics(object):
+class Statistics:
     ''' Class for collecting dirscan statistics '''
 
     def __init__(self, left, right):

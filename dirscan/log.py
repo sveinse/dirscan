@@ -11,17 +11,15 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import sys
 
 _ENABLE_DEBUG = False
 
 
-def set_debug(debug):
+def set_debug(enable):
     ''' Set global debug mode '''
-    global _ENABLE_DEBUG
-    _ENABLE_DEBUG = debug
+    global _ENABLE_DEBUG  # pylint: disable=global-statement
+    _ENABLE_DEBUG = enable
 
 
 def debug(*args, **kwargs):

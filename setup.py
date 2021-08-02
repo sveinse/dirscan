@@ -178,7 +178,7 @@ setup(
     # projects.
     extras_require={  # Optional
         'dev': ['pylint', 'flake8', 'mypy', 'black'],
-        'test': ['pytest', 'coverage'],
+        'test': ['pytest', 'coverage', 'pytest-cov'],
     },
 
     # If there are data files included in your packages that need to be
@@ -203,7 +203,7 @@ setup(
     # executes the function `main` from this package when invoked:
     entry_points={  # Optional
         'console_scripts': [
-            'dirscan=dirscan.__main__:dirscan_main',
+            'dirscan=dirscan.__main__:main',
         ],
     },
 

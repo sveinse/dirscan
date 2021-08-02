@@ -11,14 +11,11 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import os
 import datetime
 import stat as fstat
 import itertools
 import hashlib
-import errno
 import filecmp
 import fnmatch
 import binascii
@@ -37,7 +34,6 @@ class DirscanException(Exception):
     ''' Directory scan error '''
 
 
-
 ############################################################
 #
 #  FILE CLASS OBJECTS
@@ -45,7 +41,7 @@ class DirscanException(Exception):
 #
 ############################################################
 
-class BaseObj(object):
+class BaseObj:
     ''' File Objects Base Class '''
 
     def __init__(self, name, path='', stat=None, treeid=None):
@@ -63,7 +59,6 @@ class BaseObj(object):
         self.parsed = False
         self.excluded = False
         self.selected = False
-
 
     @property
     def fullpath(self):
@@ -100,7 +95,6 @@ class BaseObj(object):
         ''' Return the modified timestamp of the file '''
         return datetime.datetime.fromtimestamp(self.stat.st_mtime)
 
-
     def parse(self, done=True):
         ''' Parse the object. Get file stat info. '''
         if self.parsed:
@@ -109,17 +103,14 @@ class BaseObj(object):
             self.stat = os.lstat(self.fullpath)
         self.parsed = done
 
-
-    def children(self):
+    def children(self):  # pylint: disable=no-self-use
         ''' Return tuple of sub objects. Non-directory file objects that does not
             have any children will return an empty tuple. '''
         return tuple()
 
-
     def close(self):
         ''' Delete any allocated objecs within this class '''
         self.parsed = False
-
 
     def compare(self, other, changes=None):
         ''' Return a list of differences '''
@@ -139,17 +130,14 @@ class BaseObj(object):
             changes.append('older')
         return changes
 
-
-    #pylint: disable=unused-argument
-    def get(self, child, nochild=None):
+    # pylint: disable=unused-argument
+    def get(self, child, nochild=None):  # pylint: disable=no-self-use
         ''' Return child object child, return nochild if not present '''
         return nochild
 
-
     def __repr__(self):
-        treeid = '%s:' %(self.treeid) if self.treeid is not None else ''
-        return "%s(%s'%s')" %(type(self).__name__, treeid, self.fullpath)
-
+        treeid = '%s:' % (self.treeid) if self.treeid is not None else ''
+        return "%s(%s'%s')" % (type(self).__name__, treeid, self.fullpath)
 
     def exclude_otherfs(self, base):
         ''' Set excluded flag if this object differs from fs '''
@@ -158,7 +146,6 @@ class BaseObj(object):
         # have dev = None
         if self.dev != base.dev:
             self.excluded = True
-
 
     def exclude_files(self, excludes, base):
         ''' Set excluded flag if any of the entries in exludes matches
@@ -170,14 +157,12 @@ class BaseObj(object):
                 return
 
 
-
 class FileObj(BaseObj):
     ''' Regular File Object '''
     objtype = 'f'
     objname = 'file'
 
     hashsum_cache = None
-
 
     def hashsum(self):
         ''' Return the hashsum of the file '''
@@ -198,11 +183,9 @@ class FileObj(BaseObj):
             self.hashsum_cache = shahash.digest()
         return self.hashsum_cache
 
-
     def hashsum_hex(self):
         ''' Return the hex hashsum of the file '''
         return binascii.hexlify(self.hashsum()).decode('ascii')
-
 
     def compare(self, other, changes=None):
         ''' Compare two file objects '''
@@ -221,14 +204,12 @@ class FileObj(BaseObj):
         return BaseObj.compare(self, other, changes)
 
 
-
 class LinkObj(BaseObj):
     ''' Symbolic Link File Object '''
     objtype = 'l'
     objname = 'symbolic link'
 
     link = None
-
 
     def parse(self, done=True):
         # Execute super
@@ -240,7 +221,6 @@ class LinkObj(BaseObj):
         self.link = os.readlink(self.fullpath)
         self.parsed = True
 
-
     def compare(self, other, changes=None):
         ''' Compare two link objects '''
         if changes is None:
@@ -250,7 +230,6 @@ class LinkObj(BaseObj):
         return BaseObj.compare(self, other, changes)
 
 
-
 class DirObj(BaseObj):
     ''' Directory File Object '''
     objtype = 'd'
@@ -258,19 +237,16 @@ class DirObj(BaseObj):
 
     size = None
 
-
     def __init__(self, name, path='', stat=None, treeid=None):
         BaseObj.__init__(self, name, path, stat, treeid)
         self.dir = {}
         self.dir_parsed = False
-
 
     def close(self):
         ''' Delete all used references to allow GC cleanup '''
         self.dir.clear()
         self.dir_parsed = False
         BaseObj.close(self)
-
 
     def children(self):
         ''' Return a dict of the sub objects '''
@@ -288,16 +264,13 @@ class DirObj(BaseObj):
 
         return tuple(self.dir.keys())
 
-
     def get(self, child, nochild=None):
         ''' Return child object child '''
         return self.dir.get(child, nochild)
 
-
     def add_child(self, child):
         ''' Add child object '''
         self.dir[child.name] = child
-
 
 
 class SpecialObj(BaseObj):
@@ -306,7 +279,6 @@ class SpecialObj(BaseObj):
     objname = 'special file'
 
     size = None
-
 
     def __init__(self, name, path='', stat=None, dtype='s', treeid=None):
         BaseObj.__init__(self, name, path, stat, treeid)
@@ -322,7 +294,6 @@ class SpecialObj(BaseObj):
         elif dtype == 's':
             self.objname = 'socket'
 
-
     def compare(self, other, changes=None):
         ''' Compare two link objects '''
         if changes is None:
@@ -330,7 +301,6 @@ class SpecialObj(BaseObj):
         if self.objtype != other.objtype:
             changes.append('device type differs')
         return BaseObj.compare(self, other, changes)
-
 
 
 class NonExistingObj(BaseObj):
@@ -343,7 +313,6 @@ class NonExistingObj(BaseObj):
     def parse(self, done=True):
         self.stat = os.stat_result((None, None, None, None, None, None, None, None, None, None))
         self.parsed = True
-
 
 
 ############################################################
@@ -362,21 +331,19 @@ def create_from_fs(name, path='', treeid=None):
     mode = stat.st_mode
     if fstat.S_ISREG(mode):
         return FileObj(name, path, stat, treeid=treeid)
-    elif fstat.S_ISDIR(mode):
+    if fstat.S_ISDIR(mode):
         return DirObj(name, path, stat, treeid=treeid)
-    elif fstat.S_ISLNK(mode):
+    if fstat.S_ISLNK(mode):
         return LinkObj(name, path, stat, treeid=treeid)
-    elif fstat.S_ISBLK(mode):
+    if fstat.S_ISBLK(mode):
         return SpecialObj(name, path, stat, 'b', treeid=treeid)
-    elif fstat.S_ISCHR(mode):
+    if fstat.S_ISCHR(mode):
         return SpecialObj(name, path, stat, 'c', treeid=treeid)
-    elif fstat.S_ISFIFO(mode):
+    if fstat.S_ISFIFO(mode):
         return SpecialObj(name, path, stat, 'p', treeid=treeid)
-    elif fstat.S_ISSOCK(mode):
+    if fstat.S_ISSOCK(mode):
         return SpecialObj(name, path, stat, 's', treeid=treeid)
-    else:
-        raise DirscanException("%s: Uknown file type" %(fullpath))
-
+    raise DirscanException("%s: Uknown file type" % (fullpath))
 
 
 def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None, treeid=None):
@@ -403,16 +370,15 @@ def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None
         fileobj = DirObj(name, path, stat=fakestat, treeid=treeid)
         fileobj.dir_parsed = True
 
-    elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
+    elif objtype in ('b', 'c', 'p', 's'):
         fileobj = SpecialObj(name, path, stat=fakestat, dtype=objtype, treeid=treeid)
 
     else:
-        raise DirscanException("Unknown object type '%s'" %(objtype))
+        raise DirscanException("Unknown object type '%s'" % (objtype))
 
     # Ensure we don't go out on the FS
     fileobj.parsed = True
     return fileobj
-
 
 
 ############################################################
@@ -474,14 +440,14 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
 
     '''
 
-   # Ensure the exclusion list is a list
+    # Ensure the exclusion list is a list
     if excludes is None:
         excludes = []
 
     # Set default of traverse_oneside depending on if one-dir scanning or
     # comparing multiple dirs
     if traverse_oneside is None:
-        traverse_oneside = True if len(dirs) == 1 else False
+        traverse_oneside = len(dirs) == 1
 
     # Check list of dirs indeed are dirs and create initial object list to
     # start from
@@ -489,19 +455,14 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
     for dirobj in dirs:
         if isinstance(dirobj, DirObj):
             obj = dirobj
-        elif os.path.isdir(dirobj):
-            obj = DirObj(dirobj)
         else:
-            err = OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), dirobj)
-            raise DirscanException(str(err))
-        base.append(obj)
+            obj = DirObj(dirobj)
 
         # Parse the object to get the device.
-        try:
-            obj.parse()
-            obj.children()   # To force an exception here if permission denied
-        except OSError as err:
-            raise DirscanException(str(err))
+        obj.parse()
+        obj.children()   # To force an exception here if permission denied
+
+        base.append(obj)
 
     # Handle the special cases with '/' -> './'
     basename = base[0].fullpath
@@ -541,11 +502,11 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     raise
 
         # How many objects are present?
-        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded \
-            for obj in objs)
+        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded
+                      for obj in objs)
 
         # Send back object list to caller
-        debug('scan %s:  %s' %(path, objs))
+        debug('scan %s:  %s' % (path, objs))
         yield (path, objs)
 
         # Create a list of unique children names seen across all objects, where
@@ -565,7 +526,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
 
                 # Get and append the children names
                 children = obj.children()
-                debug("  Children of %s is %s" %(obj, children))
+                debug("  Children of %s is %s" % (obj, children))
                 subobjs.append(children)
 
             # Getting the children failed
@@ -582,8 +543,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
             child = tuple(obj.get(name,
                                   NonExistingObj(name,
                                                  obj.fullpath,
-                                                 treeid=obj.treeid)) \
-                for obj in objs)
+                                                 treeid=obj.treeid))
+                          for obj in objs)
 
             # Append it to the processing list
             children.append(child)

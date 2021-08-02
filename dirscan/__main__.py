@@ -11,19 +11,16 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import sys
 
 from . import fileinfo
 from .log import set_debug
-from .scanfile import ScanfileRecord, readscanfile, fileheader, checkscanfile
+from .scanfile import ScanfileRecord, read_scanfile, get_fileheader, is_scanfile
 from .scanfile import file_quoter, text_quoter
 from .compare import dir_compare1, dir_compare2
 from .dirscan import walkdirs, DirscanException, DirObj
-from .usage import dirscan_argumentparser, DIRSCAN_FORMAT_HELP
+from .usage import argument_parser, DIRSCAN_FORMAT_HELP
 from .progress import PrintProgress
-
 
 
 # Print formats in scan mode
@@ -36,8 +33,7 @@ FMT_HL = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {type}  {fullpath}'
 FMT_L = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}'
 
 
-
-def dirscan_main(argv=None):
+def main(argv=None):
     ''' Dirscan command-line entry-point '''
 
     #
@@ -49,10 +45,8 @@ def dirscan_main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
 
-
     # -- Set command line arguments and get the parser
-    argp = dirscan_argumentparser()
-
+    argp = argument_parser()
 
     # -- Parsing
     opts = argp.parse_args()
@@ -61,18 +55,15 @@ def dirscan_main(argv=None):
     right = opts.dir2
     set_debug(opts.debug)
 
-
     # -- Requested more help?
     if opts.formathelp:
         argp.print_help()
         print(DIRSCAN_FORMAT_HELP)
         argp.exit(1)
 
-
     # -- Not having onesided traversion in scan mode does not print anything
     if right is None:
         opts.traverse_oneside = True
-
 
     # -- Determine settings and print format
     if right is None:
@@ -115,23 +106,19 @@ def dirscan_main(argv=None):
         if opts.outfile:
             argp.error("Writing to an outfile is not supported when comparing directories")
 
-
     # -- Scanfile prefix settings
     opts.leftprefix = opts.leftprefix or opts.prefix
     opts.rightprefix = opts.rightprefix or opts.prefix
 
-
     # -- The all option will show all compare types
     if opts.all:
         comparetypes = ''.join([
-            fileinfo.COMPARE_ARROWS[x][0] for x in fileinfo.COMPARE_ARROWS])
-
+            fileinfo.COMPARE_ARROWS[x][0] for x in fileinfo.COMPARE_ARROWS.items()])
 
     # -- User provided formats overrides any defaults
     printfmt = opts.format or printfmt
     comparetypes = opts.comparetypes or comparetypes
     filetypes = opts.filetypes or filetypes
-
 
     # --- Summary options
     if opts.summary:
@@ -142,7 +129,6 @@ def dirscan_main(argv=None):
 
     summary.extend(fileinfo.FINAL_SUMMARY)
 
-
     # -- Set print strings
     if not opts.outfile:
         if opts.quiet:
@@ -150,7 +136,6 @@ def dirscan_main(argv=None):
     else:
         if not opts.verbose:
             printfmt = None
-
 
     # -- Get the fields names used in the printing formats
     try:
@@ -163,24 +148,20 @@ def dirscan_main(argv=None):
         print(prog + ': Print format error: ' + str(err))
         return 1
 
-
     # -- Handler for printing progress to stderr
     progress = PrintProgress(file=sys.stderr, delta_ms=200, show_progress=opts.progress)
 
-
     # -- Prepare the histograms to collect statistics
     stats = fileinfo.Statistics(left, right)
-
 
     # -- Error handler
     def error_handler(exception):
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
-            progress.print('%s: %s' %(prog, exception))
+            progress.print('%s: %s' % (prog, exception))
         # True will swallow the exception
         return True
-
 
     #
     # Directory scanning
@@ -191,19 +172,16 @@ def dirscan_main(argv=None):
     outfile = None
     try:
 
-        # -- Check and read the scan files (may raise DirscanException)
-        if checkscanfile(left):
-            dirs[0] = readscanfile(left, treeid=0, root=opts.leftprefix)
-        if checkscanfile(right):
-            dirs[1] = readscanfile(right, treeid=1, root=opts.rightprefix)
+        # -- Check and read the scan files
+        if is_scanfile(left):
+            dirs[0] = read_scanfile(left, treeid=0, root=opts.leftprefix)
+        if is_scanfile(right):
+            dirs[1] = read_scanfile(right, treeid=1, root=opts.rightprefix)
 
         # -- Open output file
         if opts.outfile:
-            kwargs = {}
-            if sys.version_info[0] >= 3:
-                kwargs['errors'] = 'surrogateescape'
-            outfile = open(opts.outfile, 'w', **kwargs)
-            outfile.write(fileheader())
+            outfile = open(opts.outfile, 'w', errors='surrogateescape')  # pylint: disable=consider-using-with
+            outfile.write(get_fileheader())
 
         # Prepare progress values
         count = 0
@@ -220,7 +198,7 @@ def dirscan_main(argv=None):
             # Progress printing
             count += 1
             cur = objs[0].fullpath if len(objs) == 1 else path
-            progress.progress("%s %s files:  %s " %(name, count, cur))
+            progress.progress("%s %s files:  %s " % (name, count, cur))
 
             # Compare the objects
             try:
@@ -230,7 +208,7 @@ def dirscan_main(argv=None):
                     comparetypes=comparetypes,
                     compare_dates=opts.compare_dates)
 
-            except IOError as err:
+            except OSError as err:
                 # Errors here are due to comparisons that fail.
                 error_handler(err)
                 change = 'error'
@@ -270,24 +248,28 @@ def dirscan_main(argv=None):
             }
 
             # Update the fields from the file objects
-            (errs, filefields) = fileinfo.get_fields(objs, prefixes, fieldnames)
+            (errors, filefields) = fileinfo.get_fields(objs, prefixes, fieldnames)
             fields.update(filefields)
 
-            for err in errs:
-                error_handler(err)
+            for error in errors:
+                error_handler(error)
 
             # Print to stdout
             if printfmt:
                 fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter, file=sys.stdout)
 
             # Write to file -- don't write if we couldn't get all fields
-            if writefmt and not errs:
+            if writefmt and not errors:
                 fileinfo.write_fileinfo(writefmt, fields, quoter=file_quoter, file=outfile)
 
-
-    except DirscanException as err:
+    except (DirscanException, OSError) as err:
         # Handle user-specific errors
         print(prog + ': ' + str(err))
+
+        # Show the full traceback in debug mode
+        if opts.debug:
+            raise
+
         return 1
 
     finally:
@@ -297,7 +279,6 @@ def dirscan_main(argv=None):
 
         # Close the progress output
         progress.close()
-
 
     #
     # Statistics printing
@@ -320,6 +301,5 @@ def dirscan_main(argv=None):
     return 0
 
 
-
 if __name__ == '__main__':
-    dirscan_main()
+    main()

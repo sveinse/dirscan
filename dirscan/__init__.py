@@ -18,3 +18,4 @@ __version__ = '0.9.2a1'
 from .dirscan import walkdirs, create_from_fs, create_from_data
 from .dirscan import DirscanException
 from .dirscan import FileObj, LinkObj, DirObj, SpecialObj, NonExistingObj
+from .scanfile import read_scanfile, is_scanfile

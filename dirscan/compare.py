@@ -11,11 +11,9 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
 
 
-
-#pylint: disable=unused-argument
+# pylint: disable=unused-argument
 def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
     ''' Object comparator for 1 dir. Returns tuple with (change, text) '''
 
@@ -30,7 +28,6 @@ def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
         return ('excluded', 'excluded')
 
     return ('scan', 'scan')
-
 
 
 def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
@@ -61,7 +58,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     if objs[0].objtype == '-' or objs[0].excluded:
         # File present RIGHT only
         # =======================
-        text = "%s only in right" %(objs[1].objname,)
+        text = "%s only in right" % (objs[1].objname,)
         if objs[1].excluded:
             return ('excluded', 'excluded, only in right')
         if objs[0].excluded:
@@ -71,7 +68,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     if objs[1].objtype == '-' or objs[1].excluded:
         # File present LEFT only
         # ======================
-        text = "%s only in left" %(objs[0].objname,)
+        text = "%s only in left" % (objs[0].objname,)
         if objs[0].excluded:
             return ('excluded', 'excluded, only in left')
         if objs[1].excluded:
@@ -81,7 +78,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     if len(set(o.objtype for o in objs)) > 1:
         # File type DIFFERENT
         # ===================
-        text = "Different type, %s in left and %s in right" %(
+        text = "Different type, %s in left and %s in right" % (
             objs[0].objname, objs[1].objname)
         return ('different_type', text)
 
@@ -124,13 +121,13 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
                 continue
             filtered_changes.append(change)
 
-        if filtered_changes:  # else from this test indicates file changed,
-                              # but all changes have been masked with
-                              # ignore settings
+        # else from the following test indicates file changed, but all changes
+        # have been masked with ignore settings
+        if filtered_changes:
 
             # File contents CHANGED
             # =====================
-            text = "%s changed: %s" %(objs[0].objname, ", ".join(filtered_changes))
+            text = "%s changed: %s" % (objs[0].objname, ", ".join(filtered_changes))
             return (change_type, text)
 
         # Compares with changes may fall through here because of
