@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 '''
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
@@ -13,19 +12,17 @@ extent permitted by law.
 '''
 import sys
 
-_ENABLE_DEBUG = False
+_DEBUG_LEVEL = False
 
 
-def set_debug(enable):
-    ''' Set global debug mode '''
-    global _ENABLE_DEBUG  # pylint: disable=global-statement
-    _ENABLE_DEBUG = enable
+def set_debug(level):
+    ''' Set global debug level '''
+    global _DEBUG_LEVEL  # pylint: disable=global-statement
+    _DEBUG_LEVEL = level
 
 
-def debug(*args, **kwargs):
+def debug(level, text, *args, **kwargs):
     ''' Print debug text, if enabled '''
-    if not _ENABLE_DEBUG:
+    if level > _DEBUG_LEVEL:
         return
-    sys.stderr.write('DEBUG:   ')
-    sys.stderr.write(*args, **kwargs)
-    sys.stderr.write('\n')
+    sys.stderr.write("DEBUG: " + str(text).format(*args, **kwargs) + "\n")

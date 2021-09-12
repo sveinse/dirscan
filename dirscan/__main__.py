@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 '''
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
@@ -13,24 +12,20 @@ extent permitted by law.
 '''
 import sys
 
-from . import fileinfo
-from .log import set_debug
-from .scanfile import ScanfileRecord, read_scanfile, get_fileheader, is_scanfile
-from .scanfile import file_quoter, text_quoter
-from .compare import dir_compare1, dir_compare2
-from .dirscan import walkdirs, DirscanException, DirObj
-from .usage import argument_parser, DIRSCAN_FORMAT_HELP
-from .progress import PrintProgress
+import dirscan.formatfields as fmtfields
+from dirscan.log import set_debug, debug
+from dirscan.scanfile import ScanfileRecord, read_scanfile, get_fileheader, is_scanfile
+from dirscan.scanfile import file_quoter, text_quoter
+from dirscan.compare import dir_compare1, dir_compare2
+from dirscan.dirscan import walkdirs, create_from_fs, DirscanException
+from dirscan.usage import argument_parser, DIRSCAN_FORMAT_HELP
+from dirscan.progress import PrintProgress
 
 
-# Print formats in scan mode
-#     A = --all,  H = --human,  L = --long
-FMT_AHL = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {mtime}  {type}  {fullpath}'
-FMT_AL = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {mtime}  {type}  {fullpath}'
-FMT_AH = '{mode_t}  {user:8} {group:8}  {size:>5}  {data:>64}  {type}  {fullpath}'
-FMT_A = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {type}  {fullpath}'
-FMT_HL = '{mode_t}  {user:8} {group:8}  {size:>5}  {mtime}  {type}  {fullpath}'
-FMT_L = '{mode_t}  {uid:5} {gid:5}  {size:>10}  {mtime}  {type}  {fullpath}'
+# Update interval of the progress in ms
+UPDATE_INTERVAL = 300
+
+
 
 
 def main(argv=None):
@@ -49,11 +44,12 @@ def main(argv=None):
     argp = argument_parser()
 
     # -- Parsing
-    opts = argp.parse_args()
+    opts = argp.parse_args(args=argv)
     prog = argp.prog
     left = opts.dir1
     right = opts.dir2
     set_debug(opts.debug)
+    end = '\x00' if opts.print0 else '\n'
 
     # -- Requested more help?
     if opts.formathelp:
@@ -61,59 +57,72 @@ def main(argv=None):
         print(DIRSCAN_FORMAT_HELP)
         argp.exit(1)
 
-    # -- Not having onesided traversion in scan mode does not print anything
+    # -- Ensure we have the minimum required number of arguments
+    if left is None:
+        argp.error("Missing required LEFT_DIR argument")
+
+    # -- Argument options parsing
+    try:
+        opts.comparetypes = fmtfields.get_compare_types(opts.comparetypes)
+        opts.filetypes = fmtfields.get_file_types(opts.filetypes)
+    except ValueError as err:
+        argp.error(err)
+
+    # -- Must recurse in scan mode
     if right is None:
-        opts.traverse_oneside = True
+        opts.recurse = True
 
     # -- Determine settings and print format
     if right is None:
-
-        # -- Setting for scanning
-        dirs = [DirObj(left, treeid=0)]
-        printfmt = '{fullpath}'
+        # -- Settings for scanning
+        printfmt = fmtfields.FMT_DEF
         writefmt = None
-        comparetypes = 's'
-        filetypes = 'fdlbcps'
-        prefixes = ['']
-        summary = list(fileinfo.SCAN_SUMMARY)
+        comparetypes = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
+        filetypes = fmtfields.FILE_TYPES_DEFAULT_SCAN
+        field_prefix = ['']
+        summary = list(fmtfields.SCAN_SUMMARY)
         dir_comparator = dir_compare1
-        name = 'Scanned'
+        pr_prefix = 'Scanned'
 
         if opts.outfile:
             writefmt = ScanfileRecord.FORMAT
-        elif opts.all and opts.long:
-            printfmt = FMT_AHL if opts.human else FMT_AL
-        elif opts.all:
-            printfmt = FMT_AH if opts.human else FMT_A
-        elif opts.long:
-            printfmt = FMT_HL if opts.human else FMT_L
-        elif opts.verbose:
-            printfmt = '{fullpath}{extra}'
+            if not opts.verbose:
+                printfmt = None
+        else:
+            if opts.quiet:
+                printfmt = None
+            elif opts.all and opts.long:
+                printfmt = fmtfields.FMT_AHL if opts.human else fmtfields.FMT_AL
+            elif opts.all:
+                printfmt = fmtfields.FMT_AH if opts.human else fmtfields.FMT_A
+            elif opts.long:
+                printfmt = fmtfields.FMT_HL if opts.human else fmtfields.FMT_L
+            elif opts.verbose:
+                printfmt = '{path}{extra}'
 
     else:
-
-        # -- Setting for comparing
-        dirs = [DirObj(left, treeid=0), DirObj(right, treeid=1)]
-        printfmt = '{arrow}  {path}  :  {text}'
+        # -- Settings for comparing
+        printfmt = fmtfields.FMT_COMP_DEF
         writefmt = None
-        comparetypes = 'rltcLR'
-        filetypes = 'fdlbcps'
-        prefixes = ['l_', 'r_']
-        summary = list(fileinfo.COMPARE_SUMMARY)
+        comparetypes = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
+        filetypes = fmtfields.FILE_TYPES_DEFAULT_COMPARE
+        field_prefix = ['l_', 'r_']
+        summary = list(fmtfields.COMPARE_SUMMARY)
         dir_comparator = dir_compare2
-        name = 'Compared'
+        pr_prefix = 'Compared'
 
         if opts.outfile:
             argp.error("Writing to an outfile is not supported when comparing directories")
+        if opts.quiet:
+            printfmt = None
+
+        # The all or verbose option will show all compare types
+        if opts.all or opts.verbose:
+            comparetypes = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
 
     # -- Scanfile prefix settings
     opts.leftprefix = opts.leftprefix or opts.prefix
     opts.rightprefix = opts.rightprefix or opts.prefix
-
-    # -- The all option will show all compare types
-    if opts.all:
-        comparetypes = ''.join([
-            fileinfo.COMPARE_ARROWS[x][0] for x in fileinfo.COMPARE_ARROWS.items()])
 
     # -- User provided formats overrides any defaults
     printfmt = opts.format or printfmt
@@ -127,56 +136,60 @@ def main(argv=None):
     if not opts.enable_summary:
         summary = []
 
-    summary.extend(fileinfo.FINAL_SUMMARY)
+    # The final summary contains any notes if there are any errors
+    summary.extend(fmtfields.FINAL_SUMMARY)
 
-    # -- Set print strings
-    if not opts.outfile:
-        if opts.quiet:
-            printfmt = None
-    else:
-        if not opts.verbose:
-            printfmt = None
-
-    # -- Get the fields names used in the printing formats
+    # -- Get the fields names used in the printing formats.
     try:
         fieldnames = set()
         if printfmt:
-            fieldnames.update(fileinfo.get_fieldnames(printfmt))
+            fieldnames.update(fmtfields.get_fieldnames(printfmt))
         if writefmt:
-            fieldnames.update(fileinfo.get_fieldnames(writefmt))
+            fieldnames.update(fmtfields.get_fieldnames(writefmt))
+
+        # FIXME: Evaluate valid format fields in summary, printfmt and writefmt
     except ValueError as err:
-        print(prog + ': Print format error: ' + str(err))
-        return 1
+        argp.error(f'Print format {err}')
 
     # -- Handler for printing progress to stderr
-    progress = PrintProgress(file=sys.stderr, delta_ms=200, show_progress=opts.progress)
+    progress = PrintProgress(file=sys.stderr, delta_ms=UPDATE_INTERVAL,
+                             show_progress=opts.progress)
 
     # -- Prepare the histograms to collect statistics
-    stats = fileinfo.Statistics(left, right)
+    stats = fmtfields.Statistics(left, right)
 
     # -- Error handler
     def error_handler(exception):
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
-            progress.print('%s: %s' % (prog, exception))
-        # True will swallow the exception
-        return True
+            progress.print(f"{prog}: {exception}")
+
+        # True will swallow the exception. In debug mode the error will be raised
+        return not opts.debug
 
     #
     # Directory scanning
     # -------------------
     #
 
-    hide_unselected = False
+    #hide_unselected = False
     outfile = None
     try:
 
         # -- Check and read the scan files
+        dirs = [None] if right is None else [None, None]
+
         if is_scanfile(left):
-            dirs[0] = read_scanfile(left, treeid=0, root=opts.leftprefix)
-        if is_scanfile(right):
-            dirs[1] = read_scanfile(right, treeid=1, root=opts.rightprefix)
+            dirs[0] = read_scanfile(left, root=opts.leftprefix)
+        else:
+            dirs[0] = create_from_fs(left)
+
+        if right is not None:
+            if is_scanfile(right):
+                dirs[1] = read_scanfile(right, root=opts.rightprefix)
+            else:
+                dirs[1] = create_from_fs(right)
 
         # -- Open output file
         if opts.outfile:
@@ -192,13 +205,16 @@ def main(argv=None):
                 reverse=opts.reverse,
                 excludes=opts.exclude,
                 onefs=opts.onefs,
-                traverse_oneside=opts.traverse_oneside,
-                exception_fn=error_handler):
+                traverse_oneside=opts.recurse,
+                exception_fn=error_handler,
+                close_during=False,
+            ):
+
 
             # Progress printing
             count += 1
             cur = objs[0].fullpath if len(objs) == 1 else path
-            progress.progress("%s %s files:  %s " % (name, count, cur))
+            progress.progress(f"{pr_prefix} {count} files:  {cur} ")
 
             # Compare the objects
             try:
@@ -206,7 +222,8 @@ def main(argv=None):
                     objs,
                     ignores=opts.ignore,
                     comparetypes=comparetypes,
-                    compare_dates=opts.compare_dates)
+                    compare_time=opts.compare_time,
+                )
 
             except OSError as err:
                 # Errors here are due to comparisons that fail.
@@ -221,12 +238,12 @@ def main(argv=None):
                 show = False
 
             # Show this compare type?
-            if fileinfo.COMPARE_ARROWS[change][0] not in comparetypes:
+            if fmtfields.COMPARE_ARROWS[change][0] not in comparetypes:
                 show = False
 
             # Is none selected?
-            if hide_unselected and not any(o.selected for o in objs):
-                show = False
+            #if hide_unselected and not any(o.selected for o in objs):
+            #    show = False
 
             # Save histogram info for the change type
             stats.add_stats(change)
@@ -240,27 +257,30 @@ def main(argv=None):
 
             # Set the base fields
             fields = {
-                'path'  : path,
+                'relpath': path,
                 'change': change,
-                'arrow' : fileinfo.COMPARE_ARROWS[change][1],
+                'arrow' : fmtfields.COMPARE_ARROWS[change][1],
                 'text'  : text.capitalize(),
                 'extra' : '',
             }
 
-            # Update the fields from the file objects
-            (errors, filefields) = fileinfo.get_fields(objs, prefixes, fieldnames)
+            # Update the fields from the file objects. This retries the values
+            # for the fields which are in actual use. This saves a lot of
+            # resources instead of fetching everything
+            (errors, filefields) = fmtfields.get_fields(objs, field_prefix, fieldnames)
             fields.update(filefields)
-
             for error in errors:
                 error_handler(error)
 
             # Print to stdout
             if printfmt:
-                fileinfo.write_fileinfo(printfmt, fields, quoter=text_quoter, file=sys.stdout)
+                fmtfields.write_fileinfo(printfmt, fields, quoter=text_quoter,
+                                        file=sys.stdout, end=end)
 
             # Write to file -- don't write if we couldn't get all fields
             if writefmt and not errors:
-                fileinfo.write_fileinfo(writefmt, fields, quoter=file_quoter, file=outfile)
+                fmtfields.write_fileinfo(writefmt, fields, quoter=file_quoter,
+                                        file=outfile)
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors
@@ -289,10 +309,10 @@ def main(argv=None):
     fields = {
         'prog': prog,
     }
-    fields.update(stats.get_fields(prefixes))
+    fields.update(stats.get_fields(field_prefix))
 
     # Print the summary
-    fileinfo.write_summary(summary, fields, file=sys.stderr)
+    fmtfields.write_summary(summary, fields, file=sys.stderr)
 
     # Return error code if we have encountered any errors scanning
     if fields.get('n_err'):

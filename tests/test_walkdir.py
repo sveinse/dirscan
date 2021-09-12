@@ -1,55 +1,61 @@
 import os
-import pytest
-from pprint import pprint
-import subprocess
+from pytest import raises
+#from pprint import pprint
 
-import dirscan
+import dirscan as ds
+
+# pylint: disable-all
 
 def test_no_access_to_topdir(wd):
     ''' Test scanning a dir with no access '''
     os.makedirs('a')
     os.chmod('a', 0o000)
 
-    with pytest.raises(PermissionError) as exc:
-        for (path, objs) in dirscan.walkdirs(('a',)):
-            pass
+    # Direct call
+    with raises(PermissionError) as exc:
+        for _ in ds.walkdirs(('a',)): pass
 
-    with pytest.raises(subprocess.CalledProcessError) as exc:
-        subprocess.check_call(["dirscan", "--debug", "a"])
-    assert exc.value.returncode == 1
+    # Cmd line
+    with raises(PermissionError) as exc:
+        ds.main(["--debug", "a"])
 
 
 def test_top_is_not_a_dir(wd):
     ''' Test giving a file to scan instead of a dir '''
-    with open('a', 'w') as f:
-        pass
+    with open('a', 'w') as f: pass
 
-    with pytest.raises(NotADirectoryError) as exc:
-        for (path, objs) in dirscan.walkdirs(('a',)):
-            pass
+    # Direct call
+    with raises(NotADirectoryError) as exc:
+        for _ in ds.walkdirs(('a',)): pass
 
-    with pytest.raises(subprocess.CalledProcessError) as exc:
-        subprocess.check_call(["dirscan", "--debug", "a"])
-    assert exc.value.returncode == 1
+    # Cmd line
+    with raises(NotADirectoryError) as exc:
+        ds.main(["--debug", "a"])
 
 
 def test_top_is_not_existing(wd):
     ''' Test scanning a path that doesn't exist '''
-    with pytest.raises(FileNotFoundError) as exc:
-        for (path, objs) in dirscan.walkdirs(('a',)):
-            pass
 
-    with pytest.raises(subprocess.CalledProcessError) as exc:
-        subprocess.check_call(["dirscan", "--debug", "a"])
-    assert exc.value.returncode == 1
+    # Direct call
+    with raises(FileNotFoundError) as exc:
+        for _ in ds.walkdirs(('a',)): pass
+
+    # Cmd line
+    with raises(FileNotFoundError) as exc:
+        ds.main(["--debug", "a"])
 
 
 def test_empty_dirlist(wd):
     ''' Test passing empty lists to walkdirs() '''
-    with pytest.raises(IndexError) as exc:
-        for (path, objs) in dirscan.walkdirs([]):
-            pass
 
-    with pytest.raises(TypeError) as exc:
-        for (path, objs) in dirscan.walkdirs(None):
-            pass
+    ds.set_debug(1)
+
+    expect = ((('.'),()),)
+
+    # Empty list
+    result = tuple(ds.walkdirs([]))
+    assert result == expect
+
+    # None list
+    with raises(TypeError) as exc:
+        for _ in ds.walkdirs(None): pass
