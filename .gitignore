@@ -12,6 +12,8 @@ venv*/
 # due to using tox and pytest
 .tox
 .cache
+htmlcov
+.coverage
 
 # Misc
 tags

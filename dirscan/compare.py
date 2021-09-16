@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 '''
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2021 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -11,13 +10,15 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
+
+from dirscan.dirscan import NonExistingObj
 
 
-
-#pylint: disable=unused-argument
-def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
-    ''' Object comparator for 1 dir. Returns tuple with (change, text) '''
+# pylint: disable=unused-argument
+def dir_compare1(objs, ignores='', comparetypes='', compare_time=False):
+    ''' Object comparator for one object. The only thing this function tests
+        for is if the object is excluded. Returns tuple with (change, text)
+    '''
 
     # Comparison matrix for 1 dir
     # ---------------------------
@@ -32,9 +33,9 @@ def dir_compare1(objs, ignores='', comparetypes='', compare_dates=False):
     return ('scan', 'scan')
 
 
-
-def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
-    ''' Object comparator for two dirs. Returns a tuple with (change, text) '''
+def dir_compare2(objs, ignores='', comparetypes='', compare_time=False):
+    ''' Object comparator for two objects. Returns a tuple with (change, text)
+    '''
 
     # Comparison matrix for 2 dirs
     # -----------------------------
@@ -52,37 +53,37 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
     if all(o.excluded for o in objs):
         # File EXCLUDED
         # =============
-        if objs[0].objtype == '-':
+        if isinstance(objs[0], NonExistingObj):
             return ('excluded', 'Right excluded, not present in left')
-        if objs[1].objtype == '-':
+        if isinstance(objs[1], NonExistingObj):
             return ('excluded', 'Left excluded, not present in right')
         return ('excluded', 'excluded')
 
-    if objs[0].objtype == '-' or objs[0].excluded:
+    if isinstance(objs[0], NonExistingObj) or objs[0].excluded:
         # File present RIGHT only
         # =======================
-        text = "%s only in right" %(objs[1].objname,)
+        text = f"{objs[1].objname} only in right"
         if objs[1].excluded:
             return ('excluded', 'excluded, only in right')
         if objs[0].excluded:
             text += ", left is excluded"
         return ('right_only', text)
 
-    if objs[1].objtype == '-' or objs[1].excluded:
+    if isinstance(objs[1], NonExistingObj) or objs[1].excluded:
         # File present LEFT only
         # ======================
-        text = "%s only in left" %(objs[0].objname,)
+        text = f"{objs[0].objname} only in left"
         if objs[0].excluded:
             return ('excluded', 'excluded, only in left')
         if objs[1].excluded:
             text += ", right is excluded"
         return ('left_only', text)
 
-    if len(set(o.objtype for o in objs)) > 1:
+    if len(set(type(o) for o in objs)) > 1:
         # File type DIFFERENT
         # ===================
-        text = "Different type, %s in left and %s in right" %(
-            objs[0].objname, objs[1].objname)
+        text = (f"Different type, "
+                f"{objs[0].objname} in left and {objs[1].objname} in right")
         return ('different_type', text)
 
     # File type EQUAL
@@ -96,21 +97,21 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
 
     # compare returns a list of differences. If None, they are equal
     # This might fail, so be prepared to catch any errors
-    changes = objs[0].compare(objs[1])
-    if changes:
+    differences = tuple(objs[0].compare(objs[1]))
+    if differences:
         # Make a new list and filter out the ignored differences
         filtered_changes = []
         change_type = 'changed'
-        for change in changes:
+        for change in differences:
             if 'newer' in change:
-                if len(changes) == 1 and not compare_dates:
+                if len(differences) == 1 and not compare_time:
                     continue
                 if 't' in ignores:
                     continue
                 change = 'left is newer'
                 change_type = 'left_newer'
             elif 'older' in change:
-                if len(changes) == 1 and not compare_dates:
+                if len(differences) == 1 and not compare_time:
                     continue
                 if 't' in ignores:
                     continue
@@ -124,13 +125,13 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_dates=False):
                 continue
             filtered_changes.append(change)
 
-        if filtered_changes:  # else from this test indicates file changed,
-                              # but all changes have been masked with
-                              # ignore settings
+        # else from the following test indicates file changed, but all changes
+        # have been masked with ignore settings
+        if filtered_changes:
 
             # File contents CHANGED
             # =====================
-            text = "%s changed: %s" %(objs[0].objname, ", ".join(filtered_changes))
+            text = f"{objs[0].objname} changed: {', '.join(filtered_changes)}"
             return (change_type, text)
 
         # Compares with changes may fall through here because of

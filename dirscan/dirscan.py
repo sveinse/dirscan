@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 '''
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2021 Svein Seldal, sveinse@seldal.com
 URL: https://github.com/sveinse/dirscan
 
 This application is licensed under GNU GPL version 3
@@ -11,19 +10,16 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import os
 import datetime
-import stat as fstat
+import stat as osstat
 import itertools
 import hashlib
-import errno
 import filecmp
 import fnmatch
 import binascii
 
-from .log import debug
+from dirscan.log import debug
 
 
 # Select hash algorthm to use
@@ -32,10 +28,12 @@ HASHALGORITHM = hashlib.sha256
 # Number of bytes to read per round in the hash reader
 HASHCHUNKSIZE = 16*4096
 
+# Minimum difference in seconds to consider it a changed timestamp
+TIME_THRESHOLD = 1
+
 
 class DirscanException(Exception):
     ''' Directory scan error '''
-
 
 
 ############################################################
@@ -45,25 +43,31 @@ class DirscanException(Exception):
 #
 ############################################################
 
-class BaseObj(object):
-    ''' File Objects Base Class '''
+class DirscanObj:
+    ''' Directory scan file objects base class '''
 
-    def __init__(self, name, path='', stat=None, treeid=None):
+    __slots__ = ('name', 'path', 'excluded',
+                 'mode', 'uid', 'gid', 'dev', 'size', '_mtime')
+
+    def __init__(self, name, path='', stat=None):
 
         # Ensure the name does not end with a slash, that messes up path
         # calculations later in directory compares
         if name != '/':
             name = name.rstrip('/')
 
-        self.path = path
         self.name = name
-        self.stat = stat
-        self.treeid = treeid
-
-        self.parsed = False
+        self.path = path
         self.excluded = False
-        self.selected = False
 
+        # Only save the actual file mode, not the type field. However, this
+        # will lose additional mode field information.
+        self.mode = osstat.S_IMODE(stat.st_mode)
+        self.uid = stat.st_uid
+        self.gid = stat.st_gid
+        self.dev = stat.st_dev
+        self.size = stat.st_size
+        self._mtime = stat.st_mtime
 
     @property
     def fullpath(self):
@@ -71,84 +75,37 @@ class BaseObj(object):
         return os.path.join(self.path, self.name)
 
     @property
-    def mode(self):
-        ''' Return the file mode bits '''
-        return self.stat.st_mode
-
-    @property
-    def uid(self):
-        ''' Return the file user ID '''
-        return self.stat.st_uid
-
-    @property
-    def gid(self):
-        ''' Return the file group ID '''
-        return self.stat.st_gid
-
-    @property
-    def dev(self):
-        ''' Return the device ID for the file '''
-        return self.stat.st_dev
-
-    @property
-    def size(self):
-        ''' Return the size of the file '''
-        return self.stat.st_size
-
-    @property
     def mtime(self):
         ''' Return the modified timestamp of the file '''
-        return datetime.datetime.fromtimestamp(self.stat.st_mtime)
+        return datetime.datetime.fromtimestamp(self._mtime)
 
-
-    def parse(self, done=True):
-        ''' Parse the object. Get file stat info. '''
-        if self.parsed:
-            return
-        if not self.stat:
-            self.stat = os.lstat(self.fullpath)
-        self.parsed = done
-
-
-    def children(self):
-        ''' Return tuple of sub objects. Non-directory file objects that does not
-            have any children will return an empty tuple. '''
-        return tuple()
-
+    def children(self):  # pylint: disable=no-self-use
+        ''' Return iterator of sub objects. Non-directory file objects that
+            does not have any children will return an empty tuple. '''
+        return ()
 
     def close(self):
         ''' Delete any allocated objecs within this class '''
-        self.parsed = False
 
-
-    def compare(self, other, changes=None):
+    def compare(self, other):
         ''' Return a list of differences '''
-        if changes is None:
-            changes = []
-        if type(other) is not type(self):
-            return ['type mismatch']
-        if self.uid != other.uid:
-            changes.append('UID differs')
-        if self.gid != other.gid:
-            changes.append('GID differs')
+        if type(self) is not type(other):
+            yield 'type mismatch'
+            return
+        time_delta = self._mtime - other._mtime
+        if time_delta > TIME_THRESHOLD:
+            yield 'newer'
+        if time_delta < -TIME_THRESHOLD:
+            yield 'older'
         if self.mode != other.mode:
-            changes.append('permissions differs')
-        if self.mtime > other.mtime:
-            changes.append('newer')
-        elif self.mtime < other.mtime:
-            changes.append('older')
-        return changes
-
-
-    #pylint: disable=unused-argument
-    def get(self, child, nochild=None):
-        ''' Return child object child, return nochild if not present '''
-        return nochild
-
+            yield 'permissions differs'
+        if self.uid != other.uid:
+            yield 'UID differs'
+        if self.gid != other.gid:
+            yield 'GID differs'
 
     def __repr__(self):
-        treeid = '%s:' %(self.treeid) if self.treeid is not None else ''
-        return "%s(%s'%s')" %(type(self).__name__, treeid, self.fullpath)
+        return f"{type(self).__name__}({self.path},{self.name})"
 
 
     def exclude_otherfs(self, base):
@@ -158,7 +115,6 @@ class BaseObj(object):
         # have dev = None
         if self.dev != base.dev:
             self.excluded = True
-
 
     def exclude_files(self, excludes, base):
         ''' Set excluded flag if any of the entries in exludes matches
@@ -170,15 +126,19 @@ class BaseObj(object):
                 return
 
 
-
-class FileObj(BaseObj):
+class FileObj(DirscanObj):
     ''' Regular File Object '''
     objtype = 'f'
     objname = 'file'
+    objmode = osstat.S_IFREG
 
-    hashsum_cache = None
+    __slots__ = ('hashsum_cache',)
 
+    def __init__(self, name, path='', stat=None, hashsum=None):
+        super().__init__(name, path=path, stat=stat)
+        self.hashsum_cache = hashsum
 
+    @property
     def hashsum(self):
         ''' Return the hashsum of the file '''
 
@@ -198,151 +158,130 @@ class FileObj(BaseObj):
             self.hashsum_cache = shahash.digest()
         return self.hashsum_cache
 
-
+    @property
     def hashsum_hex(self):
         ''' Return the hex hashsum of the file '''
-        return binascii.hexlify(self.hashsum()).decode('ascii')
+        return binascii.hexlify(self.hashsum).decode('ascii')
 
-
-    def compare(self, other, changes=None):
+    def compare(self, other):
         ''' Compare two file objects '''
-        if changes is None:
-            changes = []
+        yield from super().compare(other)
         if self.size != other.size:
-            changes.append('size differs')
+            yield 'size differs'
         elif self.hashsum_cache or other.hashsum_cache:
             # Does either of them have hashsum_cache set? If yes, make use of
             # hashsum based compare. filecmp might be more efficient, but if we
             # read from listfiles, we have to use hashsums.
-            if self.hashsum() != other.hashsum():
-                changes.append('contents differs')
+            if self.hashsum != other.hashsum:
+                yield 'contents differs'
         elif not filecmp.cmp(self.fullpath, other.fullpath, shallow=False):
-            changes.append('contents differs')
-        return BaseObj.compare(self, other, changes)
+            yield 'contents differs'
 
 
-
-class LinkObj(BaseObj):
+class LinkObj(DirscanObj):
     ''' Symbolic Link File Object '''
     objtype = 'l'
     objname = 'symbolic link'
+    objmode = osstat.S_IFLNK
 
-    link = None
+    __slots__ = ('link',)
 
+    def __init__(self, name, path='', stat=None, link=None):
+        super().__init__(name, path=path, stat=stat)
+        self.link = link
 
-    def parse(self, done=True):
-        # Execute super
-        if self.parsed:
-            return
-        BaseObj.parse(self, done=False)
-
-        # Read the contents of the link
-        self.link = os.readlink(self.fullpath)
-        self.parsed = True
-
-
-    def compare(self, other, changes=None):
+    def compare(self, other):
         ''' Compare two link objects '''
-        if changes is None:
-            changes = []
+        yield from super().compare(other)
         if self.link != other.link:
-            changes.append('link differs')
-        return BaseObj.compare(self, other, changes)
+            yield 'link differs'
 
 
-
-class DirObj(BaseObj):
+class DirObj(DirscanObj):
     ''' Directory File Object '''
     objtype = 'd'
     objname = 'directory'
+    objmode = osstat.S_IFDIR
 
-    size = None
+    __slots__ = ('_children',)
 
-
-    def __init__(self, name, path='', stat=None, treeid=None):
-        BaseObj.__init__(self, name, path, stat, treeid)
-        self.dir = {}
-        self.dir_parsed = False
-
+    def __init__(self, name, path='', stat=None, children=None):
+        super().__init__(name, path=path, stat=stat)
+        self.size = None
+        self._children = children
 
     def close(self):
         ''' Delete all used references to allow GC cleanup '''
-        self.dir.clear()
-        self.dir_parsed = False
-        BaseObj.close(self)
-
+        super().close()
+        self._children = None
 
     def children(self):
-        ''' Return a dict of the sub objects '''
-        if not self.dir_parsed:
+        ''' Return an iterator of the sub object names '''
+        if self._children is None:
+            self._children = tuple(create_from_fsdir(self.fullpath))
+        return self._children
 
-            # Setting dir_parsed first has the subtle effect that if
-            # os.lostdir() fails, it will still label the dir as parsed.
-            # This avoids rescanning and thus failing if the tree is
-            # scanned twice.
-            self.dir_parsed = True
-
-            # Try to get list of sub directories and make new sub object
-            for name in os.listdir(self.fullpath):
-                self.dir[name] = create_from_fs(name, self.fullpath, treeid=self.treeid)
-
-        return tuple(self.dir.keys())
+    def set_children(self, children):
+        ''' Set the directory children '''
+        self._children = children
 
 
-    def get(self, child, nochild=None):
-        ''' Return child object child '''
-        return self.dir.get(child, nochild)
+class BlockDevObj(DirscanObj):
+    ''' Block Device Object '''
+    objtype = 'b'
+    objname = 'block device'
+    objmode = osstat.S_IFBLK
 
 
-    def add_child(self, child):
-        ''' Add child object '''
-        self.dir[child.name] = child
+class CharDevObj(DirscanObj):
+    ''' Char Device Object '''
+    objtype = 'c'
+    objname = 'char device'
+    objmode = osstat.S_IFCHR
 
 
+class FifoObj(DirscanObj):
+    ''' Fifo File Object '''
+    objtype = 'p'
+    objname = 'fifo'
+    objmode = osstat.S_IFIFO
 
-class SpecialObj(BaseObj):
-    ''' Device (block or char) device '''
+
+class SocketObj(DirscanObj):
+    ''' Socket File Object '''
     objtype = 's'
-    objname = 'special file'
-
-    size = None
-
-
-    def __init__(self, name, path='', stat=None, dtype='s', treeid=None):
-        BaseObj.__init__(self, name, path, stat, treeid)
-        self.objtype = dtype
-
-        # The known special device types
-        if dtype == 'b':
-            self.objname = 'block device'
-        elif dtype == 'c':
-            self.objname = 'char device'
-        elif dtype == 'p':
-            self.objname = 'fifo'
-        elif dtype == 's':
-            self.objname = 'socket'
+    objname = 'socket'
+    objmode = osstat.S_IFSOCK
 
 
-    def compare(self, other, changes=None):
-        ''' Compare two link objects '''
-        if changes is None:
-            changes = []
-        if self.objtype != other.objtype:
-            changes.append('device type differs')
-        return BaseObj.compare(self, other, changes)
-
-
-
-class NonExistingObj(BaseObj):
+class NonExistingObj(DirscanObj):
     ''' NonExisting File Object. Evaluates to false for everything. Used by the
         walkdirs() when parsing multiple trees in parallell to indicate a
         non-existing file object in one or more of the trees. '''
     objtype = '-'
     objname = 'missing file'
 
-    def parse(self, done=True):
-        self.stat = os.stat_result((None, None, None, None, None, None, None, None, None, None))
-        self.parsed = True
+    def __init__(self, name, path=''):
+        stat = os.stat_result((None, None, None, None, None, None, None, None, None, None))
+        super().__init__(name, path=path, stat=stat)
+
+
+# Tuple of all file objects. NonExistingObj is deliberately omitted
+ALL_FILEOBJECT_CLASS = (
+    FileObj,
+    DirObj,
+    LinkObj,
+    BlockDevObj,
+    CharDevObj,
+    FifoObj,
+    SocketObj,
+)
+
+# Dict of all file object class, indexed by the stat mode key (.objmode)
+FILETYPES = {obj.objmode: obj for obj in ALL_FILEOBJECT_CLASS}
+
+# Dict pointing to the class indexed by objtype
+OBJTYPES = {obj.objtype: obj for obj in ALL_FILEOBJECT_CLASS}
 
 
 
@@ -353,65 +292,74 @@ class NonExistingObj(BaseObj):
 #
 ############################################################
 
-def create_from_fs(name, path='', treeid=None):
+def create_from_fs(name, path='', stat=None):
     ''' Create a new object from file system path and return an
         instance of the object. The object type returned is based on
         stat of the actual file system entry.'''
     fullpath = os.path.join(path, name)
-    stat = os.lstat(fullpath)
-    mode = stat.st_mode
-    if fstat.S_ISREG(mode):
-        return FileObj(name, path, stat, treeid=treeid)
-    elif fstat.S_ISDIR(mode):
-        return DirObj(name, path, stat, treeid=treeid)
-    elif fstat.S_ISLNK(mode):
-        return LinkObj(name, path, stat, treeid=treeid)
-    elif fstat.S_ISBLK(mode):
-        return SpecialObj(name, path, stat, 'b', treeid=treeid)
-    elif fstat.S_ISCHR(mode):
-        return SpecialObj(name, path, stat, 'c', treeid=treeid)
-    elif fstat.S_ISFIFO(mode):
-        return SpecialObj(name, path, stat, 'p', treeid=treeid)
-    elif fstat.S_ISSOCK(mode):
-        return SpecialObj(name, path, stat, 's', treeid=treeid)
-    else:
-        raise DirscanException("%s: Uknown file type" %(fullpath))
+    if not stat:
+        stat = os.lstat(fullpath)
+    objcls = FILETYPES.get(osstat.S_IFMT(stat.st_mode))
+    if not objcls:
+        raise DirscanException(f"{fullpath}: Uknown file type")
+
+    # Extra parameters
+    kwargs = {}
+
+    if objcls is LinkObj:
+        kwargs['link'] = os.readlink(fullpath)
+
+    # Don't want to start the read of any directories here. That would result
+    # in a full traversal of the directory, which could take considerable time.
+    # Reading the directory objects are done with the .children() function
+
+    return objcls(name, path=path, stat=stat, **kwargs)
 
 
+def create_from_fsdir(path):
+    ''' Generator that produces file object instances for directory 'path' '''
 
-def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None, treeid=None):
+    # Iterate over the directory
+    with os.scandir(path) as dirit:
+        for direntry in dirit:
+            stat = direntry.stat(follow_symlinks=False)
+            yield create_from_fs(direntry.name, path=path, stat=stat)
+
+
+def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None):
     ''' Create a new object from the given data and return an
         instance of the object. '''
 
+    # Get the file object class from the type
+    objcls = OBJTYPES.get(objtype)
+    if not objcls:
+        raise DirscanException(f"Unknown object type '{objtype}'")
+
+    # Extra parameters
+    kwargs = {}
+
+    # Do necessary post processing of the file object
+    if objcls is FileObj:
+        if data:
+            kwargs['hashsum'] = binascii.unhexlify(data)
+        elif size == 0:
+            # Hashsum is normally not defined if the size is 0.
+            kwargs['hashsum'] = HASHALGORITHM().digest()
+
+    elif objcls is LinkObj:
+        kwargs['link'] = data
+
+    if osstat.S_IFMT(mode) == objcls.objmode:
+        raise DirscanException(f"Object type '{objtype}' does not match mode 'o{mode:o}'")
+    #debug(0, "Mode {} -> {}", mode, mode|objcls.objmode)
+
     # Make a fake stat element from the given meta-data
     # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-    fakestat = os.stat_result((mode, None, None, None, uid, gid, size, None, mtime, None))
+    fakestat = os.stat_result((mode|objcls.objmode, None, None, None, uid, gid,
+                               size, None, mtime, None))
 
-    if objtype == 'f':
-        fileobj = FileObj(name, path, stat=fakestat, treeid=treeid)
-        fileobj.hashsum_cache = binascii.unhexlify(data) if data else None
-
-        # Hashsum is normally not defined if the size is 0.
-        if not data and size == 0:
-            fileobj.hashsum_cache = HASHALGORITHM().digest()
-
-    elif objtype == 'l':
-        fileobj = LinkObj(name, path, stat=fakestat, treeid=treeid)
-        fileobj.link = data
-
-    elif objtype == 'd':
-        fileobj = DirObj(name, path, stat=fakestat, treeid=treeid)
-        fileobj.dir_parsed = True
-
-    elif objtype == 'b' or objtype == 'c' or objtype == 'p' or objtype == 's':
-        fileobj = SpecialObj(name, path, stat=fakestat, dtype=objtype, treeid=treeid)
-
-    else:
-        raise DirscanException("Unknown object type '%s'" %(objtype))
-
-    # Ensure we don't go out on the FS
-    fileobj.parsed = True
-    return fileobj
+    # Make the file object instance
+    return objcls(name, path=path, stat=fakestat, **kwargs)
 
 
 
@@ -433,7 +381,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
     ``(path, objs)`` for each file object it finds. ``path`` represents the
     common file path. ``objs`` is a tuple of file objects representing the
     respective found file object from the directories given by the ``dirs``
-    list. The objects returned are derived types of ``BaseObj``, such
+    list. The objects returned are derived types of ``DirscanObj``, such
     as ``FileObj``, ``DirObj``. If a file is only present in one of the
     dirs,  the object returned in the dirs where the file isn't present will
     be returned as a ``NonExistingObj`` object.
@@ -458,7 +406,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
 
      ``traverse_onside``
         Will walk/yield all file objects in a directory that exists on only one
-        side
+        side. Otherwise the one-sided directory will be skipped from scanning/
+        traversal.
 
      ``exception_fn``
         Exception handler callback. It has format ``exception_fn(exception)``
@@ -474,61 +423,49 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
 
     '''
 
-   # Ensure the exclusion list is a list
+    # Ensure the exclusion list is a list
     if excludes is None:
         excludes = []
 
     # Set default of traverse_oneside depending on if one-dir scanning or
     # comparing multiple dirs
     if traverse_oneside is None:
-        traverse_oneside = True if len(dirs) == 1 else False
+        # Not set, default value. True for scanning, False for comparing
+        traverse_oneside = len(dirs) == 1
 
     # Check list of dirs indeed are dirs and create initial object list to
     # start from
     base = []
-    for dirobj in dirs:
-        if isinstance(dirobj, DirObj):
-            obj = dirobj
-        elif os.path.isdir(dirobj):
-            obj = DirObj(dirobj)
-        else:
-            err = OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), dirobj)
-            raise DirscanException(str(err))
+    for obj in dirs:
+
+        # If we're not handed a FileObj-instance
+        if not isinstance(obj, DirscanObj):
+            obj = create_from_fs(obj)
+
+        # The object must be a directory object
+        if not isinstance(obj, DirObj):
+            raise NotADirectoryError()
+
         base.append(obj)
 
-        # Parse the object to get the device.
-        try:
-            obj.parse()
-            obj.children()   # To force an exception here if permission denied
-        except OSError as err:
-            raise DirscanException(str(err))
-
-    # Handle the special cases with '/' -> './'
-    basename = base[0].fullpath
-    baserepl = '.'
-    if basename == '/':
-        baserepl = './'
-
     # Start the queue
-    queue = [tuple(base)]
+    queue = [('.', tuple(base))]
 
     # Traverse the queue
     while queue:
 
         # Get the next set of objects
-        objs = queue.pop(-1)
+        path, objs = queue.pop(-1)
 
-        # Relative path: Gives '.', './a', './b'
-        path = objs[0].fullpath.replace(basename, baserepl, 1)
-        if path == './':
-            path = '.'
+        # Do not prefix top-level directories with './'
+        if path[:2] == './':
+            path = path[2::]
+
+        debug(1, ">>>>  OBJECT {}:  {}", path, objs)
 
         # Parse the objects, getting object metadata
         for obj, baseobj in zip(objs, base):
             try:
-                # Get file object metadata
-                obj.parse()
-
                 # Test for exclusions
                 obj.exclude_files(excludes, base=baseobj)
                 if onefs:
@@ -541,17 +478,17 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     raise
 
         # How many objects are present?
-        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded \
-            for obj in objs)
+        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded
+                      for obj in objs)
 
         # Send back object list to caller
-        debug('scan %s:  %s' %(path, objs))
         yield (path, objs)
 
         # Create a list of unique children names seen across all objects, where
         # excluded objects are removed from parsing
-        subobjs = []
+        childobjs = []
         for obj in objs:
+            children = {}
             try:
                 # Skip the children if...
 
@@ -564,9 +501,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                     continue
 
                 # Get and append the children names
-                children = obj.children()
-                debug("  Children of %s is %s" %(obj, children))
-                subobjs.append(children)
+                children = {obj.name: obj for obj in obj.children()}
+                #debug(2, "    Children of {} is {}", obj, children)
 
             # Getting the children failed
             except OSError as err:
@@ -574,24 +510,25 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                 if not exception_fn or not exception_fn(err):
                     raise
 
-        # Merge all subobjects into a single list of unique, sorted, children names
-        children = []
-        for name in sorted(set(itertools.chain.from_iterable(subobjs)), reverse=not reverse):
+            finally:
+                # Append the children collected so far
+                childobjs.append(children)
 
-            # Create a list of children objects for that name
-            child = tuple(obj.get(name,
-                                  NonExistingObj(name,
-                                                 obj.fullpath,
-                                                 treeid=obj.treeid)) \
-                for obj in objs)
+        # Merge all found objects into a single list of unique, sorted, children names
+        # and iterate over it
+        for name in sorted(set(itertools.chain.from_iterable(childobjs)),
+                           reverse=not reverse):
 
-            # Append it to the processing list
-            children.append(child)
+            # Get the child if it exists for each of the dirs being traversed
+            child = tuple(
+                children.get(name) or NonExistingObj(name, path=parent.fullpath)
+                for parent, children in zip(objs, childobjs)
+            )
+
+            # Append the newly discovered objects to the queue
+            queue.append((os.path.join(path, name), child))
 
         # Close objects to conserve memory
         if close_during:
             for obj in objs:
                 obj.close()
-
-        # Append the newly discovered objects to the queue
-        queue.extend(children)
