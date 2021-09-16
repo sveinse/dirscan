@@ -1,5 +1,8 @@
 import os
+import sys
+import pytest
 from pytest import raises
+from pathlib import Path
 #from pprint import pprint
 
 import dirscan as ds
@@ -8,6 +11,10 @@ import dirscan as ds
 
 def test_no_access_to_topdir(wd):
     ''' Test scanning a dir with no access '''
+
+    if sys.platform == 'win32':
+        pytest.skip("Not supported on windows")
+
     os.makedirs('a')
     os.chmod('a', 0o000)
 
@@ -50,7 +57,7 @@ def test_empty_dirlist(wd):
 
     ds.set_debug(1)
 
-    expect = ((('.'),()),)
+    expect = (((Path('.')),()),)
 
     # Empty list
     result = tuple(ds.walkdirs([]))
