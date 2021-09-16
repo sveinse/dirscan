@@ -103,13 +103,6 @@ class ScanfileRecord:
             raise DirscanException("'path' field cannot be omitted")
 
 
-def rewrite_path_and_name(path, name, base):
-    ''' Rewrite path and name and insert base filename '''
-
-
-    return path, name
-
-
 def read_scanfile(filename, root=None):
     ''' Read filename scan file and return a DirObj() with the file tree root '''
 
