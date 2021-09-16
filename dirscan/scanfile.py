@@ -11,6 +11,7 @@ free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
 import os
+from pathlib import Path
 
 from dirscan.dirscan import DirscanException, create_from_data
 
@@ -28,7 +29,10 @@ def is_scanfile(filename):
         the results, unless it is unable to read the file
     '''
 
-    if not filename or not os.path.isfile(filename):
+    if not filename:
+        return False
+    filename = Path(filename)
+    if not filename.is_file():
         return False
     try:
         with open(filename, 'r', errors='surrogateescape') as infile:
@@ -71,10 +75,10 @@ def int_positive(value, radix=10):
 class ScanfileRecord:
     ''' Scan file record '''
 
-    __slots__ = ('type', 'size', 'mode', 'uid', 'gid', 'mtime', 'data', 'path', 'name', 'filepath')
+    __slots__ = ('type', 'size', 'mode', 'uid', 'gid', 'mtime', 'data', 'relpath')
 
     # File format for serialized data-file
-    FORMAT = "{type},{size},{mode:o},{uid},{gid},{mtime_x},{data:qs},{relpath:qs}"
+    FORMAT = "{type},{size},{mode:o},{uid},{gid},{mtime_x},{data:qs},{relpath_p:qs}"
 
     def __init__(self, parse, base_fname=None):
         args = [unquote(e) for e in parse.rstrip().split(',')]
@@ -90,63 +94,23 @@ class ScanfileRecord:
             self.gid = int_positive(args[4])
             self.mtime = float(int_positive(args[5], 16))  # Hex input
             self.data = args[6] or None
-            filepath = args[7]
+            self.relpath = args[7]
         except ValueError as err:
             raise DirscanException("Scanfile field error: " + str(err)) from None
         if not self.type:
             raise DirscanException("'type' field cannot be omitted")
-        if not filepath:
+        if not self.relpath:
             raise DirscanException("'path' field cannot be omitted")
-
-        (path, name) = os.path.split(filepath)
-
-        if not name:
-            raise DirscanException(f"empty filename '{filepath}'")
-
-        # Set file object path and name
-        if path == '':
-            # First top-level entry has path='', name='.'.
-            # Rewrite into path='', name=filename
-            if name == '.':
-                name = base_fname
-            else:
-                path = base_fname
-                #raise DirscanException(f"unexpected top-level entity '{filepath}'")
-        elif path == '.':
-            # First level entries has path='.'
-            # Rewrite into path=filename
-            path = base_fname
-        elif path.startswith('./'):
-            # Rewrite into path='filename/something...'
-            path = os.path.join(base_fname, path[2:])
-        else:
-            # All other has path='something...'
-            # Rewrite into path='filename/something...'
-            path = os.path.join(base_fname, path)
-        #else:
-            # path does not start with './'
-            #raise DirscanException(f"malformed path '{filepath}'")
-
-        # If path do not have './' as prefix, it will fall though here unchanged
-
-        # Filepath contains the unparsed fileparse as represented in file, while
-        # path and name are processed
-        self.filepath = filepath
-        self.path = path
-        self.name = name
 
 
 def read_scanfile(filename, root=None):
     ''' Read filename scan file and return a DirObj() with the file tree root '''
 
-    base_fname = os.path.basename(filename)
+    base_fname = Path(filename).name
 
     # Set a default value
     if not root:
         root = '.'
-        droot = base_fname
-    else:
-        droot = os.path.join(base_fname, root)
 
     dirtree = {}
 
@@ -168,19 +132,40 @@ def read_scanfile(filename, root=None):
                 # Read/parse the record
                 data = ScanfileRecord(line, base_fname=base_fname)
 
-                # Split path into path and name
-                path = data.path
-                fullpath = os.path.join(path, data.name)
+                relpath = data.relpath
+                if relpath[0] != '.':
+                    # Don't use Path for this, as the './' is important
+                    relpath = './' + relpath
+
+                # Set file object path and name
+                path, name = os.path.split(relpath)
+                fpath, fname = path, name
+
+                # First top-level entry has path='', name='.'.
+                if path == '' and name == '.':
+                    fpath = ''
+                    fname = base_fname
+
+                # First level entries has path='.', name=*
+                elif path == '.':
+                    fpath = base_fname
+
+                else:
+                    # Prefix path with the base filename
+                    fpath = base_fname + '/' + path[2:]
+
+                if not name:
+                    raise DirscanException(f"empty filename '{data.relpath}'")
 
                 # Get the parent dict
-                parent = dirtree.get(path)
+                parent = dirtree.get(str(path))
                 if not parent and path:
-                    raise DirscanException(f"'{data.filepath}' is an orphan")
+                    raise DirscanException(f"'{data.relpath}' is an orphan")
 
-                # # Create new file object
+                # Create new file object
                 fileobj = create_from_data(
-                    name=data.name,
-                    path=parent[2] if parent else data.path,
+                    name=fname,
+                    path=fpath, #parent[2] if parent else fpath,
                     objtype=data.type,
                     size=data.size,
                     mode=data.mode,
@@ -192,15 +177,16 @@ def read_scanfile(filename, root=None):
 
                 if data.type == 'd':
                     # Add this new dir object to the dict of directories
-                    if fullpath in dirtree:
-                        raise DirscanException(f"'{data.filepath}' already exists in file")
-                    dirtree[fullpath] = (fileobj, {}, fullpath)  # (parent, children, path)
+                    if relpath in dirtree:
+                        raise DirscanException(f"'{data.relpath}' already exists in file*")
+                    # (parent, children, path)
+                    dirtree[str(relpath)] = (fileobj, {}, fpath + '/' + fname if fpath else fname)
 
                 if parent:
                     # Add the object into the parent's children list
-                    if data.name in parent[1]:
-                        raise DirscanException(f"'{data.filepath}' already exists in file")
-                    parent[1][data.name] = fileobj
+                    if name in parent[1]:
+                        raise DirscanException(f"'{data.relpath}' already exists in file")
+                    parent[1][name] = fileobj
 
             except DirscanException as err:
                 raise DirscanException(f"{filename}:{lineno}: Data error, {err}") from None
@@ -215,11 +201,13 @@ def read_scanfile(filename, root=None):
     if not dirtree:
         raise DirscanException(f"Scanfile '{filename}' contains no data or no top-level directory")
 
-    if droot not in dirtree:
-        raise DirscanException(f"No such sub-directory '{root}' found in scanfile '{filename}'")
-
     # Now the tree should be populated
-    return dirtree[droot][0]
+    try:
+        return dirtree['./' + root if root[0] != '.' else root][0]
+
+    except KeyError:
+        raise DirscanException(f"No such directory '{root}' found in scanfile '{filename}'") from None
+
 
 
 # SIMPLE QUOTER USED IN SCAN FILES

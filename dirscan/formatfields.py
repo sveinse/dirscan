@@ -13,8 +13,19 @@ extent permitted by law.
 import sys
 import stat
 import string
-import pwd
-import grp
+if not sys.platform == 'win32':
+    from pwd import getpwuid
+    from grp import getgrgid
+else:
+    # Make a fake windows implementation
+    def getpwuid(a):
+        class _PwuidFake:
+            pw_name = 'N/A'
+        return _PwuidFake()
+    def getgrgid(a):
+        class _GrgidFake:
+            gr_name = 'N/A'
+        return _GrgidFake()
 
 
 # Print formats in scan mode
@@ -54,11 +65,11 @@ FILE_FIELDS = {
     'path': lambda o: o.fullpath,
 
     # User
-    'user': lambda o: pwd.getpwuid(o.uid).pw_name,
+    'user': lambda o: getpwuid(o.uid).pw_name,
     'uid': lambda o: o.uid,
 
     # Group
-    'group': lambda o: grp.getgrgid(o.gid).gr_name,
+    'group': lambda o: getgrgid(o.gid).gr_name,
     'gid': lambda o: o.gid,
 
     # Mode

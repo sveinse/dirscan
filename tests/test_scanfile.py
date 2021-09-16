@@ -1,4 +1,7 @@
 import os
+import sys
+import pytest
+from pathlib import Path
 from pytest import raises
 #from pprint import pprint
 
@@ -33,6 +36,9 @@ def test_scanfile_empty_file(wd):
 def test_scanfile_no_access(wd):
     ''' Test passing a file with no access to read_scanfile() and dirscan '''
 
+    if sys.platform == 'win32':
+        pytest.skip("Not supported on windows")
+
     wrdata('a')
     os.chmod('a', 0x000)
 
@@ -65,10 +71,11 @@ def test_scanfile_is_scanfile(wd):
     assert ds.is_scanfile('a') == False
 
     # Give file without permission
-    wrdata('p')
-    os.chmod('p', 0o000)
-    with raises(PermissionError):
-        ds.is_scanfile('p')
+    if sys.platform != 'win32':
+        wrdata('p')
+        os.chmod('p', 0o000)
+        with raises(PermissionError):
+            ds.is_scanfile('p')
 
     # File which is not scanfile
     wrdata('a', ('''foobar'''))
@@ -96,7 +103,10 @@ def test_scanfile_read_scanfile_file_handling(wd):
 
     # Give dir
     os.makedirs('d1')
-    with raises(IsADirectoryError):
+    exctype = IsADirectoryError
+    if sys.platform == 'win32':
+        exctype = PermissionError
+    with raises(exctype):
         ds.read_scanfile('d1')
 
     # Give dir with no access
@@ -112,10 +122,11 @@ def test_scanfile_read_scanfile_file_handling(wd):
     assert "Invalid scanfile 'a', missing header" in str(exc.value)
 
     # Give file without permission
-    wrdata('p')
-    os.chmod('p', 0o000)
-    with raises(PermissionError):
-        ds.read_scanfile('p')
+    if sys.platform != 'win32':
+        wrdata('p')
+        os.chmod('p', 0o000)
+        with raises(PermissionError):
+            ds.read_scanfile('p')
 
     # File which is not scanfile
     wrdata('a', ('''foobar'''))
@@ -340,6 +351,15 @@ d,,,,,,,./b/c
     assert c[0].path == 'a/b'
     assert c[0].name == 'c'
 
+    # Test successful subroot
+    wrdata('a', (
+'''#!ds:v1
+d,,,,,,,.
+d,,,,,,,./b
+'''))
+    d = ds.read_scanfile('a', 'b')
+    assert d.name == 'b'
+
 
 def test_scanfile_read_scanfile_data_structures_fails(wd):
     ''' Test the higher level data structure, expected fails '''
@@ -368,43 +388,54 @@ d,,,,,,,foo/orphan
     wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-d,,,,,,,./b/a
+d,,,,,,,./b/c
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, './b/a' is an orphan" in str(exc.value)
+    assert "Data error, './b/c' is an orphan" in str(exc.value)
 
     # Test duplicate dirs
     wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-d,,,,,,,./a
-d,,,,,,,./a
+d,,,,,,,./b
+d,,,,,,,./b
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, './a' already exists in file" in str(exc.value)
+    assert "Data error, './b' already exists in file" in str(exc.value)
 
     # Test duplicate files
     wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-f,,,,,,,./a
-f,,,,,,,./a
+f,,,,,,,./b
+f,,,,,,,./b
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, './a' already exists in file" in str(exc.value)
+    assert "Data error, './b' already exists in file" in str(exc.value)
+
+    # Test duplicate name, dir and file
+    wrdata('a', (
+'''#!ds:v1
+d,,,,,,,.
+d,,,,,,,./b
+f,,,,,,,./b
+'''))
+    with raises(ds.DirscanException) as exc:
+        ds.read_scanfile('a')
+    assert "Data error, './b' already exists in file" in str(exc.value)
 
     # Test subroot which is not dir
     wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-f,,,,,,,./a
+f,,,,,,,./b
 '''))
     with raises(ds.DirscanException) as exc:
-        ds.read_scanfile('a', 'a')
-    assert "No such sub-directory 'a' found in scanfile 'a'" in str(exc.value)
+        ds.read_scanfile('a', 'b')
+    assert "No such directory 'b' found in scanfile 'a'" in str(exc.value)
 
     # Test subroot which does not exist
     wrdata('a', (
@@ -412,15 +443,5 @@ f,,,,,,,./a
 d,,,,,,,.
 '''))
     with raises(ds.DirscanException) as exc:
-        ds.read_scanfile('a', 'a')
-    assert "No such sub-directory 'a' found in scanfile 'a'" in str(exc.value)
-
-    # Test subroot which is not dir
-    wrdata('a', (
-'''#!ds:v1
-d,,,,,,,.
-d,,,,,,,./a
-'''))
-    d = ds.read_scanfile('a', 'a')
-    assert d.name == 'a'
-
+        ds.read_scanfile('a', 'b')
+    assert "No such directory 'b' found in scanfile 'a'" in str(exc.value)

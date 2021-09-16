@@ -38,6 +38,9 @@
     * Use `os.scandir()` to read a directory more efficiently
 * Fix scanfile reading and improved robustness of scan files in `scanfile.py`
 * Added pytest and coverage framework
+* Add support for Windows
+    * Add field `{relpath_u}` to print posixpath on windows (for dump files which
+      is always in unix format)
 
 
 ## v0.9.1

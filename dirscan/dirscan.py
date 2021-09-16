@@ -18,6 +18,7 @@ import hashlib
 import filecmp
 import fnmatch
 import binascii
+from pathlib import Path
 
 from dirscan.log import debug
 
@@ -72,7 +73,7 @@ class DirscanObj:
     @property
     def fullpath(self):
         ''' Return the complete path of the object '''
-        return os.path.join(self.path, self.name)
+        return Path(self.path, self.name)
 
     @property
     def mtime(self):
@@ -120,7 +121,7 @@ class DirscanObj:
         ''' Set excluded flag if any of the entries in exludes matches
             this object '''
         for ex in excludes:
-            ex = os.path.join(base.fullpath, ex)
+            ex = Path(base.fullpath, ex)
             if fnmatch.fnmatch(self.fullpath, ex):
                 self.excluded = True
                 return
@@ -296,7 +297,7 @@ def create_from_fs(name, path='', stat=None):
     ''' Create a new object from file system path and return an
         instance of the object. The object type returned is based on
         stat of the actual file system entry.'''
-    fullpath = os.path.join(path, name)
+    fullpath = Path(path, name)
     if not stat:
         stat = os.lstat(fullpath)
     objcls = FILETYPES.get(osstat.S_IFMT(stat.st_mode))
@@ -449,17 +450,13 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         base.append(obj)
 
     # Start the queue
-    queue = [('.', tuple(base))]
+    queue = [(Path('.'), tuple(base))]
 
     # Traverse the queue
     while queue:
 
         # Get the next set of objects
         path, objs = queue.pop(-1)
-
-        # Do not prefix top-level directories with './'
-        if path[:2] == './':
-            path = path[2::]
 
         debug(1, ">>>>  OBJECT {}:  {}", path, objs)
 
@@ -526,7 +523,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
             )
 
             # Append the newly discovered objects to the queue
-            queue.append((os.path.join(path, name), child))
+            queue.append((Path(path, name), child))
 
         # Close objects to conserve memory
         if close_during:

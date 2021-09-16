@@ -10,6 +10,7 @@ This application is licensed under GNU GPL version 3
 free to change and redistribute it. There is NO WARRANTY, to the
 extent permitted by law.
 '''
+from pathlib import PurePosixPath
 import sys
 
 import dirscan.formatfields as fmtfields
@@ -210,7 +211,6 @@ def main(argv=None):
                 close_during=False,
             ):
 
-
             # Progress printing
             count += 1
             cur = objs[0].fullpath if len(objs) == 1 else path
@@ -257,7 +257,8 @@ def main(argv=None):
 
             # Set the base fields
             fields = {
-                'relpath': path,
+                'relpath': str(path),
+                'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
                 'change': change,
                 'arrow' : fmtfields.COMPARE_ARROWS[change][1],
                 'text'  : text.capitalize(),
