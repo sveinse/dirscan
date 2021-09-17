@@ -10,20 +10,10 @@ import dirscan as ds
 # pylint: disable-all
 
 
-def prexc(exc):
-    print(exc.type.__name__ + ': ' + str(exc.value))
-
-
-def wrdata(f, d=None):
-    with open(f, 'w') as fd:
-        if d:
-            fd.write(d)
-
-
 def test_scanfile_empty_file(wd):
     ''' Test passing an empty scanfile to read_scanfile() and dirscan '''
 
-    wrdata('a')
+    wd.wrdata('a', None)
 
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
@@ -39,8 +29,8 @@ def test_scanfile_no_access(wd):
     if sys.platform == 'win32':
         pytest.skip("Not supported on windows")
 
-    wrdata('a')
-    os.chmod('a', 0x000)
+    wd.wrdata('a', None)
+    wd.chmod('a', 0x000)
 
     with raises(PermissionError) as exc:
         ds.read_scanfile('a')
@@ -58,35 +48,36 @@ def test_scanfile_is_scanfile(wd):
     assert ds.is_scanfile('noexist') == False
 
     # Give dir
-    os.makedirs('d1')
+    wd.makedirs('d1')
     assert ds.is_scanfile('d1') == False
 
     # Give dir with no access
-    os.makedirs('d2')
-    os.chmod('d2', 0o000)
-    assert ds.is_scanfile('d2') == False
+    if sys.platform != 'win32':
+        wd.makedirs('d2')
+        wd.chmod('d2', 0o000)
+        assert ds.is_scanfile('d2') == False
 
     # Give empty file
-    wrdata('a')
+    wd.wrdata('a', None)
     assert ds.is_scanfile('a') == False
 
     # Give file without permission
     if sys.platform != 'win32':
-        wrdata('p')
-        os.chmod('p', 0o000)
+        wd.wrdata('p', None)
+        wd.chmod('p', 0o000)
         with raises(PermissionError):
             ds.is_scanfile('p')
 
     # File which is not scanfile
-    wrdata('a', ('''foobar'''))
+    wd.wrdata('a', ('''foobar'''))
     assert ds.is_scanfile('a') == False
 
     # Too new scanfile version
-    wrdata('a', ('''#!ds:v100'''))
+    wd.wrdata('a', ('''#!ds:v100'''))
     assert ds.is_scanfile('a') == False
 
     # Proper file header
-    wrdata('a', ('''#!ds:v1'''))
+    wd.wrdata('a', ('''#!ds:v1'''))
     assert ds.is_scanfile('a') == True
 
 
@@ -102,7 +93,7 @@ def test_scanfile_read_scanfile_file_handling(wd):
         ds.read_scanfile('noexist')
 
     # Give dir
-    os.makedirs('d1')
+    wd.makedirs('d1')
     exctype = IsADirectoryError
     if sys.platform == 'win32':
         exctype = PermissionError
@@ -110,38 +101,38 @@ def test_scanfile_read_scanfile_file_handling(wd):
         ds.read_scanfile('d1')
 
     # Give dir with no access
-    os.makedirs('d2')
-    os.chmod('d2', 0o000)
+    wd.makedirs('d2')
+    wd.chmod('d2', 0o000)
     with raises(PermissionError):
         ds.read_scanfile('d2')
 
     # Give empty file
-    wrdata('a')
+    wd.wrdata('a', None)
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
     assert "Invalid scanfile 'a', missing header" in str(exc.value)
 
     # Give file without permission
     if sys.platform != 'win32':
-        wrdata('p')
-        os.chmod('p', 0o000)
+        wd.wrdata('p', None)
+        wd.chmod('p', 0o000)
         with raises(PermissionError):
             ds.read_scanfile('p')
 
     # File which is not scanfile
-    wrdata('a', ('''foobar'''))
+    wd.wrdata('a', ('''foobar'''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
     assert "Invalid scanfile 'a', malformed header" in str(exc.value)
 
     # Too new scanfile version
-    wrdata('a', ('''#!ds:v100'''))
+    wd.wrdata('a', ('''#!ds:v100'''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
     assert "Invalid scanfile 'a', unsupported version 'v100'" in str(exc.value)
 
     # Proper file header, but no data
-    wrdata('a', ('''#!ds:v1'''))
+    wd.wrdata('a', ('''#!ds:v1'''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
     assert "Scanfile 'a' contains no data or no top-level directory" in str(exc.value)
@@ -151,7 +142,7 @@ def test_scanfile_read_scanfile_data_fields(wd):
     ''' Test the basic line fields'''
 
     # Test correct minimal file
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 '''))
@@ -166,7 +157,7 @@ d,,,,,,,.
     assert d._mtime == 0
 
     # Test empty lines
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 
 d,,,,,,,.
@@ -176,7 +167,7 @@ d,,,,,,,.
     assert isinstance(d, ds.DirObj)
 
     # Test comments
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 # foobar
 d,,,,,,,.
@@ -186,7 +177,7 @@ d,,,,,,,.
     assert isinstance(d, ds.DirObj)
 
     # Test empty filename
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,
 '''))
@@ -195,7 +186,7 @@ d,,,,,,,
     assert "Data error, 'path' field cannot be omitted" in str(exc.value)
 
     # Test filenames ending with /
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,./
 '''))
@@ -204,7 +195,7 @@ d,,,,,,,./
     assert "Data error, empty filename './'" in str(exc.value)
 
     # Test empty type
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 ,,,,,,,.
 '''))
@@ -213,7 +204,7 @@ d,,,,,,,./
     assert "Data error, 'type' field cannot be omitted" in str(exc.value)
 
     # Test file type top
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 f,,,,,,,.
 '''))
@@ -222,7 +213,7 @@ f,,,,,,,.
     assert "Scanfile 'a' contains no data or no top-level directory" in str(exc.value)
 
     # Test too few fields
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d
 '''))
@@ -231,7 +222,7 @@ d
     assert "Data error, Missing or excess file fields (got 1, want 8)" in str(exc.value)
 
     # Test incorrect filetype
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 q,,,,,,,.
 '''))
@@ -254,7 +245,7 @@ q,,,,,,,.
         "d,,,,,1.44,,.",  # mtime float
     )
     for test in tests:
-        wrdata('a', (
+        wd.wrdata('a', (
 f'''#!ds:v1
 {test}
 '''))
@@ -271,7 +262,7 @@ f'''#!ds:v1
         "d,,,,,-1,,.",  # mtime
     )
     for test in tests:
-        wrdata('a', (
+        wd.wrdata('a', (
 f'''#!ds:v1
 {test}
 '''))
@@ -285,8 +276,8 @@ f'''#!ds:v1
 def test_scanfile_read_scanfile_data_structures_success(wd):
     ''' Test the higher level data structure, expected successes '''
 
-    # Test subdir
-    wrdata('a', (
+    # Test subdir without ./ prefix
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,b
@@ -299,8 +290,8 @@ d,,,,,,,b
     assert b[0].path == 'a'
     assert b[0].name == 'b'
 
-    # Test subdir
-    wrdata('a', (
+    # Test subdir of subdir without ./ prefix
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,b
@@ -318,8 +309,8 @@ d,,,,,,,b/c
     assert c[0].path == 'a/b'
     assert c[0].name == 'c'
 
-    # Test dir relative path
-    wrdata('a', (
+    # Test subdir with ./ prefix
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,./b
@@ -332,8 +323,8 @@ d,,,,,,,./b
     assert b[0].path == 'a'
     assert b[0].name == 'b'
 
-    # Test subdir relative path
-    wrdata('a', (
+    # Test subdir of subdir with ./ prefix
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,./b
@@ -352,20 +343,26 @@ d,,,,,,,./b/c
     assert c[0].name == 'c'
 
     # Test successful subroot
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-d,,,,,,,./b
+d,,,,,,,b
+d,,,,,,,b/c
 '''))
-    d = ds.read_scanfile('a', 'b')
-    assert d.name == 'b'
+    b = ds.read_scanfile('a', 'b')
+    c = b.children()
+    assert b.path == 'a'
+    assert b.name == 'b'
+    assert len(c) == 1
+    assert c[0].path == 'a/b'
+    assert c[0].name == 'c'
 
 
 def test_scanfile_read_scanfile_data_structures_fails(wd):
     ''' Test the higher level data structure, expected fails '''
 
-    # Test repeated data
-    wrdata('a', (
+    # Test repeated top
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,.
@@ -375,7 +372,7 @@ d,,,,,,,.
     assert "Data error, '.' already exists in file" in str(exc.value)
 
     # Test orphan
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,foo/orphan
@@ -384,8 +381,8 @@ d,,,,,,,foo/orphan
         ds.read_scanfile('a')
     assert "Data error, 'foo/orphan' is an orphan" in str(exc.value)
 
-    # Test orphan2
-    wrdata('a', (
+    # Test orphan with ./ prefix
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,./b/c
@@ -395,7 +392,18 @@ d,,,,,,,./b/c
     assert "Data error, './b/c' is an orphan" in str(exc.value)
 
     # Test duplicate dirs
-    wrdata('a', (
+    wd.wrdata('a', (
+'''#!ds:v1
+d,,,,,,,.
+d,,,,,,,b
+d,,,,,,,b
+'''))
+    with raises(ds.DirscanException) as exc:
+        ds.read_scanfile('a')
+    assert "Data error, 'b' already exists in file" in str(exc.value)
+
+    # Test duplicate dirs with ./ prefix
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 d,,,,,,,./b
@@ -406,39 +414,39 @@ d,,,,,,,./b
     assert "Data error, './b' already exists in file" in str(exc.value)
 
     # Test duplicate files
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-f,,,,,,,./b
-f,,,,,,,./b
+f,,,,,,,b
+f,,,,,,,b
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, './b' already exists in file" in str(exc.value)
+    assert "Data error, 'b' already exists in file" in str(exc.value)
 
-    # Test duplicate name, dir and file
-    wrdata('a', (
+    # Test duplicate name with different filetype
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-d,,,,,,,./b
-f,,,,,,,./b
+d,,,,,,,b
+f,,,,,,,b
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, './b' already exists in file" in str(exc.value)
+    assert "Data error, 'b' already exists in file" in str(exc.value)
 
     # Test subroot which is not dir
-    wrdata('a', (
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
-f,,,,,,,./b
+f,,,,,,,b
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a', 'b')
     assert "No such directory 'b' found in scanfile 'a'" in str(exc.value)
 
-    # Test subroot which does not exist
-    wrdata('a', (
+    # Test subroot that does not exist
+    wd.wrdata('a', (
 '''#!ds:v1
 d,,,,,,,.
 '''))

@@ -108,7 +108,6 @@ class DirscanObj:
     def __repr__(self):
         return f"{type(self).__name__}({self.path},{self.name})"
 
-
     def exclude_otherfs(self, base):
         ''' Set excluded flag if this object differs from fs '''
 

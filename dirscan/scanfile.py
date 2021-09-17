@@ -178,7 +178,7 @@ def read_scanfile(filename, root=None):
                 if data.type == 'd':
                     # Add this new dir object to the dict of directories
                     if relpath in dirtree:
-                        raise DirscanException(f"'{data.relpath}' already exists in file*")
+                        raise DirscanException(f"'{data.relpath}' already exists in file")
                     # (parent, children, path)
                     dirtree[str(relpath)] = (fileobj, {}, fpath + '/' + fname if fpath else fname)
 

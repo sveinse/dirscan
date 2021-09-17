@@ -9,14 +9,15 @@ import dirscan as ds
 
 # pylint: disable-all
 
+
 def test_no_access_to_topdir(wd):
     ''' Test scanning a dir with no access '''
 
     if sys.platform == 'win32':
         pytest.skip("Not supported on windows")
 
-    os.makedirs('a')
-    os.chmod('a', 0o000)
+    wd.makedirs('a')
+    wd.chmod('a', 0o000)
 
     # Direct call
     with raises(PermissionError) as exc:
@@ -29,7 +30,8 @@ def test_no_access_to_topdir(wd):
 
 def test_top_is_not_a_dir(wd):
     ''' Test giving a file to scan instead of a dir '''
-    with open('a', 'w') as f: pass
+
+    wd.wrdata('a', None)
 
     # Direct call
     with raises(NotADirectoryError) as exc:
@@ -45,11 +47,11 @@ def test_top_is_not_existing(wd):
 
     # Direct call
     with raises(FileNotFoundError) as exc:
-        for _ in ds.walkdirs(('a',)): pass
+        for _ in ds.walkdirs(('noexist',)): pass
 
     # Cmd line
     with raises(FileNotFoundError) as exc:
-        ds.main(["--debug", "a"])
+        ds.main(["--debug", "noexist"])
 
 
 def test_empty_dirlist(wd):
