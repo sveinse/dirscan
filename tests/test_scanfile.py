@@ -183,7 +183,7 @@ d,,,,,,,
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, 'path' field cannot be omitted" in str(exc.value)
+    assert "Data error, 'path' field (#7) cannot be omitted" in str(exc.value)
 
     # Test filenames ending with /
     wd.wrdata('a', (
@@ -201,7 +201,7 @@ d,,,,,,,./
 '''))
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a')
-    assert "Data error, 'type' field cannot be omitted" in str(exc.value)
+    assert "Data error, 'type' field (#1) cannot be omitted" in str(exc.value)
 
     # Test file type top
     wd.wrdata('a', (

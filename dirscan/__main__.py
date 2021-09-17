@@ -15,8 +15,8 @@ import sys
 
 import dirscan.formatfields as fmtfields
 from dirscan.log import set_debug, debug
-from dirscan.scanfile import ScanfileRecord, read_scanfile, get_fileheader, is_scanfile
-from dirscan.scanfile import file_quoter, text_quoter
+from dirscan.scanfile import read_scanfile, get_fileheader, is_scanfile
+from dirscan.scanfile import file_quoter, text_quoter, SCANFILE_FORMAT
 from dirscan.compare import dir_compare1, dir_compare2
 from dirscan.dirscan import walkdirs, create_from_fs, DirscanException
 from dirscan.usage import argument_parser, DIRSCAN_FORMAT_HELP
@@ -86,7 +86,7 @@ def main(argv=None):
         pr_prefix = 'Scanned'
 
         if opts.outfile:
-            writefmt = ScanfileRecord.FORMAT
+            writefmt = SCANFILE_FORMAT
             if not opts.verbose:
                 printfmt = None
         else:

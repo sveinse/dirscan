@@ -22,6 +22,8 @@
     * `{mtime}` removed
     * Added `{mtime_h}`, `{mtime_f}`, `{mtime_x}`
     * Renamed summary field `{sum_objects}` to `{n_objects}`
+    * Add field `{relpath_u}` to print posixpath on windows (for dump files
+      which is always in unix format)
 * Rename `fileinfo.py` to `formatfields.py`
 * Dirscan file object classes overhaul
     * Base class renamed from `BaseObj` to `DirscanObj`
@@ -36,11 +38,15 @@
     * Remove `SpecialObj` class and add `BlockDevObj`, `CharDevObj`, `FifoObj`,
       `SocketObj` classes
     * Use `os.scandir()` to read a directory more efficiently
+    * Add the `to_dict()` method to generate dict from any `DirscanObj` instance
+    * Ensure `FileObj` and `DirObj` doesn't query the filesystem for missing
+      field data
+    * Added `DirObj.traverse()` to parse recursively the tree to build up the
+      in-memory tree
 * Fix scanfile reading and improved robustness of scan files in `scanfile.py`
 * Added pytest and coverage framework
 * Add support for Windows
-    * Add field `{relpath_u}` to print posixpath on windows (for dump files which
-      is always in unix format)
+* Implemented `create_from_dict()` factory and removed `create_from_data()`
 
 
 ## v0.9.1

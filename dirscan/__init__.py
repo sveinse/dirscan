@@ -18,7 +18,7 @@ from dirscan.__main__ import main
 from dirscan.dirscan import (
     walkdirs,
     create_from_fs,
-    create_from_data,
+    create_from_dict,
     DirscanException,
     DirscanObj,
     FileObj,

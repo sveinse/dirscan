@@ -50,7 +50,7 @@ class DirscanObj:
     __slots__ = ('name', 'path', 'excluded',
                  'mode', 'uid', 'gid', 'dev', 'size', '_mtime')
 
-    def __init__(self, name, path='', stat=None):
+    def __init__(self, name, *, path='', stat):
 
         # Ensure the name does not end with a slash, that messes up path
         # calculations later in directory compares
@@ -108,12 +108,12 @@ class DirscanObj:
     def __repr__(self):
         return f"{type(self).__name__}({self.path},{self.name})"
 
-    def exclude_otherfs(self, base):
-        ''' Set excluded flag if this object differs from fs '''
+    def exclude_otherfs(self, other):
+        ''' Set excluded flag if this object resides on another fs than other  '''
 
         # Note that self.excluded will be set on NonExistingObj() since they
         # have dev = None
-        if self.dev != base.dev:
+        if self.dev != other.dev:
             self.excluded = True
 
     def exclude_files(self, excludes, base):
@@ -125,6 +125,15 @@ class DirscanObj:
                 self.excluded = True
                 return
 
+    def to_dict(self):
+        ''' Return a dict representation of this class '''
+        data = {k: getattr(self, k) for k in (
+                # Not exactly __slots__
+                'objtype', 'name', 'path', 'mode', 'uid', 'gid', 'dev', 'size',
+                )}
+        data['mtime'] = self._mtime
+        return data
+
 
 class FileObj(DirscanObj):
     ''' Regular File Object '''
@@ -132,11 +141,16 @@ class FileObj(DirscanObj):
     objname = 'file'
     objmode = osstat.S_IFREG
 
-    __slots__ = ('hashsum_cache',)
+    __slots__ = ('_hashsum',)
 
-    def __init__(self, name, path='', stat=None, hashsum=None):
+    def __init__(self, name, *, path='', stat, hashsum=None):
         super().__init__(name, path=path, stat=stat)
-        self.hashsum_cache = hashsum
+
+        # Protocol:
+        #   None: Unknown value, will read from fs if self.hashsum is accessed
+        #   False: Unknown value, will not read from fs
+        #   <*>: Stored hashsum
+        self._hashsum = hashsum
 
     @property
     def hashsum(self):
@@ -145,18 +159,20 @@ class FileObj(DirscanObj):
         # This is not a part of the parse() structure because it can take
         # considerable time to evaluate the hashsum, hence its done on
         # need-to have basis.
-        if self.hashsum_cache:
-            return self.hashsum_cache
+        if self._hashsum:
+            return self._hashsum
 
-        shahash = HASHALGORITHM()
-        with open(self.fullpath, 'rb') as shafile:
-            while True:
-                data = shafile.read(HASHCHUNKSIZE)
-                if not data:
-                    break
-                shahash.update(data)
-            self.hashsum_cache = shahash.digest()
-        return self.hashsum_cache
+        # Only query the fs if None, other falsey values won't
+        if self._hashsum is None:
+            shahash = HASHALGORITHM()
+            with open(self.fullpath, 'rb') as shafile:
+                while True:
+                    data = shafile.read(HASHCHUNKSIZE)
+                    if not data:
+                        break
+                    shahash.update(data)
+                self._hashsum = shahash.digest()
+        return self._hashsum
 
     @property
     def hashsum_hex(self):
@@ -168,14 +184,25 @@ class FileObj(DirscanObj):
         yield from super().compare(other)
         if self.size != other.size:
             yield 'size differs'
-        elif self.hashsum_cache or other.hashsum_cache:
-            # Does either of them have hashsum_cache set? If yes, make use of
+        elif self._hashsum is False and other._hashsum is False:
+            # Don't compare if neither has hashsum data
+            pass
+        elif self._hashsum is False or other._hashsum is False:
+            yield 'W:cannot compare'
+        elif self._hashsum or other._hashsum:
+            # Does either of them have _hashsum set? If yes, make use of
             # hashsum based compare. filecmp might be more efficient, but if we
             # read from listfiles, we have to use hashsums.
             if self.hashsum != other.hashsum:
                 yield 'contents differs'
         elif not filecmp.cmp(self.fullpath, other.fullpath, shallow=False):
             yield 'contents differs'
+
+    def to_dict(self):
+        ''' Return a dict representation of this class '''
+        data = super().to_dict()
+        data['hashsum'] = self._hashsum or None
+        return data
 
 
 class LinkObj(DirscanObj):
@@ -186,7 +213,7 @@ class LinkObj(DirscanObj):
 
     __slots__ = ('link',)
 
-    def __init__(self, name, path='', stat=None, link=None):
+    def __init__(self, name, *, path='', stat, link=None):
         super().__init__(name, path=path, stat=stat)
         self.link = link
 
@@ -195,6 +222,12 @@ class LinkObj(DirscanObj):
         yield from super().compare(other)
         if self.link != other.link:
             yield 'link differs'
+
+    def to_dict(self):
+        ''' Return a dict representation of this class '''
+        data = super().to_dict()
+        data['link'] = self.link
+        return data
 
 
 class DirObj(DirscanObj):
@@ -205,9 +238,13 @@ class DirObj(DirscanObj):
 
     __slots__ = ('_children',)
 
-    def __init__(self, name, path='', stat=None, children=None):
+    def __init__(self, name, *, path='', stat, children=None):
         super().__init__(name, path=path, stat=stat)
         self.size = None
+
+        # Protocol:
+        #   None: Unknown value, will read from fs
+        #   False: Unknown value, will not read from fs
         self._children = children
 
     def close(self):
@@ -224,6 +261,18 @@ class DirObj(DirscanObj):
     def set_children(self, children):
         ''' Set the directory children '''
         self._children = children
+
+    def to_dict(self):
+        ''' Return a dict representation of this class '''
+        data = super().to_dict()
+        data['children'] = [c.to_dict() for c in self._children or {}]
+        return data
+
+    def traverse(self):
+        ''' Traverse the directory tree. It will traverse the fs if necessary '''
+        for _ in walkdirs((self,), close_during=False):
+            pass
+        return self
 
 
 class BlockDevObj(DirscanObj):
@@ -261,7 +310,7 @@ class NonExistingObj(DirscanObj):
     objtype = '-'
     objname = 'missing file'
 
-    def __init__(self, name, path=''):
+    def __init__(self, name, *, path=''):
         stat = os.stat_result((None, None, None, None, None, None, None, None, None, None))
         super().__init__(name, path=path, stat=stat)
 
@@ -326,40 +375,59 @@ def create_from_fsdir(path):
             yield create_from_fs(direntry.name, path=path, stat=stat)
 
 
-def create_from_data(name, path, objtype, size, mode, uid, gid, mtime, data=None):
-    ''' Create a new object from the given data and return an
-        instance of the object. '''
+def create_from_dict(data):
+    ''' Create a new fs object from a dict '''
 
     # Get the file object class from the type
+    objtype = data['objtype']
     objcls = OBJTYPES.get(objtype)
     if not objcls:
         raise DirscanException(f"Unknown object type '{objtype}'")
 
-    # Extra parameters
-    kwargs = {}
+    # Class parameters
+    kwargs = {
+        'path': data['path'],
+        'name': data['name'],
+    }
 
     # Do necessary post processing of the file object
     if objcls is FileObj:
-        if data:
-            kwargs['hashsum'] = binascii.unhexlify(data)
-        elif size == 0:
+        if data.get('hashsum'):
+            hashsum = binascii.unhexlify(data['hashsum'])
+        elif data['size'] == 0:
             # Hashsum is normally not defined if the size is 0.
-            kwargs['hashsum'] = HASHALGORITHM().digest()
+            hashsum = HASHALGORITHM().digest()
+        else:
+            # Setting hashsum to False indicates that the fs should not be
+            # queried to find the result
+            hashsum = False
+        kwargs['hashsum'] = hashsum
 
     elif objcls is LinkObj:
-        kwargs['link'] = data
+        kwargs['link'] = data['link']
 
-    if osstat.S_IFMT(mode) == objcls.objmode:
-        raise DirscanException(f"Object type '{objtype}' does not match mode 'o{mode:o}'")
+    elif objcls is DirObj:
+        if data.get('children'):
+            # This will recurse all children
+            kwargs['children'] = [create_from_dict(c) for c in data['children']]
+        else:
+            # Setting this to empty tuple prevents the class from querying the fs
+            kwargs['children'] = ()
+
+    # Sanity check
+    if osstat.S_IFMT(data['mode']) == objcls.objmode:
+        raise DirscanException(f"Object type '{objtype}' does not match mode 'o{data['mode']:o}'")
     #debug(0, "Mode {} -> {}", mode, mode|objcls.objmode)
 
     # Make a fake stat element from the given meta-data
     # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-    fakestat = os.stat_result((mode|objcls.objmode, None, None, None, uid, gid,
-                               size, None, mtime, None))
+    fakestat = os.stat_result((data['mode']|objcls.objmode, None, None, None,
+                               data['uid'], data['gid'], data['size'], None,
+                               data['mtime'], None))
+    kwargs['stat'] = fakestat
 
     # Make the file object instance
-    return objcls(name, path=path, stat=fakestat, **kwargs)
+    return objcls(**kwargs)
 
 
 
@@ -465,7 +533,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                 # Test for exclusions
                 obj.exclude_files(excludes, base=baseobj)
                 if onefs:
-                    obj.exclude_otherfs(base=baseobj)
+                    obj.exclude_otherfs(baseobj)
 
             # Parsing the object failed
             except OSError as err:

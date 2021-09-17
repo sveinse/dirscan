@@ -13,15 +13,14 @@ extent permitted by law.
 import os
 from pathlib import Path
 
-from dirscan.dirscan import DirscanException, create_from_data
-
-
-class ScanFIleException(DirscanException):
-    ''' Scan-file exceptions '''
+from dirscan.dirscan import DirscanException, create_from_dict
 
 
 # Known scan file versions
 SCANFILE_VERSIONS = ('v1',)
+
+# Line fields of the scanfile
+SCANFILE_FORMAT = "{type},{size},{mode:o},{uid},{gid},{mtime_x},{data:qs},{relpath_p:qs}"
 
 
 def is_scanfile(filename):
@@ -72,37 +71,6 @@ def int_positive(value, radix=10):
     return num
 
 
-class ScanfileRecord:
-    ''' Scan file record '''
-
-    __slots__ = ('type', 'size', 'mode', 'uid', 'gid', 'mtime', 'data', 'relpath')
-
-    # File format for serialized data-file
-    FORMAT = "{type},{size},{mode:o},{uid},{gid},{mtime_x},{data:qs},{relpath_p:qs}"
-
-    def __init__(self, parse, base_fname=None):
-        args = [unquote(e) for e in parse.rstrip().split(',')]
-        length = len(args)
-        if length != 8:
-            raise DirscanException(f"Missing or excess file fields (got {length}, want 8)")
-        try:
-            # Must be kept in sync with self.FORMAT
-            self.type = args[0]
-            self.size = int_positive(args[1])
-            self.mode = int_positive(args[2], 8)  # Octal input
-            self.uid = int_positive(args[3])
-            self.gid = int_positive(args[4])
-            self.mtime = float(int_positive(args[5], 16))  # Hex input
-            self.data = args[6] or None
-            self.relpath = args[7]
-        except ValueError as err:
-            raise DirscanException("Scanfile field error: " + str(err)) from None
-        if not self.type:
-            raise DirscanException("'type' field cannot be omitted")
-        if not self.relpath:
-            raise DirscanException("'path' field cannot be omitted")
-
-
 def read_scanfile(filename, root=None):
     ''' Read filename scan file and return a DirObj() with the file tree root '''
 
@@ -129,10 +97,40 @@ def read_scanfile(filename, root=None):
                 continue
 
             try:
-                # Read/parse the record
-                data = ScanfileRecord(line, base_fname=base_fname)
+                # Parse the line record
+                args = [unquote(e) for e in line.rstrip().split(',')]
+                length = len(args)
+                if length != 8:
+                    raise DirscanException(f"Missing or excess file fields (got {length}, want 8)")
+                try:
+                    # Must be kept in sync with self.FORMAT
+                    data = {
+                        'objtype':  args[0],
+                        'size': int_positive(args[1]),
+                        'mode': int_positive(args[2], 8),  # Octal input
+                        'uid': int_positive(args[3]),
+                        'gid': int_positive(args[4]),
+                        'mtime': float(int_positive(args[5], 16)),  # Hex input,
+                    }
+                    objpath = args[7]
 
-                relpath = data.relpath
+                    # Parse the 'data' field - args[6]
+                    objtype = data['objtype']
+                    if objtype == 'f':  # Files
+                        data['hashsum'] = args[6] or False
+                    elif objtype == 'l':  # Link
+                        data['link'] = args[6] or None
+                    elif objtype == 'd':  # Directory
+                        data['children'] = ()
+
+                except ValueError as err:
+                    raise DirscanException("Scanfile field error: " + str(err)) from None
+                if not objtype:
+                    raise DirscanException("'type' field (#1) cannot be omitted")
+                if not objpath:
+                    raise DirscanException("'path' field (#7) cannot be omitted")
+
+                relpath = objpath
                 if relpath[0] != '.':
                     # Don't use Path for this, as the './' is important
                     relpath = './' + relpath
@@ -155,37 +153,30 @@ def read_scanfile(filename, root=None):
                     fpath = base_fname + '/' + path[2:]
 
                 if not name:
-                    raise DirscanException(f"empty filename '{data.relpath}'")
+                    raise DirscanException(f"empty filename '{objpath}'")
 
                 # Get the parent dict
                 parent = dirtree.get(str(path))
                 if not parent and path:
-                    raise DirscanException(f"'{data.relpath}' is an orphan")
+                    raise DirscanException(f"'{objpath}' is an orphan")
+
+                data['name'] = fname
+                data['path'] = parent[2] if parent else fpath
 
                 # Create new file object
-                fileobj = create_from_data(
-                    name=fname,
-                    path=fpath, #parent[2] if parent else fpath,
-                    objtype=data.type,
-                    size=data.size,
-                    mode=data.mode,
-                    uid=data.uid,
-                    gid=data.gid,
-                    mtime=data.mtime,
-                    data=data.data
-                )
+                fileobj = create_from_dict(data)
 
-                if data.type == 'd':
+                if objtype == 'd':
                     # Add this new dir object to the dict of directories
                     if relpath in dirtree:
-                        raise DirscanException(f"'{data.relpath}' already exists in file")
+                        raise DirscanException(f"'{objpath}' already exists in file")
                     # (parent, children, path)
                     dirtree[str(relpath)] = (fileobj, {}, fpath + '/' + fname if fpath else fname)
 
                 if parent:
                     # Add the object into the parent's children list
                     if name in parent[1]:
-                        raise DirscanException(f"'{data.relpath}' already exists in file")
+                        raise DirscanException(f"'{objpath}' already exists in file")
                     parent[1][name] = fileobj
 
             except DirscanException as err:
