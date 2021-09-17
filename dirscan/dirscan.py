@@ -311,7 +311,7 @@ class NonExistingObj(DirscanObj):
     objname = 'missing file'
 
     def __init__(self, name, *, path=''):
-        stat = os.stat_result((None, None, None, None, None, None, None, None, None, None))
+        stat = os.stat_result((0, None, None, None, None, None, None, None, None, None))
         super().__init__(name, path=path, stat=stat)
 
 
@@ -386,15 +386,15 @@ def create_from_dict(data):
 
     # Class parameters
     kwargs = {
-        'path': data['path'],
         'name': data['name'],
+        'path': data.get('path',''),
     }
 
     # Do necessary post processing of the file object
     if objcls is FileObj:
         if data.get('hashsum'):
             hashsum = binascii.unhexlify(data['hashsum'])
-        elif data['size'] == 0:
+        elif data.get('size') == 0:
             # Hashsum is normally not defined if the size is 0.
             hashsum = HASHALGORITHM().digest()
         else:
@@ -414,16 +414,16 @@ def create_from_dict(data):
             # Setting this to empty tuple prevents the class from querying the fs
             kwargs['children'] = ()
 
-    # Sanity check
-    if osstat.S_IFMT(data['mode']) == objcls.objmode:
+    # Sanity check. If mode is not present this test will never fail
+    if osstat.S_IFMT(data.get('mode', objcls.objmode)) != objcls.objmode:
         raise DirscanException(f"Object type '{objtype}' does not match mode 'o{data['mode']:o}'")
     #debug(0, "Mode {} -> {}", mode, mode|objcls.objmode)
 
     # Make a fake stat element from the given meta-data
     # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-    fakestat = os.stat_result((data['mode']|objcls.objmode, None, None, None,
-                               data['uid'], data['gid'], data['size'], None,
-                               data['mtime'], None))
+    fakestat = os.stat_result((data.get('mode',0)|objcls.objmode, None, None, None,
+                               data.get('uid'), data.get('gid'), data.get('size'),
+                               None, data.get('mtime'), None))
     kwargs['stat'] = fakestat
 
     # Make the file object instance
