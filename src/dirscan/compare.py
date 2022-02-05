@@ -2,13 +2,9 @@
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2021 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2022 Svein Seldal
+This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
-
-This application is licensed under GNU GPL version 3
-<http://gnu.org/licenses/gpl.html>. This is free software: you are
-free to change and redistribute it. There is NO WARRANTY, to the
-extent permitted by law.
 '''
 
 from dirscan.dirscan import NonExistingObj

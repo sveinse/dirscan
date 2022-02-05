@@ -3,6 +3,7 @@
 
 ## v0.10
 
+* License change to MIT
 * major overhaul including python3 migration
 * Change command line parameters.
     * Adding `-0, --print0`
