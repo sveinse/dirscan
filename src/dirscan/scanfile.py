@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from dirscan.dirscan import DirscanException, create_from_dict
+from dirscan.log import debug_level
 
 
 # Known scan file versions
@@ -176,7 +177,8 @@ def read_scanfile(filename, root=None):
                     parent[1][name] = fileobj
 
             except DirscanException as err:
-                raise DirscanException(f"{filename}:{lineno}: Data error, {err}") from None
+                exc = err if debug_level() else None
+                raise DirscanException(f"{filename}:{lineno}: Data error, {err}") from exc
 
     # Second pass, inserting all the children into the list of parents,
     # building up the final tree structure

@@ -10,6 +10,8 @@ __pycache__/
 *.whl
 *~
 venv*/
+__*
+!__*__.py
 
 # due to using tox and pytest
 .tox

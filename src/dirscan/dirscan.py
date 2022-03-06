@@ -410,10 +410,10 @@ def create_from_dict(data):
             # Setting this to empty tuple prevents the class from querying the fs
             kwargs['children'] = ()
 
-    # Sanity check. If mode is not present this test will never fail
-    if osstat.S_IFMT(data.get('mode', objcls.objmode)) != objcls.objmode:
+    # If the mode carries object type fields, check this against the object
+    objmode = osstat.S_IFMT(data.get('mode', objcls.objmode))
+    if objmode and objmode != objcls.objmode:
         raise DirscanException(f"Object type '{objtype}' does not match mode 'o{data['mode']:o}'")
-    #debug(0, "Mode {} -> {}", mode, mode|objcls.objmode)
 
     # Make a fake stat element from the given meta-data
     # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime

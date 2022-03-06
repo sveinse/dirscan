@@ -3,6 +3,8 @@ import subprocess
 from dataclasses import dataclass
 import pytest
 
+# pylint: disable-all
+
 
 @dataclass
 class Tempdir:
@@ -27,7 +29,6 @@ class Tempdir:
 def wd(tmpdir):
     dir = os.getcwd()
     os.chdir(tmpdir)
-    print()
     yield Tempdir(tmpdir)
     os.chdir(dir)
     subprocess.call(["chmod", "-R", "700", tmpdir])

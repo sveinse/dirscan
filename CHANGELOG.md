@@ -45,6 +45,8 @@
     * Added `DirObj.traverse()` to parse recursively the tree to build up the
       in-memory tree
 * Fix scanfile reading and improved robustness of scan files in `scanfile.py`
+    * Change to hex mtime timestamp
+    * Change to octal modestring containting only filemode
 * Added pytest and coverage framework
 * Add support for Windows
 * Implemented `create_from_dict()` factory and removed `create_from_data()`

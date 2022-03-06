@@ -6,8 +6,18 @@ from pytest import raises
 #from pprint import pprint
 
 import dirscan as ds
+import dirscan.scanfile as scanfile
 
 # pylint: disable-all
+
+
+def test_scanfile_get_fileheader():
+    ''' Test the fileheader '''
+
+    # Somewhat idiomatic test
+    a = '#!ds:v1\n'
+
+    assert a == scanfile.get_fileheader()
 
 
 def test_scanfile_empty_file(wd):
@@ -453,3 +463,79 @@ d,,,,,,,.
     with raises(ds.DirscanException) as exc:
         ds.read_scanfile('a', 'b')
     assert "No such directory 'b' found in scanfile 'a'" in str(exc.value)
+
+
+def test_scanfile_read_scanfile_object_types(wd):
+    ''' Test the object types returned '''
+    wd.wrdata('a', (
+'''#!ds:v1
+d,,,,,,,.
+f,,,,,,,f
+l,,,,,,,l
+b,,,,,,,b
+c,,,,,,,c
+p,,,,,,,p
+s,,,,,,,s
+'''
+))
+    d = ds.read_scanfile('a')
+    assert isinstance(d, ds.DirObj)
+    c = d.children()
+    assert isinstance(c[0], ds.FileObj)
+    assert isinstance(c[1], ds.LinkObj)
+    assert isinstance(c[2], ds.BlockDevObj)
+    assert isinstance(c[3], ds.CharDevObj)
+    assert isinstance(c[4], ds.FifoObj)
+    assert isinstance(c[5], ds.SocketObj)
+
+
+def test_scanfile_text_quoter():
+
+    a = '\x00\x1FAB CD,EF\\GH'
+    b = '\\x00\\x1fAB CD,EF\\\\GH'
+
+    assert b == scanfile.text_quoter(a)
+    assert a == scanfile.unquote(b)
+
+    # Test surrogat encoding error
+    a = 'g\udcfah\udcfao\udcfa~1.\udcfa_'
+    b = 'g\\xfah\\xfao\\xfa~1.\\xfa_'
+
+    assert b == scanfile.text_quoter(a)
+    assert a == scanfile.unquote(b)
+
+
+def test_scanfile_file_quoter():
+
+    a = '\x00\x1FAB CD,EF\\GH'
+    b = '\\x00\\x1fAB\\ CD\\-EF\\\\GH'
+
+    assert b == scanfile.file_quoter(a)
+    assert a == scanfile.unquote(b)
+
+    # Test surrogat encoding error
+    a = 'g\udcfah\udcfao\udcfa~1.\udcfa_'
+    b = 'g\\xfah\\xfao\\xfa~1.\\xfa_'
+
+    assert b == scanfile.file_quoter(a)
+    assert a == scanfile.unquote(b)
+
+
+def test_scanfile_unquote():
+
+    # Test do-nothing result
+    a = "SIMPLE"
+    assert a == scanfile.unquote(a)
+
+    # Test invalid quote symbol
+    a = "\\q"
+    with raises(ds.DirscanException) as exc:
+        scanfile.unquote(a)
+    assert "Unknown escape char" in str(exc.value)
+
+    # Test unfinished string
+
+    a = "End\\"
+    with raises(ds.DirscanException) as exc:
+        scanfile.unquote(a)
+    assert "Incomplete escape string" in str(exc.value)

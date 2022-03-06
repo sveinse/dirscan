@@ -22,3 +22,8 @@ def debug(level, text, *args, **kwargs):
     if level > _DEBUG_LEVEL:
         return
     sys.stderr.write("DEBUG: " + str(text).format(*args, **kwargs) + "\n")
+
+
+def debug_level():
+    """ Return the current debug level """
+    return _DEBUG_LEVEL
