@@ -30,7 +30,7 @@ quit () {
 usage () {
     cat <<EOF
 $ME -- Dirscan tester
-(C) 2018 Svein Seldal <sveinse@seldal.com>
+(C) 2018 Svein Seldal
 
   Run dirscan tests
 

@@ -6,6 +6,8 @@ dist/
 *.py[cod]
 __pycache__/
 *.so
+*.scan
+*.whl
 *~
 venv*/
 
