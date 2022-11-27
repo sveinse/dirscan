@@ -6,12 +6,20 @@ dist/
 *.py[cod]
 __pycache__/
 *.so
+*.scan
+*.whl
 *~
 venv*/
+__*
+!__*__.py
 
 # due to using tox and pytest
 .tox
 .cache
+htmlcov
+.coverage
+.pytest_cache
+.mypy_cache
 
 # Misc
 tags

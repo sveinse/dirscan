@@ -1,25 +1,51 @@
-# -*- coding: utf-8 -*-
 '''
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2022 Svein Seldal
+This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
-
-This application is licensed under GNU GPL version 3
-<http://gnu.org/licenses/gpl.html>. This is free software: you are
-free to change and redistribute it. There is NO WARRANTY, to the
-extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import sys
 import stat
-import time
 import string
-import pwd
-import grp
+if not sys.platform == 'win32':
+    from pwd import getpwuid
+    from grp import getgrgid
+else:
+    # Make a fake windows implementation
+    def getpwuid(a):
+        class _PwuidFake:
+            pw_name = 'N/A'
+        return _PwuidFake()
+    def getgrgid(a):
+        class _GrgidFake:
+            gr_name = 'N/A'
+        return _GrgidFake()
 
+
+# Print formats in scan mode
+#     A = --all,  H = --human,  L = --long
+FMT_DEF = '{path}'
+FMT_AHL = '{mode_h}  {user:8} {group:8}  {size:>5}  {data:>64}  {mtime_h}  {type}  {path}'
+FMT_AL = '{mode_h}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {mtime_h}  {type}  {path}'
+FMT_AH = '{mode_h}  {user:8} {group:8}  {size_h:>5}  {data:>64}  {type}  {path}'
+FMT_A = '{mode_h}  {uid:5} {gid:5}  {size:>10}  {data:>64}  {type}  {path}'
+FMT_HL = '{mode_h}  {user:8} {group:8}  {size_h:>5}  {mtime_h}  {type}  {path}'
+FMT_L = '{mode_h}  {uid:5} {gid:5}  {size:>10}  {mtime_h}  {path}'
+
+# Print formats in compare mode
+FMT_COMP_DEF = '{arrow}  {relpath}  :  {text}'
+
+# All compare types
+COMPARE_TYPES_ALL = 'elrcLRtEx'
+COMPARE_TYPES_DEFAULT_SCAN = 's'
+COMPARE_TYPES_DEFAULT_COMPARE = 'rltcLR'
+
+# All file types
+FILE_TYPES_ALL = 'fdlbcps'
+FILE_TYPES_DEFAULT_SCAN = FILE_TYPES_ALL
+FILE_TYPES_DEFAULT_COMPARE = FILE_TYPES_ALL
 
 
 #
@@ -32,34 +58,34 @@ FILE_FIELDS = {
     'name': lambda o: o.name,
 
     # The full file path
-    'fullpath': lambda o: o.fullpath,
+    'path': lambda o: o.fullpath,
 
     # User
-    'user': lambda o: format_user(o.uid),
+    'user': lambda o: getpwuid(o.uid).pw_name,
     'uid': lambda o: o.uid,
 
     # Group
-    'group': lambda o: format_group(o.gid),
+    'group': lambda o: getgrgid(o.gid).gr_name,
     'gid': lambda o: o.gid,
 
     # Mode
     'mode': lambda o: o.mode,
-    'mode_t': lambda o: format_mode(o.objtype, o.mode),
+    'mode_h': lambda o: stat.filemode(o.mode|o.objmode),
 
     # The object type, f=file, d=dir, l=symlink
     'type': lambda o: o.objtype,
 
     # The object size
     'size': lambda o: o.size,
-    'size_h': lambda o: format_bytes(o.size),
+    'size_h': lambda o: format_bytes(o.size, short=True),
 
     # Modification time
-    'mtime': lambda o: o.mtime.strftime("%Y-%m-%d %H:%M:%S"),
-    'mtime_n': lambda o: '%.6f' %(time.mktime(o.mtime.timetuple())+
-                                  float(o.mtime.strftime("%f"))/1000000.0,),
+    'mtime_h': lambda o: o.mtime.strftime("%Y-%m-%d %H:%M:%S"),
+    'mtime_f': lambda o: o.mtime.timestamp(),
+    'mtime_x': lambda o: f"{int(o.mtime.timestamp()):x}",
 
     # Special data-payload of the file. For files: the hashsum, links: the link destination
-    'data': lambda o: format_data(o),  # pylint: disable=W0108
+    'data': lambda o: format_data(o),  # pylint: disable=unnecessary-lambda
 
     # The device node which the file resides
     'dev': lambda o: o.dev,
@@ -84,17 +110,16 @@ COMPARE_ARROWS = {
 }
 
 
- # pylint: disable=C0326
 SCAN_SUMMARY = (
     # Condition,         Line to print
     (True,               "\nSummary of '{dir}':"),
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
     ('n_dirs',           "    {n_dirs}  directories"),
     ('n_symlinks',       "    {n_symlinks}  symbolic links"),
-    ('n_special',        "    {n_special}  special files  " \
-                                "({n_blkdev} block devices, " \
-                                "{n_chrdev} char devices, " \
-                                "{n_fifos} fifos, " \
+    ('n_special',        "    {n_special}  special files  "
+                                "({n_blkdev} block devices, "
+                                "{n_chrdev} char devices, "
+                                "{n_fifos} fifos, "
                                 "{n_sockets} sockets)"),
     ('n_exclude',        "    {n_exclude}  excluded files or directories"),
     (True,               "In total {n_objects} file objects"),
@@ -115,7 +140,7 @@ COMPARE_SUMMARY = (
     ('n_excludes',       "    {n_excludes}  excluded files or directories"),
     ('n_errors',         "    {n_errors}  compare errors"),
     ('n_skipped',        "    {n_skipped}  skipped comparisons"),
-    (True,               "In total {sum_objects} file objects"),
+    (True,               "In total {n_objects} file objects"),
 )
 
 
@@ -127,7 +152,6 @@ FINAL_SUMMARY = (
 
 # Error contents
 ERROR_FIELD = '**-ERROR-**'
-
 
 
 def split_number(number):
@@ -145,8 +169,7 @@ def split_number(number):
     return ''.join(group).lstrip()
 
 
-
-def format_bytes(size, print_full=False):
+def format_bytes(size, print_full=False, short=False):
     ''' Return a string with a human printable representation of a
         (file) size.  The print_full option will append "(26 552 946
         485 bytes)" to the string.  E.g. format_bytes(26552946485)
@@ -157,8 +180,8 @@ def format_bytes(size, print_full=False):
     if size is None:
         return None
 
-    elif size < 10000:
-        sizestr = '%s' %(size)
+    if size < 10000:
+        sizestr = str(size)
 
     else:
         # kb_int = integer part, kb_mod = modulus part
@@ -167,21 +190,25 @@ def format_bytes(size, print_full=False):
         kb_mod = 0
         scaled_size = kb_int
         # Iterate through each "decade" unit
-        for unit in ('B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'):
+        for unit in "BKMGTP":
+
+            if not short:
+                unit = ' ' + unit + ('iB' if unit != 'B' else '')
+
             scaled_size = float(kb_int) + float(kb_mod)/1024
 
             # Various print options. If a matching value range is found then exit loop
             if kb_int < 10:
-                sizestr = '%.2f %s' %(scaled_size, unit)
+                sizestr = f"{scaled_size:.2f}{unit}"
                 break
-            elif kb_int < 100:
-                sizestr = '%.1f %s' %(scaled_size, unit)
+            if kb_int < 100:
+                sizestr = f"{scaled_size:.1f}{unit}"
                 break
-            elif kb_int < 1000:
-                sizestr = '%.0f %s' %(scaled_size, unit)
+            if kb_int < 1000:
+                sizestr = f"{scaled_size:.0f}{unit}"
                 break
-            elif kb_int < 2048:
-                sizestr = '%.0f %s' %(scaled_size, unit)
+            if kb_int < 2048:
+                sizestr = f"{scaled_size:.0f}{unit}"
                 break
 
             # If kb_int (remaining value) is >=2048 then we will go to
@@ -193,42 +220,9 @@ def format_bytes(size, print_full=False):
     if print_full:
         extra = ' bytes'
         if size >= 10000:
-            extra = ' (%s bytes)' %(split_number(size))
+            extra = f" ({split_number(size)} bytes)"
         sizestr += extra
     return sizestr
-
-
-
-def format_mode(objtype, mode):
-    ''' Return a human readable string of the mode permission bits '''
-
-    mode_sequence = (
-        # Posistion, character, condition
-        (0, 'r', stat.S_IRUSR),
-        (1, 'w', stat.S_IWUSR),
-        (2, 'x', stat.S_IXUSR),
-        (2, 'S', stat.S_ISUID),
-        (2, 's', stat.S_IXUSR|stat.S_ISUID),
-        (3, 'r', stat.S_IRGRP),
-        (4, 'w', stat.S_IWGRP),
-        (5, 'x', stat.S_IXGRP),
-        (5, 'S', stat.S_ISGID),
-        (5, 's', stat.S_IXGRP|stat.S_ISGID),
-        (6, 'r', stat.S_IROTH),
-        (7, 'w', stat.S_IWOTH),
-        (8, 'x', stat.S_IXOTH),
-        (8, 'T', stat.S_ISVTX),
-        (8, 't', stat.S_IXOTH|stat.S_ISVTX),
-    )
-
-    mode_text = list('-') * 9
-    for (pos, char, cond) in mode_sequence:
-        if mode & cond == cond:
-            mode_text[pos] = char
-    if objtype == 'f':
-        objtype = '-'
-    return objtype + ''.join(mode_text)
-
 
 
 def format_data(obj):
@@ -237,23 +231,10 @@ def format_data(obj):
         their symlink target.
     '''
     if obj.objtype == 'f' and obj.size:
-        return obj.hashsum_hex()
-    elif obj.objtype == 'l':
+        return obj.hashsum_hex
+    if obj.objtype == 'l':
         return obj.link
     return None
-
-
-
-def format_user(uid):
-    ''' Return the username for the given uid '''
-    return pwd.getpwuid(uid).pw_name
-
-
-
-def format_group(gid):
-    ''' Return the group name for the given gid '''
-    return grp.getgrgid(gid).gr_name
-
 
 
 def get_fields(objs, prefixes, fieldnames):
@@ -280,17 +261,18 @@ def get_fields(objs, prefixes, fieldnames):
             # Get the data for that field
             try:
                 data = FILE_FIELDS[fld](obj)
+
+                # Never print None
                 if data is None:
                     data = ''
-            except (IOError, OSError) as err:
+            except OSError as err:
                 data = ERROR_FIELD
                 errs.append(err)
 
-            # Store the field (as string)
-            fields[field] = str(data)
+            # Store the field
+            fields[field] = data
 
     return (errs, fields)
-
 
 
 def get_fieldnames(formatstr):
@@ -303,20 +285,18 @@ def get_fieldnames(formatstr):
     return fieldnames
 
 
+def write_fileinfo(formatstr, fields, quoter=None, file=sys.stdout, end='\n'):
+    ''' Write the formatstr to the given file. The format fields are
+        read from the fields dicts.
+    '''
 
-# pylint: disable=W0622
-def write_fileinfo(fmt, fields, quoter=None, file=sys.stdout):
-    ''' Write fileinfo fields. And field keys that starts with '_' will
-        be renamed to without the '_' prefix, and will not be quoted. '''
+    if not quoter:
+        quoter = lambda a: a
 
-    if quoter:
-        p_fields = {k: quoter(v) for k, v in fields.items() if not k.startswith('_')}
-        p_fields.update({k[1:]: v for k, v in fields.items() if k.startswith('_')})
-    file.write(fmt.format(**p_fields) + '\n')
-
+    file.write(Formatter(quoter).format(formatstr, **fields) + end)
 
 
-def write_summary(summary, fields, file=sys.stdout):
+def write_summary(summary, fields, file=sys.stdout, end='\n'):
     ''' Write the summary '''
 
     # Use the pre-defined summary_text
@@ -324,21 +304,71 @@ def write_summary(summary, fields, file=sys.stdout):
         # d.get(n,n) will return d[n] if n exists, otherwise return n.
         # Thus if n is True, True will be returned
         if line and fields.get(var, var):
-            file.write(line.format(**fields) + '\n')
+            file.write(line.format(**fields) + end)
 
 
+def get_compare_types(comparestr):
+    ''' Parse the compare types argument to --compare '''
+    if not comparestr:
+        return comparestr
+
+    invert = False
+    cset = set(comparestr)
+    if comparestr[0] == '^':
+        invert = True
+        cset = set(comparestr[1:])
+    foreign = cset.difference(COMPARE_TYPES_ALL)
+    if foreign:
+        raise ValueError((
+            f"Unknown compare type(s): {''.join(foreign)}, "
+            f"valid values {''.join(sorted(COMPARE_TYPES_ALL))}"))
+    if invert:
+        return set(COMPARE_TYPES_ALL).difference(cset)
+    return cset
 
 
-#
-# HISTOGRAM CLASS
-# ===============
-#
+def get_file_types(typestr):
+    ''' Parse the type to --types '''
+    if not typestr:
+        return typestr
 
-class FileHistogram(object):
+    invert = False
+    cset = set(typestr)
+    if typestr[0] == '^':
+        invert = True
+        cset = set(typestr[1:])
+    foreign = cset.difference(FILE_TYPES_ALL)
+    if foreign:
+        raise ValueError((
+            f"Unknown file type(s): {''.join(foreign)}, "
+            f"valid values {''.join(sorted(FILE_TYPES_ALL))}"))
+    if invert:
+        return set(FILE_TYPES_ALL).difference(cset)
+    return cset
+
+
+class Formatter(string.Formatter):
+    ''' Custom formatter class which implements the 'qs' conversion, e.g.
+        "My text is {name:qs}". When encountered it will run the quoter
+        function prior to printing it with '{name:s}'
+    '''
+
+    def __init__(self, quoter, *args, **kwargs):
+        self.quoter = quoter
+        super().__init__(*args, **kwargs)
+
+    def format_field(self, value, format_spec):
+        if format_spec == 'qs':
+            format_spec = 's'
+            value = self.quoter(value)
+        return super().format_field(value, format_spec)
+
+
+class FileHistogram:
     ''' Histogram for counting file objects '''
 
-    def __init__(self, dir):
-        self.dir = dir
+    def __init__(self, directory):
+        self.dir = directory
         self.size = 0
         self.bins = {}
 
@@ -374,7 +404,7 @@ class FileHistogram(object):
         }
 
 
-class CompareHistogram(object):
+class CompareHistogram:
     ''' Histogram for counting compare relationship '''
 
     def __init__(self, left, right):
@@ -407,11 +437,11 @@ class CompareHistogram(object):
             'n_errors': self.get('error'),
             'n_skipped': self.get('skipped'),
             'n_err': self.get('err'),
-            'sum_objects': sum(self.bins.values())-self.get('err'),
+            'n_objects': sum(self.bins.values())-self.get('err'),
         }
 
 
-class Statistics(object):
+class Statistics:
     ''' Class for collecting dirscan statistics '''
 
     def __init__(self, left, right):

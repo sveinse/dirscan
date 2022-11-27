@@ -1,24 +1,16 @@
-# -*- coding: utf-8 -*-
 '''
 This file is a part of dirscan, a tool for recursively
 scanning and comparing directories and files
 
-Copyright (C) 2010-2018 Svein Seldal, sveinse@seldal.com
+Copyright (C) 2010-2022 Svein Seldal
+This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
-
-This application is licensed under GNU GPL version 3
-<http://gnu.org/licenses/gpl.html>. This is free software: you are
-free to change and redistribute it. There is NO WARRANTY, to the
-extent permitted by law.
 '''
-from __future__ import absolute_import, division, print_function
-
 import sys
 import datetime
 
 
-
-class PrintProgress(object):
+class PrintProgress:
     ''' A simple progress output manager. print() provides an ordinary print
         functionality, while progress() prints a line for displaying progress.
         Both accepts syntax similar to print(). progress() does not print the
@@ -27,7 +19,6 @@ class PrintProgress(object):
         passed, and when it does, it will overwrite the previous progress line.
         print() will also overwrite the last progress() printed line.
          '''
-
 
     def __init__(self, file=sys.stdout, delta_ms=200, show_progress=True):
         ''' file - stream to print to
@@ -40,7 +31,6 @@ class PrintProgress(object):
         self.show_progress = show_progress
         self.next_clear = False
 
-
     def print(self, *args, **kwargs):
         ''' Print a message '''
 
@@ -51,7 +41,6 @@ class PrintProgress(object):
 
         print(*args, file=self.file, **kwargs)
         self.file.flush()
-
 
     def progress(self, *args, **kwargs):
         ''' Print a progress message. force will print the
@@ -66,7 +55,6 @@ class PrintProgress(object):
                 self.next_clear = True
                 self.print(*args, end='', **kwargs)
                 self.next_clear = True
-
 
     def close(self):
         ''' Close the progress '''
