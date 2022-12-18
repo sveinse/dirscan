@@ -6,6 +6,7 @@ Copyright (C) 2010-2022 Svein Seldal
 This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
+from typing import Optional, Union
 import os
 import datetime
 import stat as osstat
@@ -43,6 +44,10 @@ class DirscanException(Exception):
 class DirscanObj:
     ''' Directory scan file objects base class '''
 
+    # Declare to help type checkers
+    objtype: str
+    objname: str
+
     __slots__ = ('name', 'path', 'excluded',
                  'mode', 'uid', 'gid', 'dev', 'size', '_mtime')
 
@@ -53,18 +58,18 @@ class DirscanObj:
         if name != '/':
             name = name.rstrip('/')
 
-        self.name = name
-        self.path = path
+        self.name: str = name
+        self.path: Union[Path, str] = path
         self.excluded = False
 
         # Only save the actual file mode, not the type field. However, this
         # will lose additional mode field information.
-        self.mode = osstat.S_IMODE(stat.st_mode)
-        self.uid = stat.st_uid
-        self.gid = stat.st_gid
-        self.dev = stat.st_dev
-        self.size = stat.st_size
-        self._mtime = stat.st_mtime
+        self.mode: int = osstat.S_IMODE(stat.st_mode)
+        self.uid: int = stat.st_uid
+        self.gid: int = stat.st_gid
+        self.dev: int = stat.st_dev
+        self.size: int = stat.st_size
+        self._mtime: float = stat.st_mtime
 
     @property
     def fullpath(self):
@@ -84,7 +89,7 @@ class DirscanObj:
     def close(self):
         ''' Delete any allocated objecs within this class '''
 
-    def compare(self, other):
+    def compare(self, other: 'DirscanObj'):
         ''' Return a list of differences '''
         if type(self) is not type(other):
             yield 'type mismatch'
@@ -139,7 +144,7 @@ class FileObj(DirscanObj):
 
     __slots__ = ('_hashsum',)
 
-    def __init__(self, name, *, path='', stat, hashsum=None):
+    def __init__(self, name, *, path='', stat, hashsum: Optional[bytes]=None):
         super().__init__(name, path=path, stat=stat)
 
         # Protocol:
@@ -149,7 +154,7 @@ class FileObj(DirscanObj):
         self._hashsum = hashsum
 
     @property
-    def hashsum(self):
+    def hashsum(self) -> Optional[bytes]:
         ''' Return the hashsum of the file '''
 
         # This is not a part of the parse() structure because it can take
@@ -213,7 +218,7 @@ class LinkObj(DirscanObj):
         super().__init__(name, path=path, stat=stat)
         self.link = link
 
-    def compare(self, other):
+    def compare(self, other: 'DirscanObj'):
         ''' Compare two link objects '''
         yield from super().compare(other)
         if self.link != other.link:
@@ -365,6 +370,8 @@ def create_from_fsdir(path):
     ''' Generator that produces file object instances for directory 'path' '''
 
     # Iterate over the directory
+    # FIXME: This should possibly be done with bytes as path in order to get
+    #        the filename as bytes and then do a controlled decode to str.
     with os.scandir(path) as dirit:
         for direntry in dirit:
             stat = direntry.stat(follow_symlinks=False)
@@ -417,9 +424,11 @@ def create_from_dict(data):
 
     # Make a fake stat element from the given meta-data
     # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-    fakestat = os.stat_result((data.get('mode',0)|objcls.objmode, None, None, None,
-                               data.get('uid'), data.get('gid'), data.get('size'),
-                               None, data.get('mtime'), None))
+    fakestat = os.stat_result((
+        data.get('mode',0)|objcls.objmode, None, None, None,
+        data.get('uid'), data.get('gid'), data.get('size'),
+        None, data.get('mtime'), None
+    ))
     kwargs['stat'] = fakestat
 
     # Make the file object instance
@@ -435,7 +444,8 @@ def create_from_dict(data):
 ############################################################
 
 def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
-             traverse_oneside=None, exception_fn=None, close_during=True):
+             traverse_oneside=None, exception_fn=None, close_during=True,
+             sequential=False):
     '''
     Generator function that recursively traverses the directories in
     list ``dirs``. This function can scan a file system or compare two
@@ -485,7 +495,18 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         that this tears down the in-memory directory tree, making it impossible
         to reuse the object tree after ``walkdirs()`` is complete.
 
+     ``ìn_tandem``
+        If True, the directories will be traversed in parallel simulaneously.
+        If False, each of the directories will be scanned one by one.
     '''
+
+    if sequential:
+        for obj in dirs:
+            yield from walkdirs((obj,), reverse=reverse, excludes=excludes,
+                                onefs=onefs, traverse_oneside=traverse_oneside,
+                                exception_fn=exception_fn, close_during=close_during,
+                                sequential=False)
+        return
 
     # Ensure the exclusion list is a list
     if excludes is None:
@@ -515,13 +536,15 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
     # Start the queue
     queue = [(Path('.'), tuple(base))]
 
+    debug(2, "")
+
     # Traverse the queue
     while queue:
 
         # Get the next set of objects
         path, objs = queue.pop(-1)
 
-        debug(1, ">>>>  OBJECT {}:  {}", path, objs)
+        debug(2, ">>>>  OBJECT {}:  {}", path, objs)
 
         # Parse the objects, getting object metadata
         for obj, baseobj in zip(objs, base):
@@ -562,7 +585,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
 
                 # Get and append the children names
                 children = {obj.name: obj for obj in obj.children()}
-                #debug(2, "    Children of {} is {}", obj, children)
+                debug(4, "      Children of {} is {}", obj, children)
 
             # Getting the children failed
             except OSError as err:

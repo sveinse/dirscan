@@ -12,7 +12,7 @@ class Tempdir:
 
     @staticmethod
     def wrdata(f, d):
-        with open(f, 'w') as fd:
+        with open(f, 'w', encoding='utf-8') as fd:
             if d:
                 fd.write(d)
 

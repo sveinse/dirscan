@@ -1,4 +1,3 @@
-from dirscan.dirscan import create_from_dict
 import os
 import sys
 import pytest
@@ -183,7 +182,7 @@ def test_create_from_dict_roundtrip(wd):
 
     a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
     d = a.to_dict()
-    b = create_from_dict(d)
+    b = ds.create_from_dict(d)
 
     # TODO: Do we need a == operator in DirscanObj?
     assert tuple(a.compare(b)) == ()

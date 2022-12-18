@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.11
+
+* Added new features:
+   * Finding duplicate files (--duplicates)
+   * Tracking renamed files when comparing (--shadiff)
+* Fixed debug info with -D, and extra info with -vv
+* Added argument `sequential` to `walkdirs()` that allows sequential scanning
+  instead of scanning in parallel.
+* Format field changes:
+   * `{change_t}` added, one letter for the change type
+   * `{dupinfo}` added, human readable info about duplicated files
+      (--duplicates)
+   * `{dupcount}` added, the number of times the file has been duplicated
+   * `{dup}` added, prints 'DUP' if duplicated file.
+* Added more testing
+* Fix `dir_compare1()` and `dir_compare2()` to facilitate sha diffing and
+  refactor diffing issues
+* Added new compare types `n` and `m` for renamed files in `--shadiff` and
+  `d` (duplicated) in `--duplicates`.
+* Added type checker hints
+* Change command line parameters
+   * Adding `-d, --duplicates` to show duplicated files in scan mode
+   * Adding `-H, --shadiff` to track renamed files while diffing dirs
+   * Rename `-c, --compare` to `-f, --filter`
+   * Implemented proper invert `^` in `-f, --filter` and `-t, --types`
+
 
 ## v0.10
 

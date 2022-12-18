@@ -7,31 +7,46 @@ This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
 
-from dirscan.dirscan import NonExistingObj
+from typing import List
+from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj
+from dirscan.formatfields import COMPARE_TYPES_ALL
 
 
 # pylint: disable=unused-argument
-def dir_compare1(objs, ignores='', comparetypes='', compare_time=False, shadb=None):
+def dir_compare1(objs: List[DirscanObj], ignores='', comparetypes='',
+                 compare_time=False, shadb=None):
     ''' Object comparator for one object. The only thing this function tests
         for is if the object is excluded. Returns tuple with (change, text)
     '''
+    assert len(objs) == 1
+    obj = objs[0]
 
     # Comparison matrix for 1 dir
     # ---------------------------
     #    x    excluded  Excluded
     #    *    scan      Scan
 
-    if objs[0].excluded:
-        # File EXCLUDED
-        # =============
+    # File EXCLUDED
+    # =============
+    if obj.excluded:
         return ('excluded', 'excluded')
+
+    # File DUPLICATED
+    # ===============
+    if shadb and isinstance(obj, FileObj):
+        sha = obj.hashsum
+        if sha in shadb and len(shadb[sha]) > 1:
+            return ('duplicated', 'Duplicated entry')
 
     return ('scan', 'scan')
 
 
-def dir_compare2(objs, ignores='', comparetypes='', compare_time=False, shadb=None):
+def dir_compare2(objs: List[DirscanObj], ignores='', comparetypes=COMPARE_TYPES_ALL,
+                 compare_time=False, shadb=None):
     ''' Object comparator for two objects. Returns a tuple with (change, text)
     '''
+    assert len(objs) == 2
+    left, right = objs
 
     # Comparison matrix for 2 dirs
     # -----------------------------
@@ -46,60 +61,61 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_time=False, shadb=No
     #         right_newer
     #    aa   Equal
 
+    # File EXCLUDED
+    # =============
     if all(o.excluded for o in objs):
-        # File EXCLUDED
-        # =============
-        if isinstance(objs[0], NonExistingObj):
-            return ('excluded', 'Right excluded, not present in left')
-        if isinstance(objs[1], NonExistingObj):
-            return ('excluded', 'Left excluded, not present in right')
+        if isinstance(left, NonExistingObj):
+            return ('excluded', 'Right excluded')
+        if isinstance(right, NonExistingObj):
+            return ('excluded', 'Left excluded')
         return ('excluded', 'excluded')
 
-    if isinstance(objs[0], NonExistingObj) or objs[0].excluded:
-        # File present RIGHT only
-        # =======================
-        text = f"{objs[1].objname} only in right"
-        if objs[1].excluded:
-            return ('excluded', 'excluded, only in right')
-        if objs[0].excluded:
+    if left.excluded and isinstance(right, NonExistingObj):
+        return ('excluded', 'excluded, only in left')
+    if right.excluded and isinstance(left, NonExistingObj):
+        return ('excluded', 'excluded, only in right')
+
+    # File present RIGHT only
+    # =======================
+    if isinstance(left, NonExistingObj) or left.excluded:
+        text = f"{right.objname} only in right"
+        if left.excluded:
             text += ", left is excluded"
-        elif shadb and objs[1].objtype == 'f':
-            sha = objs[1].hashsum()
+        elif shadb and isinstance(right, FileObj):
+            sha = right.hashsum
             shalist = shadb.get(sha, [])
             other = None
-            for o in shalist:
-                if o.treeid == 0:
+            for i, o in shalist:
+                if i == 0:  # This ensures that only left sources are used
                     other = o
             if other:
-                text = "only in right, found in left as %s" %(other.fullpath)
+                text = "renamed, in left %s" %(other.fullpath)
                 return ('right_renamed', text)
         return ('right_only', text)
 
-    if isinstance(objs[1], NonExistingObj) or objs[1].excluded:
-        # File present LEFT only
-        # ======================
-        text = f"{objs[0].objname} only in left"
-        if objs[0].excluded:
-            return ('excluded', 'excluded, only in left')
-        if objs[1].excluded:
+    # File present LEFT only
+    # ======================
+    if isinstance(right, NonExistingObj) or right.excluded:
+        text = f"{left.objname} only in left"
+        if right.excluded:
             text += ", right is excluded"
-        elif shadb and objs[0].objtype == 'f':
-            sha = objs[0].hashsum()
+        elif shadb and isinstance(left, FileObj):
+            sha = left.hashsum
             shalist = shadb.get(sha, [])
             other = None
-            for o in shalist:
-                if o.treeid == 1:
+            for i, o in shalist:
+                if i == 1:  # This ensures that only right sources are used
                     other = o
             if other:
-                text = "only in left, found in right as %s" %(other.fullpath)
+                text = "renamed, in right %s" %(other.fullpath)
                 return ('left_renamed', text)
         return ('left_only', text)
 
+    # File type DIFFERENT
+    # ===================
     if len(set(type(o) for o in objs)) > 1:
-        # File type DIFFERENT
-        # ===================
         text = (f"Different type, "
-                f"{objs[0].objname} in left and {objs[1].objname} in right")
+                f"{left.objname} in left and {right.objname} in right")
         return ('different_type', text)
 
     # File type EQUAL
@@ -113,7 +129,7 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_time=False, shadb=No
 
     # compare returns a list of differences. If None, they are equal
     # This might fail, so be prepared to catch any errors
-    differences = tuple(objs[0].compare(objs[1]))
+    differences = tuple(left.compare(right))
     if differences:
         # Make a new list and filter out the ignored differences
         filtered_changes = []
@@ -147,7 +163,10 @@ def dir_compare2(objs, ignores='', comparetypes='', compare_time=False, shadb=No
 
             # File contents CHANGED
             # =====================
-            text = f"{objs[0].objname} changed: {', '.join(filtered_changes)}"
+
+            # FIXME: Need to check either side for being renamed
+
+            text = f"{left.objname} changed: {', '.join(filtered_changes)}"
             return (change_type, text)
 
         # Compares with changes may fall through here because of

@@ -31,7 +31,7 @@ def is_scanfile(filename):
     if not filename.is_file():
         return False
     try:
-        with open(filename, 'r', errors='surrogateescape') as infile:
+        with open(filename, 'r', encoding='utf-8', errors='surrogateescape') as infile:
             check_header(infile.readline(), filename)
     except DirscanException:
         return False
@@ -80,7 +80,7 @@ def read_scanfile(filename, root=None):
     dirtree = {}
 
     # First pass reading entire file into memory
-    with open(filename, 'r', errors='surrogateescape') as infile:
+    with open(filename, 'r', encoding='utf-8', errors='surrogateescape') as infile:
 
         # Check the scanfile header
         check_header(infile.readline(), filename)
@@ -95,7 +95,7 @@ def read_scanfile(filename, root=None):
 
             try:
                 # Parse the line record
-                args = [unquote(e) for e in line.rstrip().split(',')]
+                args = [file_unquote(e) for e in line.rstrip().split(',')]
                 length = len(args)
                 if length != 8:
                     raise DirscanException(f"Missing or excess file fields (got {length}, want 8)")
@@ -198,102 +198,98 @@ def read_scanfile(filename, root=None):
         raise DirscanException(f"No such directory '{root}' found in scanfile '{filename}'") from None
 
 
-
 # SIMPLE QUOTER USED IN SCAN FILES
 # ================================
-#
-#     '\' -> '\\'
-#     ' ' -> '\ '
-#     ',' -> '\-'
-#     <32 and 127-255 -> '\xNN'
-#
 
-def text_quoter(text):
-    ''' Quote the text for printing '''
+def quote(text, extended=False):
+    ''' Quote the text '''
 
-    out = ''
-    for char in text:
-        value = ord(char)
-        if value < 32 or value == 127:
-            out += f"\\x{value:02x}"
-        # elif v == 32:  # ' '
-        #     out += '\\ '
-        # elif v == 44:  # ','
-        #    out += '\\-'
-        elif value == 92:  # '\'
-            out += '\\\\'
-        else:
-            out += char
+    def _quote(text):
+        e = extended
+        for c in text:
+            v = ord(c)
+            if v < 32 or v == 127:   # n -> \xnn
+                yield f"\\x{v:02x}"
+            elif c == '\\':          # \ -> \\
+                yield '\\\\'
+            elif e and c == ',':     # , -> \\-
+                yield '\\-'          # To not interfere when reading file
+            elif e and c == ' ':     # ' ' -> '\\ '
+                yield '\\ '          # To remain quotable with shell pasting
+            else:
+                yield c
 
-    try:
-        text.encode('utf-8')
-    except UnicodeEncodeError:
-        # Strings with encoding errors will come up as surrogates, which
-        # will fail the encode. This code will make the str into a bytes
-        # object and back to a string, where surrogates will be escaped
-        # as \xNN. [2:-1] removes the b' prefix and ' postfix
-        out = str(os.fsencode(out))[2:-1]
-
-    return out
-
-
-def file_quoter(text):
-    ''' Simple text quoter for the scan files '''
-
-    text = text_quoter(text)
-
-    # Special scan file escapings
-    if ',' in text:
-        text = text.replace(',', '\\-')
-    if ' ' in text:
-        text = text.replace(' ', '\\ ')
+    text = "".join(_quote(text))
+    # Need this to encode surrogates \udcfa -> \\xfa
+    text = text.encode(errors='surrogateescape').decode(errors='backslashreplace')
     return text
 
 
-def unquote(text):
+def unquote(text, extended=False):
+    ''' Unquote the text '''
+
+    def _unqoute(text):
+
+        # Escape code translations
+        escapes = {
+            '\\': '\\',
+            'n': '\n',
+            'r': '\r',
+            't': '\t',
+            "'": "'",
+            '"': '"',
+        }
+        if extended:
+            escapes.update({
+                '-': ',',
+                ' ': ' ',
+            })
+
+        g = iter(text)
+        while True:
+            try:
+                c = next(g)
+                if c != '\\':
+                    yield c
+                    continue
+            except StopIteration:
+                return
+
+            try:
+                c = next(g)
+                o = escapes.get(c)
+                if o is not None:
+                    yield o
+                    continue
+                elif c not in 'xuU':
+                    raise DirscanException(f"Unknown escape char '{c}'")
+                capture = {'x': 2, 'u': 4, 'U': 8}[c]
+                cap = "".join(next(g) for i in range(capture))
+                val = int(cap, 16)
+                if val > 127 and val < 256:
+                    val |= 0xdc00  # Handle surrogates
+                yield chr(val)
+            except StopIteration:
+                raise DirscanException(f"Incomplete escape string '{text}'") from None
+
+    return "".join(_unqoute(text))
+
+
+def text_quote(text):
+    ''' Quote the text for printing '''
+    return quote(text, False)
+
+
+def file_quote(text):
+    ''' Simple text quoter for the scan files '''
+    return quote(text, True)
+
+
+def text_unquote(text):
     ''' Simple text un-quoter for the scan files '''
+    return unquote(text, False)
 
-    if '\\' not in text:
-        return text
-    out = ''
-    getchars = 0
-    escape = False
-    hexstr = ''
-    for char in text:
 
-        if getchars:
-            # Getting char value for \xNN escape codes
-            hexstr += char
-            getchars -= 1
-            if getchars == 0:
-                value = int(hexstr, 16)
-                # Code-points above 128 must be made into a surrogate
-                # for the quoter to work with this values
-                if value >= 128:
-                    value |= 0xdc00
-                out += chr(value)
-
-        elif escape:
-            # Getting escape code following '\'
-            if '\\' in char:
-                out += '\\'
-            elif '-' in char:
-                out += ','
-            elif ' ' in char:
-                out += ' '
-            elif 'x' in char:
-                getchars = 2
-                hexstr = ''
-            else:
-                raise DirscanException(f"Unknown escape char '{char}'")
-            escape = False
-
-        elif '\\' in char:
-            escape = True
-
-        else:
-            out += char
-
-    if escape or getchars:
-        raise DirscanException(f"Incomplete escape string '{text}'")
-    return out
+def file_unquote(text):
+    ''' Simple text un-quoter for the scan files '''
+    return unquote(text, True)

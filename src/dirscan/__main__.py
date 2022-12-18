@@ -6,15 +6,16 @@ Copyright (C) 2010-2022 Svein Seldal
 This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
+from typing import Dict, List, Tuple
 from pathlib import PurePosixPath
 import sys
 
 import dirscan.formatfields as fmtfields
 from dirscan.log import set_debug, debug
 from dirscan.scanfile import read_scanfile, get_fileheader, is_scanfile
-from dirscan.scanfile import file_quoter, text_quoter, SCANFILE_FORMAT
+from dirscan.scanfile import file_quote, text_quote, SCANFILE_FORMAT
 from dirscan.compare import dir_compare1, dir_compare2
-from dirscan.dirscan import walkdirs, create_from_fs, DirscanException
+from dirscan.dirscan import walkdirs, create_from_fs, DirscanException, DirscanObj, FileObj
 from dirscan.usage import argument_parser, DIRSCAN_FORMAT_HELP
 from dirscan.progress import PrintProgress
 
@@ -23,42 +24,42 @@ from dirscan.progress import PrintProgress
 UPDATE_INTERVAL = 300
 
 
-def scan_shadb(dirs, opts, error_handler, progress):
+def scan_shadb(dirs, reverse=False, excludes=None, onefs=False,
+               exception_fn=None, progress=None):
     """ Build a sha database for a scanned tree """
 
     # -- Build the sha database
-    shadb = {}
+    shadb: Dict[bytes, List[Tuple[int, DirscanObj]]] = {}
 
     # Prepare progress values
     count = 0
 
-    for sdir in dirs:
+    for i, sdir in enumerate(dirs):
         for (path, objs) in walkdirs(
                 [sdir],
-                reverse=opts.reverse,
-                excludes=opts.exclude,
-                onefs=opts.onefs,
-                exception_fn=error_handler,
+                reverse=reverse,
+                excludes=excludes,
+                onefs=onefs,
+                exception_fn=exception_fn,
                 close_during=False):
 
             # Progress printing
             count += 1
-            progress.progress("Scanning %s files:  %s " %(count, objs[0].fullpath))
+            if progress:
+                progress.progress("Scanning %s files:  %s " %(count, objs[0].fullpath))
 
             # Evaluate the hashsum for each of the objects and store in
             # sha database
-            for o in objs:
-                if o.objtype != 'f' or o.excluded:
+            for obj in objs:
+                if not isinstance(obj, FileObj) or obj.excluded:
                     continue
 
                 try:
                     # Get the hashsum and store it to the shadb list
-                    sha = o.hashsum()
-                    _t = shadb.get(sha, [])
-                    _t.append(o)
-                    shadb[sha] = _t
+                    shadb.setdefault(obj.hashsum, []).append((i, obj))
                 except IOError as err:
-                    error_handler(err)
+                    if not exception_fn or not exception_fn(err):
+                        raise
 
     return shadb
 
@@ -96,19 +97,9 @@ def main(argv=None):
     if left is None:
         argp.error("Missing required LEFT_DIR argument")
 
-    # -- Argument options parsing
-    try:
-        opts.comparetypes = fmtfields.get_compare_types(opts.comparetypes)
-        opts.filetypes = fmtfields.get_file_types(opts.filetypes)
-    except ValueError as err:
-        argp.error(err)
-
-    # -- Must recurse in scan mode
-    if right is None:
-        opts.recurse = True
-
     # -- Determine settings and print format
-    if right is None:
+    duponce = False
+    if right is None or opts.duplicates:
         # -- Settings for scanning
         printfmt = fmtfields.FMT_DEF
         writefmt = None
@@ -118,6 +109,10 @@ def main(argv=None):
         summary = list(fmtfields.SCAN_SUMMARY)
         dir_comparator = dir_compare1
         pr_prefix = 'Scanned'
+        sequential = True
+
+        # Must recurse in scan mode
+        opts.recurse = True
 
         if opts.outfile:
             writefmt = SCANFILE_FORMAT
@@ -133,7 +128,22 @@ def main(argv=None):
             elif opts.long:
                 printfmt = fmtfields.FMT_HL if opts.human else fmtfields.FMT_L
             elif opts.verbose:
-                printfmt = '{path}{extra}'
+                printfmt = '{path}'
+            elif opts.duplicates:
+                comparetypes = 'd'
+                duponce = not bool(opts.format)
+                printfmt = '{dupinfo}'
+
+        if opts.duplicates:
+            filetypes = 'f'
+            # Sneaky way to add DUP to printings
+            printfmt = printfmt.replace('{path}', '{dup}  {path}')
+
+            if opts.shadiff:
+                argp.error("--sha doesn't work with --duplicates")
+
+        if opts.shadiff:
+            argp.error("--sha doesn't work when scanning")
 
     else:
         # -- Settings for comparing
@@ -145,6 +155,7 @@ def main(argv=None):
         summary = list(fmtfields.COMPARE_SUMMARY)
         dir_comparator = dir_compare2
         pr_prefix = 'Compared'
+        sequential = False
 
         if opts.outfile:
             argp.error("Writing to an outfile is not supported when comparing directories")
@@ -155,16 +166,33 @@ def main(argv=None):
         if opts.all or opts.verbose:
             comparetypes = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
 
+        if opts.shadiff:
+            # Want to walk the entire tree on both sides to find any
+            # duplicates
+            opts.traverse_oneside = True
+
     # -- Scanfile prefix settings
     opts.leftprefix = opts.leftprefix or opts.prefix
     opts.rightprefix = opts.rightprefix or opts.prefix
 
     # -- User provided formats overrides any defaults
-    printfmt = opts.format or printfmt
-    comparetypes = opts.comparetypes or comparetypes
-    filetypes = opts.filetypes or filetypes
+    try:
+        printfmt = opts.format or printfmt
+        comparetypes = fmtfields.get_compare_types(opts.comparetypes, comparetypes)
+        filetypes = fmtfields.get_file_types(opts.filetypes, filetypes)
+    except ValueError as err:
+        argp.error(err)
 
-    # --- Summary options
+    # -- Extra verbose
+    if opts.verbose > 1:
+        # Prefix fields
+        printfmt = '{change_t}  ' + printfmt
+
+    # -- Verify file types
+    if opts.duplicates and filetypes != 'f':
+        argp.error("Cannot use other filetypes than 'f' in --duplicates mode")
+
+    # -- Summary options
     if opts.summary:
         summary = [(True, s) for s in opts.summary]
         opts.enable_summary = True
@@ -185,6 +213,20 @@ def main(argv=None):
         # FIXME: Evaluate valid format fields in summary, printfmt and writefmt
     except ValueError as err:
         argp.error(f'Print format {err}')
+
+    # -- Debug info --
+    debug(1, "Command options:")
+    debug(1, "  Left          : '{}'", left)
+    debug(1, "  Right         : '{}'", right)
+    debug(1, "  Print format  : '{}'", printfmt)
+    debug(1, "  Write format  : '{}'", writefmt)
+    debug(1, "  Fields in use : {}", fieldnames)
+    debug(1, "  Compare types : '{}'", comparetypes)
+    debug(1, "  File types    : '{}'", filetypes)
+    for i, s in enumerate(summary, start=1):
+        debug(1, "  Summary {:2d}    : '{}'", i, s)
+    debug(1, "  Opts          : {}", opts)
+    debug(1, "")
 
     # -- Handler for printing progress to stderr
     progress = PrintProgress(file=sys.stderr, delta_ms=UPDATE_INTERVAL,
@@ -207,18 +249,10 @@ def main(argv=None):
     # Directory scanning
     # -------------------
     #
-    if opts.shadiff:
-        # Want to look at the entire trees on both sides to show any
-        # duplicates
-        opts.traverse_oneside = True
 
+    # The filter must return True to show the line
+    show_filter = lambda obj: True
 
-    #
-    # Directory scanning
-    # -------------------
-    #
-
-    #hide_unselected = False
     outfile = None
     try:
 
@@ -238,27 +272,22 @@ def main(argv=None):
 
         # -- Scan the database
         shadb = {}
+        shavisited = set()
         if opts.duplicates or opts.shadiff:
 
             # -- Build the sha database
-            shadb = scan_shadb(dirs, opts, error_handler, progress)
-
-            # -- Select duplicates
-            if opts.duplicates:
-                hide_unselected = True
-
-                if right is None:
-                    for objs in shadb.values():
-                        if len(objs) > opts.duplicates:
-                            for obj in objs:
-                                obj.selected = True
-                else:
-                    raise DirscanException("Showing duplicated in compares is not implemented yet")
-                    #if len(set(o.treeid for o in objs)) == len(objs):
+            shadb = scan_shadb(
+                dirs,
+                reverse=opts.reverse,
+                excludes=opts.exclude,
+                onefs=opts.onefs,
+                exception_fn=error_handler,
+                progress=progress
+            )
 
         # -- Open output file
         if opts.outfile:
-            outfile = open(opts.outfile, 'w', errors='surrogateescape')  # pylint: disable=consider-using-with
+            outfile = open(opts.outfile, 'w', encoding='utf-8', errors='surrogateescape')  # pylint: disable=consider-using-with
             outfile.write(get_fileheader())
 
         # Prepare progress values
@@ -273,6 +302,7 @@ def main(argv=None):
                 traverse_oneside=opts.recurse,
                 exception_fn=error_handler,
                 close_during=False,
+                sequential=sequential,
             ):
 
             # Progress printing
@@ -296,7 +326,10 @@ def main(argv=None):
                 change = 'error'
                 text = 'Compare failed: ' + str(err)
 
-            show = True
+            debug(3, "      Compare: {} {}", change, text)
+
+            # Going to show this entry?
+            show = show_filter(objs)
 
             # Show this filetype?
             if not any(o.objtype in filetypes for o in objs):
@@ -306,15 +339,12 @@ def main(argv=None):
             if fmtfields.COMPARE_ARROWS[change][0] not in comparetypes:
                 show = False
 
-            # Is none selected?
-            #if hide_unselected and not any(o.selected for o in objs):
-            #    show = False
-
             # Save histogram info for the change type
             stats.add_stats(change)
 
             # Skip this entry if its not going to be printed
             if not show:
+                debug(3, "     hidden")
                 continue
 
             # Save file histogram info
@@ -325,22 +355,36 @@ def main(argv=None):
                 'relpath': str(path),
                 'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
                 'change': change,
+                'change_t': fmtfields.COMPARE_ARROWS[change][0],
                 'arrow' : fmtfields.COMPARE_ARROWS[change][1],
                 'text'  : text.capitalize(),
-                'extra' : '',
             }
 
-            # Write list of duplicates to the _extra field
-            if opts.duplicates and right is None:
-                sha = objs[0].hashsum()
-                compares = []
-                for same in  shadb[sha]:
-                    if same is objs[0]:
+            # Write list of duplicates to the extra field
+            if opts.duplicates: # and right is None:
+                fields['dupinfo'] = ''
+                fields['dup'] = '   '
+                fields['dupcount'] = 0
+
+                # Technically not needed, due to sequential setting ensures it
+                # will only contain one directory. Probably smart to keep this
+                # as a safeguard. Same applies to the FileObj test.
+                for obj in objs:
+                    if not isinstance(obj, FileObj):
                         continue
-                    compares.append(text_quoter(same.fullpath))
-                del fields['extra']
-                fields['_extra'] = '    duplicated in:\n    ' + \
-                    '\n    '.join(compares) + '\n'
+                    sha = obj.hashsum
+
+                    # Skip if the duplicated entry has already been printed
+                    if duponce and sha in shavisited:
+                        continue
+
+                    shavisited.add(sha)
+                    compares = [str(o[1].fullpath) for o in shadb[sha]]
+                    fields['dupcount'] = len(compares)
+                    if len(compares) > 1:
+                        fields['dupinfo'] = f'File duplicated {len(compares)} times:\n    ' + \
+                            '\n    '.join(compares) + '\n'
+                        fields['dup'] = 'DUP'
 
             # Update the fields from the file objects. This retries the values
             # for the fields which are in actual use. This saves a lot of
@@ -352,13 +396,13 @@ def main(argv=None):
 
             # Print to stdout
             if printfmt:
-                fmtfields.write_fileinfo(printfmt, fields, quoter=text_quoter,
-                                        file=sys.stdout, end=end)
+                fmtfields.write_fileinfo(printfmt, fields, quoter=text_quote,
+                                         file=sys.stdout, end=end)
 
             # Write to file -- don't write if we couldn't get all fields
             if writefmt and not errors:
-                fmtfields.write_fileinfo(writefmt, fields, quoter=file_quoter,
-                                        file=outfile)
+                fmtfields.write_fileinfo(writefmt, fields, quoter=file_quote,
+                                         file=outfile)
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors

@@ -38,7 +38,9 @@ FORMAT template:
 
   Common format fields:
     {relpath}           Common relative path
+    {relpath_p}         Common relative path in unix '/' format
     {change}            Compare relationship, e.g. 'equal'
+    {change_t}          Compare relationship in single letter
     {arrow}             ASCII graphics for ease of indication
     {text}              Human readable text for the change
 
@@ -63,6 +65,11 @@ FORMAT template:
     {dev}               The device number for the filesystem
   In compare mode, the fields for the left and right file objects can be
   accessed by prefixing with 'l_' or 'r_'. e.g. {l_name}.
+
+  Format fields available under --duplicates:
+    {dupinfo}           List of all files that are equal to this file
+    {dup}               The text 'DUP' otherwise '   '
+    {dupcount}          The number of occurrences this file has
 
 SUMMARY_FORMAT template:
   The --summary-format option enables custom output fields for printing the
@@ -107,11 +114,13 @@ SUMMARY_FORMAT template:
     {n_err}             Count of OS errors
     {n_objects}         Count of objects compared
 
-COMPARE_TYPES description:
-  The --compare, -c option allows specifying which difference types are shown
-  when comparing two directories. The argument supports the following combinable
-  options:
+FILTER_TYPES description:
+  The --filter, -f option allows specifying which relation types are shown
+  when scanning or comparing directories. The argument supports the following
+  combinable options:
     e - equal files. Both files are the same type and contents are equal
+    c - content differs. The file exists in both sides and are of the same type,
+        but the contents differs.
     l - left only. The file is only present on LEFT side
     r - right only. The file is only present on RIGHT side
     L - left is newest. The files exists in both sides, but the contents
@@ -120,14 +129,19 @@ COMPARE_TYPES description:
     R - right is newest. The files exists in both sides, but the contents
         differs with the RIGHT file being the newest. Using --ignore=t will
         change this compare type into a 'c'.
-    c - content differs. The file exists in both sides and are of the same type,
-        but the contents differs.
-    t - Different type. The file/object exists in both LEFT and RIGHT side, but
+    n - left has been renamed. This applies when used with --shadiff
+    m - right has been renamed. This applies when used with --shadiff
+    t - different type. The file/object exists in both LEFT and RIGHT side, but
         as different file types, e.g. file and directory.
-    E - Compare error. One object could not be read.
+    E - compare error. One object could not be read.
+    x - excluded. File has been excluded.
+    s - scan. The filter type when scanning a directory
+    d - duplicated. Indicates that the file exists multiple times. Used with
+        --duplicates
+    i - ignored. Any file that is of type NOT shown with --types
 
-  If the COMPARE_TYPES are prefixed with '^', the types will be inverted, where
-  the listed types will not included.
+  If the FILTER_TYPES are prefixed with '^', the types will be inverted, where
+  the listed types will not be included.
 '''
 
 
@@ -153,23 +167,32 @@ def argument_parser():
                       help='''
         Print all file info
         ''')
-    argp.add_argument('-c', '--compare', metavar='COMPARE_TYPES', action='store',
-                      dest='comparetypes', default='', help='''
-        When comparing, show only the following compare relationship:
-            e=equal,
-            l=left only,
-            r=right only,
-            c=changed,
-            L=left is newest,
-            R=right is newest,
-            t=different type,
-            E=error,
-            x=excluded.
-        Prefix with '^' inverts selection. See COMPARE_TYPES under --format-help.
+    argp.add_argument('-d', '--dup', '--duplicates', action='store_true', dest='duplicates',
+                      default=False, help='''
+        Find and show duplicate files.
         ''')
     argp.add_argument('-D', '--debug', action='count', dest='debug',
                       default=0, help='''
         Enable debug output
+        ''')
+    argp.add_argument('-f', '--filter', metavar='FILTER_TYPES', action='store',
+                      dest='comparetypes', default='', help='''
+        When comparing, show only the following compare relationship:
+            e=equal,
+            c=changed,
+            l=left only,
+            L=left is newest,
+            n=left only and renamed from right,
+            r=right only,
+            m=right renamed,
+            R=right is newest,
+            t=different type,
+            E=error,
+            x=excluded,
+            s=scan,
+            d=duplicated,
+            i=ignored.
+        Prefix with '^' inverts selection. See FILTER_TYPES under --format-help.
         ''')
     argp.add_argument('-F', '--format', metavar='FORMAT', dest='format',
                       default=None, help='''
@@ -178,6 +201,11 @@ def argument_parser():
     argp.add_argument('-h', '--human', action='store_true', dest='human',
                       default=False, help='''
         Display human readable sizes
+        ''')
+    argp.add_argument('-H', '--sha', '--shadiff', action='store_true', dest='shadiff', default=None,
+                      help='''
+        Turn on comparing using the calculated sha hashsum of the files. This enables
+        showing files that have been renamed.
         ''')
     argp.add_argument('-i', '--ignore', metavar='IGNORES', action='store',
                       dest='ignore', default='', help='''
@@ -242,8 +270,8 @@ def argument_parser():
         Compare timestamp on files which are otherwise equal. By default difference
         in file timestamp are ignored.
         ''')
-    argp.add_argument('-v', '--verbose', action='store_true', dest='verbose',
-                      default=False, help='''
+    argp.add_argument('-v', '--verbose', action='count', dest='verbose',
+                      default=0, help='''
         Verbose printing during writing to scan output file
         ''')
     argp.add_argument('-x', '--one-file-system', action='store_true', dest='onefs',
@@ -272,15 +300,6 @@ def argument_parser():
                       help='''
         When reading from a scanfiles on the right side, use the given prefix PATH
         to read a subsection of the scan file.
-        ''')
-    argp.add_argument('--shadiff', action='store_true', dest='shadiff', default=None,
-                      help='''
-        Turn on comparing using the calculated sha hashsum of the files. This enables
-        showing files that have been renamed.
-        ''')
-    argp.add_argument('--duplicates', action='count', dest='duplicates', default=False,
-                      help='''
-        Find and show duplicate files (scan mode)
         ''')
     argp.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 

@@ -9,6 +9,9 @@ URL: https://github.com/sveinse/dirscan
 import sys
 import stat
 import string
+
+from dirscan.dirscan import FileObj, LinkObj
+
 if not sys.platform == 'win32':
     from pwd import getpwuid
     from grp import getgrgid
@@ -38,9 +41,9 @@ FMT_L = '{mode_h}  {uid:5} {gid:5}  {size:>10}  {mtime_h}  {path}'
 FMT_COMP_DEF = '{arrow}  {relpath}  :  {text}'
 
 # All compare types
-COMPARE_TYPES_ALL = 'elrcLRtEx'
-COMPARE_TYPES_DEFAULT_SCAN = 's'
-COMPARE_TYPES_DEFAULT_COMPARE = 'rltcLR'
+COMPARE_TYPES_ALL = 'elrcLRnmtExsdi'
+COMPARE_TYPES_DEFAULT_SCAN = 'sd'
+COMPARE_TYPES_DEFAULT_COMPARE = 'rltcLRnm'
 
 # All file types
 FILE_TYPES_ALL = 'fdlbcps'
@@ -58,7 +61,7 @@ FILE_FIELDS = {
     'name': lambda o: o.name,
 
     # The full file path
-    'path': lambda o: o.fullpath,
+    'path': lambda o: str(o.fullpath),
 
     # User
     'user': lambda o: getpwuid(o.uid).pw_name,
@@ -98,14 +101,15 @@ COMPARE_ARROWS = {
     'excluded'       : ('x', '    x'),
     'right_only'     : ('r', '   >>'),
     'left_only'      : ('l', '<<   '),
-    'right_renamed'  : ('m', 'r  >>'),
-    'left_renamed'   : ('n', '<<  r'),
-    'different_type' : ('t', '<~~~>'),
+    'right_renamed'  : ('m', 'R-->>'),
+    'left_renamed'   : ('n', '<<--R'),
+    'different_type' : ('t', '<~T~>'),
     'changed'        : ('c', '<--->'),
     'left_newer'     : ('L', '<<-->'),
     'right_newer'    : ('R', '<-->>'),
     'equal'          : ('e', '     '),
     'scan'           : ('s', '     '),
+    'duplicated'     : ('d', '  DUP'),
     'skipped'        : ('i', '    -'),
 }
 
@@ -230,9 +234,9 @@ def format_data(obj):
         information, depending on type. Files return their sha256 hashsum, links
         their symlink target.
     '''
-    if obj.objtype == 'f' and obj.size:
+    if isinstance(obj, FileObj) and obj.size:
         return obj.hashsum_hex
-    if obj.objtype == 'l':
+    if isinstance(obj, LinkObj):
         return obj.link
     return None
 
@@ -293,7 +297,9 @@ def write_fileinfo(formatstr, fields, quoter=None, file=sys.stdout, end='\n'):
     if not quoter:
         quoter = lambda a: a
 
-    file.write(Formatter(quoter).format(formatstr, **fields) + end)
+    line = Formatter(quoter).format(formatstr, **fields)
+    if line:
+        file.write(line + end)
 
 
 def write_summary(summary, fields, file=sys.stdout, end='\n'):
@@ -307,43 +313,45 @@ def write_summary(summary, fields, file=sys.stdout, end='\n'):
             file.write(line.format(**fields) + end)
 
 
-def get_compare_types(comparestr):
+def get_compare_types(comparestr, default):
     ''' Parse the compare types argument to --compare '''
     if not comparestr:
-        return comparestr
-
-    invert = False
-    cset = set(comparestr)
-    if comparestr[0] == '^':
-        invert = True
+        return default
+    if comparestr.lower() == 'all':
+        return set(COMPARE_TYPES_ALL)
+    invert = comparestr.startswith('^')
+    if invert:
         cset = set(comparestr[1:])
+    else:
+        cset = set(comparestr)
     foreign = cset.difference(COMPARE_TYPES_ALL)
     if foreign:
         raise ValueError((
-            f"Unknown compare type(s): {''.join(foreign)}, "
-            f"valid values {''.join(sorted(COMPARE_TYPES_ALL))}"))
+            f"Unknown filter: '{''.join(foreign)}', "
+            f"valid values in '{''.join(sorted(COMPARE_TYPES_ALL))}' or 'all'"))
     if invert:
-        return set(COMPARE_TYPES_ALL).difference(cset)
+        return set(default).difference(cset)
     return cset
 
 
-def get_file_types(typestr):
+def get_file_types(typestr, default):
     ''' Parse the type to --types '''
     if not typestr:
-        return typestr
-
-    invert = False
-    cset = set(typestr)
-    if typestr[0] == '^':
-        invert = True
+        return default
+    if typestr.lower() == 'all':
+        return set(FILE_TYPES_ALL)
+    invert = typestr.startswith('^')
+    if invert:
         cset = set(typestr[1:])
+    else:
+        cset = set(typestr)
     foreign = cset.difference(FILE_TYPES_ALL)
     if foreign:
         raise ValueError((
-            f"Unknown file type(s): {''.join(foreign)}, "
-            f"valid values {''.join(sorted(FILE_TYPES_ALL))}"))
+            f"Unknown file type(s): '{''.join(foreign)}', "
+            f"valid values '{''.join(sorted(FILE_TYPES_ALL))}' or 'all'"))
     if invert:
-        return set(FILE_TYPES_ALL).difference(cset)
+        return set(default).difference(cset)
     return cset
 
 

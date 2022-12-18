@@ -17,9 +17,6 @@
 
 ## sveinse 2018-05-18:
 
-- Add option for amending default option to --compare, -c by using +v and -v.
-  Add option for all options
-
 - Separate metric in scandirs() for errors? Problem is how to count
   the histograms when there is an partial error in only one of the trees.
   Should it count the whole compare as error, or the non-errored object?

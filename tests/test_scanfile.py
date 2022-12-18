@@ -489,53 +489,86 @@ s,,,,,,,s
     assert isinstance(c[5], ds.SocketObj)
 
 
-def test_scanfile_text_quoter():
+ENCODES = (
+    # (which, encode/decode, unencoded_text, encoded_text)
+    ('all', 'ed', 'ABCDEF', 'ABCDEF'),
+    ('all', 'ed', '/\\', '/\\\\'),  # /\ -> /\\ Backslash-quoting
+    ('all', 'ed', '\x00\x01\x7f', '\\x00\\x01\\x7f'),   # Low values quoting
+    ('all', 'ed', '\U0001f44d', '👍'),  # Unicode emoji, as utf-8 \xf0\x9f\x99\x8f
+    ('all', 'ed', '👍', '👍'),
+    ('all', 'ed', 'Δ', 'Δ'),
+    ('all', 'ed', 'æ', 'æ'),  # As utf-8 \xc3\xa6
+    ('all', 'ed', '\udcfa', '\\xfa'),  # Surrogate escape for 0x80-0xff on some file systems
+    ('all', 'ed', '@Δ😇ab', '@Δ😇ab'),
+    ('all', 'd',  '\x40\u0394\U0001f607ab', '\\x40\\u0394\\U0001f607ab'),
+    ('all', 'd',  '\n', '\\n'),
 
-    a = '\x00\x1FAB CD,EF\\GH'
-    b = '\\x00\\x1fAB CD,EF\\\\GH'
+    ('text', 'ed', ',', ','),
+    ('text', 'ed', ' ', ' '),
+    ('text', 'ed', '-', '-'),
+    ('text', 'ed', '\\-', '\\\\-'),
+    ('text', 'ed', '\\,', '\\\\,'),
+    ('text', 'ed', '\\ ', '\\\\ '),
 
-    assert b == scanfile.text_quoter(a)
-    assert a == scanfile.unquote(b)
-
-    # Test surrogat encoding error
-    a = 'g\udcfah\udcfao\udcfa~1.\udcfa_'
-    b = 'g\\xfah\\xfao\\xfa~1.\\xfa_'
-
-    assert b == scanfile.text_quoter(a)
-    assert a == scanfile.unquote(b)
-
-
-def test_scanfile_file_quoter():
-
-    a = '\x00\x1FAB CD,EF\\GH'
-    b = '\\x00\\x1fAB\\ CD\\-EF\\\\GH'
-
-    assert b == scanfile.file_quoter(a)
-    assert a == scanfile.unquote(b)
-
-    # Test surrogat encoding error
-    a = 'g\udcfah\udcfao\udcfa~1.\udcfa_'
-    b = 'g\\xfah\\xfao\\xfa~1.\\xfa_'
-
-    assert b == scanfile.file_quoter(a)
-    assert a == scanfile.unquote(b)
+    ('file', 'ed', '-', '-'),
+    ('file', 'e',  ' ', '\\ '),  # Encode only, when ' ' encodes to '\\ '
+    ('file', 'd',  ' ', ' '),    # Decode only
+    ('file', 'd',  ' ', '\\ '),  # Decode only
+    ('file', 'ed', ',',     '\\-'),
+    ('file', 'ed', '\\-',   '\\\\-'),
+    ('file', 'ed', '\\,',   '\\\\\\-'),
+    ('file', 'ed', '\\\\-', '\\\\\\\\-'),
+    ('file', 'e',  '\\ ', '\\\\\\ '),  # Encode only, when ' ' encodes to '\\ '
+    ('file', 'd',  '\\ ', '\\\\ '),    # Decode only
+    ('file', 'd',  '\\ ', '\\\\\\ '),  # Decode only
+)
 
 
-def test_scanfile_unquote():
+def test_scanfile_q_text(): #text_quoter():
+
+    for n, (i, d, a, b) in enumerate(ENCODES):
+        if i not in ('all', 'text'):
+            continue
+
+        if 'e' in d:
+            q = scanfile.text_quote(a)
+            assert b == q
+
+        if 'd' in d:
+            u = scanfile.text_unquote(b)
+            assert a == u
+
+
+def test_scanfile_q_file(): #_quoter():
+
+    for n, (i, d, a, b) in enumerate(ENCODES):
+        if i not in ('all', 'file'):
+            continue
+        q = u = ""
+
+        if 'e' in d:
+            q = scanfile.file_quote(a)
+            assert b == q
+
+        if 'd' in d:
+            u = scanfile.file_unquote(b)
+            assert a == u
+
+
+def test_scanfile_q_invalid():
 
     # Test do-nothing result
     a = "SIMPLE"
-    assert a == scanfile.unquote(a)
+    assert a == scanfile.file_unquote(a)
 
     # Test invalid quote symbol
     a = "\\q"
     with raises(ds.DirscanException) as exc:
-        scanfile.unquote(a)
+        scanfile.file_unquote(a)
     assert "Unknown escape char" in str(exc.value)
 
     # Test unfinished string
-
     a = "End\\"
     with raises(ds.DirscanException) as exc:
-        scanfile.unquote(a)
+        scanfile.file_unquote(a)
     assert "Incomplete escape string" in str(exc.value)
