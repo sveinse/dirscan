@@ -160,7 +160,7 @@ d,,,,,,,.
     assert isinstance(d, ds.DirObj)
     assert d.name == 'a'
     assert d.path == ''
-    assert d.size == None
+    assert d.size == 0
     assert d.mode == 0
     assert d.uid == 0
     assert d.gid == 0
@@ -261,7 +261,7 @@ f'''#!ds:v1
 '''))
         with raises(ds.DirscanException) as exc:
             ds.read_scanfile('a')
-        assert "Data error, Scanfile field error: invalid literal for int()" in str(exc.value)
+        assert "Field error, invalid literal for int()" in str(exc.value)
 
     # Test for negative number in the numeric fields
     tests = (
@@ -278,7 +278,7 @@ f'''#!ds:v1
 '''))
         with raises(ds.DirscanException) as exc:
             ds.read_scanfile('a')
-        assert "Data error, Scanfile field error: Number must be positive" in str(exc.value)
+        assert "Field error, number must be positive" in str(exc.value)
 
     # FIXME: Add test of quoting of the data and path fields
 

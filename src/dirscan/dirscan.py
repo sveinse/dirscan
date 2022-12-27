@@ -6,7 +6,10 @@ Copyright (C) 2010-2022 Svein Seldal
 This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
-from typing import Optional, Union
+from __future__ import annotations  # for Python 3.7-3.9
+from typing import (Any, Callable, Collection, Dict, Generator, List, Optional,
+                    Type, Union, Tuple)
+
 import os
 import datetime
 import stat as osstat
@@ -17,6 +20,7 @@ import fnmatch
 import binascii
 from pathlib import Path
 
+from typing_extensions import NotRequired, TypedDict  # for Python <3.11
 from dirscan.log import debug
 
 
@@ -28,6 +32,28 @@ HASHCHUNKSIZE = 16*4096
 
 # Minimum difference in seconds to consider it a changed timestamp
 TIME_THRESHOLD = 1
+
+
+# Typings
+TPath = Union[str, Path]
+
+
+class DirscanDict(TypedDict):
+    ''' Type to declare the contents of the dict representation of a
+        DirscanObj
+    '''
+    objtype: str
+    name: str
+    path: str
+    mode: int
+    uid: int
+    gid: int
+    dev: int
+    size: int
+    mtime: float
+    hashsum: NotRequired[str]
+    link: NotRequired[str]
+    children: NotRequired[Collection['DirscanDict']]  # type: ignore
 
 
 class DirscanException(Exception):
@@ -47,54 +73,66 @@ class DirscanObj:
     # Declare to help type checkers
     objtype: str
     objname: str
+    objmode: int
 
     __slots__ = ('name', 'path', 'excluded',
                  'mode', 'uid', 'gid', 'dev', 'size', '_mtime')
 
-    def __init__(self, name, *, path='', stat):
+    # Type definitions
+    name: str
+    path: TPath
+    excluded: bool
+    mode: int
+    uid: int
+    gid: int
+    dev: int
+    size: int
+    _mtime: float
+
+    def __init__(self, name: str, *, path: TPath='', stat: os.stat_result):
 
         # Ensure the name does not end with a slash, that messes up path
         # calculations later in directory compares
         if name != '/':
             name = name.rstrip('/')
 
-        self.name: str = name
-        self.path: Union[Path, str] = path
+        self.name = name
+        self.path = path
         self.excluded = False
 
         # Only save the actual file mode, not the type field. However, this
         # will lose additional mode field information.
-        self.mode: int = osstat.S_IMODE(stat.st_mode)
-        self.uid: int = stat.st_uid
-        self.gid: int = stat.st_gid
-        self.dev: int = stat.st_dev
-        self.size: int = stat.st_size
-        self._mtime: float = stat.st_mtime
+        self.mode = osstat.S_IMODE(stat.st_mode)
+        self.uid = stat.st_uid
+        self.gid = stat.st_gid
+        self.dev = stat.st_dev
+        self.size = stat.st_size
+        self._mtime = stat.st_mtime
 
     @property
-    def fullpath(self):
+    def fullpath(self) -> Path:
         ''' Return the complete path of the object '''
         return Path(self.path, self.name)
 
     @property
-    def mtime(self):
+    def mtime(self) -> datetime.datetime:
         ''' Return the modified timestamp of the file '''
         return datetime.datetime.fromtimestamp(self._mtime)
 
-    def children(self):  # pylint: disable=no-self-use
+    def children(self) -> Tuple['DirscanObj', ...]:  # pylint: disable=no-self-use
         ''' Return iterator of sub objects. Non-directory file objects that
             does not have any children will return an empty tuple. '''
         return ()
 
-    def close(self):
+    def close(self) -> None:
         ''' Delete any allocated objecs within this class '''
 
-    def compare(self, other: 'DirscanObj'):
+    def compare(self, other: 'DirscanObj') -> Generator[str, None, None]:
         ''' Return a list of differences '''
-        if type(self) is not type(other):
+        if not isinstance(other, type(self)):
             yield 'type mismatch'
             return
-        time_delta = self._mtime - other._mtime
+        time_delta = self._mtime - other._mtime  # pylint: disable=protected-access
         if time_delta > TIME_THRESHOLD:
             yield 'newer'
         if time_delta < -TIME_THRESHOLD:
@@ -106,32 +144,35 @@ class DirscanObj:
         if self.gid != other.gid:
             yield 'GID differs'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}({self.path},{self.name})"
 
-    def exclude_otherfs(self, other):
-        ''' Set excluded flag if this object resides on another fs than other  '''
+    def exclude_otherfs(self, other: 'DirscanObj') -> None:
+        ''' Set excluded flag if this object resides on
+            another fs than other  '''
 
         # Note that self.excluded will be set on NonExistingObj() since they
         # have dev = None
         if self.dev != other.dev:
             self.excluded = True
 
-    def exclude_files(self, excludes, base):
+    def exclude_files(self, excludes: Collection[TPath],
+                      base: 'DirscanObj') -> None:
         ''' Set excluded flag if any of the entries in exludes matches
             this object '''
         for ex in excludes:
             ex = Path(base.fullpath, ex)
-            if fnmatch.fnmatch(self.fullpath, ex):
+            if fnmatch.fnmatch(self.fullpath, ex):  # type: ignore
                 self.excluded = True
                 return
 
-    def to_dict(self):
+    def to_dict(self) -> DirscanDict:
         ''' Return a dict representation of this class '''
-        data = {k: getattr(self, k) for k in (
+        data: DirscanDict = {  # type: ignore
+            k: getattr(self, k) for k in (
                 # Not exactly __slots__
                 'objtype', 'name', 'path', 'mode', 'uid', 'gid', 'dev', 'size',
-                )}
+            )}
         data['mtime'] = self._mtime
         return data
 
@@ -144,26 +185,28 @@ class FileObj(DirscanObj):
 
     __slots__ = ('_hashsum',)
 
-    def __init__(self, name, *, path='', stat, hashsum: Optional[bytes]=None):
+    # Type definitions
+    _hashsum: Optional[bytes]
+
+    def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
+                 hashsum: Optional[bytes]=None):
         super().__init__(name, path=path, stat=stat)
 
         # Protocol:
         #   None: Unknown value, will read from fs if self.hashsum is accessed
-        #   False: Unknown value, will not read from fs
+        #   Falsey: Unknown value, will not read from fs
         #   <*>: Stored hashsum
         self._hashsum = hashsum
 
     @property
-    def hashsum(self) -> Optional[bytes]:
+    def hashsum(self) -> bytes:
         ''' Return the hashsum of the file '''
 
         # This is not a part of the parse() structure because it can take
         # considerable time to evaluate the hashsum, hence its done on
         # need-to have basis.
-        if self._hashsum:
-            return self._hashsum
 
-        # Only query the fs if None, other falsey values won't
+        # Only query the fs if None
         if self._hashsum is None:
             shahash = HASHALGORITHM()
             with open(self.fullpath, 'rb') as shafile:
@@ -173,22 +216,27 @@ class FileObj(DirscanObj):
                         break
                     shahash.update(data)
                 self._hashsum = shahash.digest()
+
         return self._hashsum
 
     @property
-    def hashsum_hex(self):
+    def hashsum_hex(self) -> str:
         ''' Return the hex hashsum of the file '''
         return binascii.hexlify(self.hashsum).decode('ascii')
 
-    def compare(self, other):
+    def compare(self, other: DirscanObj) -> Generator[str, None, None]:
         ''' Compare two file objects '''
+        if not isinstance(other, type(self)):
+            yield 'type mismatch'
+            return
         yield from super().compare(other)
+        # pylint: disable=protected-access
         if self.size != other.size:
             yield 'size differs'
-        elif self._hashsum is False and other._hashsum is False:
+        elif self._hashsum == b'' and other._hashsum == b'':
             # Don't compare if neither has hashsum data
             pass
-        elif self._hashsum is False or other._hashsum is False:
+        elif self._hashsum == b'' or other._hashsum == b'':
             yield 'W:cannot compare'
         elif self._hashsum or other._hashsum:
             # Does either of them have _hashsum set? If yes, make use of
@@ -199,10 +247,11 @@ class FileObj(DirscanObj):
         elif not filecmp.cmp(self.fullpath, other.fullpath, shallow=False):
             yield 'contents differs'
 
-    def to_dict(self):
+    def to_dict(self) -> DirscanDict:
         ''' Return a dict representation of this class '''
         data = super().to_dict()
-        data['hashsum'] = self._hashsum or None
+        if self._hashsum is not None:
+            data['hashsum'] = self.hashsum_hex
         return data
 
 
@@ -214,17 +263,24 @@ class LinkObj(DirscanObj):
 
     __slots__ = ('link',)
 
-    def __init__(self, name, *, path='', stat, link=None):
+    # Type definitions
+    link: str
+
+    def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
+                 link:str=''):
         super().__init__(name, path=path, stat=stat)
         self.link = link
 
-    def compare(self, other: 'DirscanObj'):
+    def compare(self, other: 'DirscanObj') -> Generator[str, None, None]:
         ''' Compare two link objects '''
+        if not isinstance(other, type(self)):
+            yield 'type mismatch'
+            return
         yield from super().compare(other)
         if self.link != other.link:
             yield 'link differs'
 
-    def to_dict(self):
+    def to_dict(self) -> DirscanDict:
         ''' Return a dict representation of this class '''
         data = super().to_dict()
         data['link'] = self.link
@@ -239,41 +295,38 @@ class DirObj(DirscanObj):
 
     __slots__ = ('_children',)
 
-    def __init__(self, name, *, path='', stat, children=None):
+    _children: Optional[Tuple[DirscanObj, ...]]
+
+    def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
+                 children: Optional[Collection[DirscanObj]]=None):
         super().__init__(name, path=path, stat=stat)
-        self.size = None
 
-        # Protocol:
-        #   None: Unknown value, will read from fs
-        #   False: Unknown value, will not read from fs
-        self._children = children
+        # Override the stat default filled in by super().__init__
+        self.size = 0
 
-    def close(self):
+        # Setting to None will read from fs. All other values won't
+        self._children = children if children is None else tuple(children)
+
+    def close(self) -> None:
         ''' Delete all used references to allow GC cleanup '''
         super().close()
         self._children = None
 
-    def children(self):
+    def children(self) -> Tuple[DirscanObj, ...]:
         ''' Return an iterator of the sub object names '''
         if self._children is None:
             self._children = tuple(create_from_fsdir(self.fullpath))
         return self._children
 
-    def set_children(self, children):
+    def set_children(self, children: Collection[DirscanObj]) -> None:
         ''' Set the directory children '''
-        self._children = children
+        self._children = tuple(children)
 
-    def to_dict(self):
+    def to_dict(self) -> DirscanDict:
         ''' Return a dict representation of this class '''
         data = super().to_dict()
-        data['children'] = [c.to_dict() for c in self._children or {}]
+        data['children'] = tuple(c.to_dict() for c in self._children or {})
         return data
-
-    def traverse(self):
-        ''' Traverse the directory tree. It will traverse the fs if necessary '''
-        for _ in walkdirs((self,), close_during=False):
-            pass
-        return self
 
 
 class BlockDevObj(DirscanObj):
@@ -311,13 +364,13 @@ class NonExistingObj(DirscanObj):
     objtype = '-'
     objname = 'missing file'
 
-    def __init__(self, name, *, path=''):
-        stat = os.stat_result((0, None, None, None, None, None, None, None, None, None))
+    def __init__(self, name: str, *, path: TPath=''):
+        stat = os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
         super().__init__(name, path=path, stat=stat)
 
 
-# Tuple of all file objects. NonExistingObj is deliberately omitted
-ALL_FILEOBJECT_CLASS = (
+# Tuple of all real file objects. NonExistingObj is deliberately omitted
+ALL_FILEOBJECT_CLASS: Tuple[Type[DirscanObj], ...] = (
     FileObj,
     DirObj,
     LinkObj,
@@ -328,10 +381,10 @@ ALL_FILEOBJECT_CLASS = (
 )
 
 # Dict of all file object class, indexed by the stat mode key (.objmode)
-FILETYPES = {obj.objmode: obj for obj in ALL_FILEOBJECT_CLASS}
+FILETYPES = {cls.objmode: cls for cls in ALL_FILEOBJECT_CLASS}
 
 # Dict pointing to the class indexed by objtype
-OBJTYPES = {obj.objtype: obj for obj in ALL_FILEOBJECT_CLASS}
+OBJTYPES = {cls.objtype: cls for cls in ALL_FILEOBJECT_CLASS}
 
 
 
@@ -342,14 +395,17 @@ OBJTYPES = {obj.objtype: obj for obj in ALL_FILEOBJECT_CLASS}
 #
 ############################################################
 
-def create_from_fs(name, path='', stat=None):
+def create_from_fs(name: str, path: TPath='',
+                   stat: Optional[os.stat_result]=None,
+                   ) -> DirscanObj:
     ''' Create a new object from file system path and return an
         instance of the object. The object type returned is based on
         stat of the actual file system entry.'''
     fullpath = Path(path, name)
     if not stat:
-        stat = os.lstat(fullpath)
-    objcls = FILETYPES.get(osstat.S_IFMT(stat.st_mode))
+        stat = os.stat(fullpath, follow_symlinks=False)
+    mode = osstat.S_IFMT(stat.st_mode)
+    objcls: Optional[Type[DirscanObj]] = FILETYPES.get(mode)
     if not objcls:
         raise DirscanException(f"{fullpath}: Uknown file type")
 
@@ -366,7 +422,7 @@ def create_from_fs(name, path='', stat=None):
     return objcls(name, path=path, stat=stat, **kwargs)
 
 
-def create_from_fsdir(path):
+def create_from_fsdir(path: Path) -> Generator[DirscanObj, None, None]:
     ''' Generator that produces file object instances for directory 'path' '''
 
     # Iterate over the directory
@@ -378,56 +434,67 @@ def create_from_fsdir(path):
             yield create_from_fs(direntry.name, path=path, stat=stat)
 
 
-def create_from_dict(data):
+def create_from_dict(data: DirscanDict) -> DirscanObj:
     ''' Create a new fs object from a dict '''
 
     # Get the file object class from the type
     objtype = data['objtype']
-    objcls = OBJTYPES.get(objtype)
+    objcls: Optional[Type[DirscanObj]] = OBJTYPES.get(objtype)
     if not objcls:
         raise DirscanException(f"Unknown object type '{objtype}'")
 
     # Class parameters
-    kwargs = {
+    kwargs: Dict[str, Any] = {
         'name': data['name'],
         'path': data.get('path',''),
     }
 
     # Do necessary post processing of the file object
     if objcls is FileObj:
-        if data.get('hashsum'):
-            hashsum = binascii.unhexlify(data['hashsum'])
+        _hashsum = data.get('hashsum')
+        if _hashsum is not None:
+            hashsum = binascii.unhexlify(_hashsum)
         elif data.get('size') == 0:
             # Hashsum is normally not defined if the size is 0.
             hashsum = HASHALGORITHM().digest()
         else:
-            # Setting hashsum to False indicates that the fs should not be
+            # Setting hashsum to falsey indicates that the fs should not be
             # queried to find the result
-            hashsum = False
+            hashsum = b''
         kwargs['hashsum'] = hashsum
 
     elif objcls is LinkObj:
-        kwargs['link'] = data['link']
+        kwargs['link'] = data['link']  # pyright: ignore
 
     elif objcls is DirObj:
         if data.get('children'):
             # This will recurse all children
-            kwargs['children'] = [create_from_dict(c) for c in data['children']]
+            kwargs['children'] = tuple(
+                create_from_dict(c) for c in data['children']  # pyright: ignore
+            )
         else:
-            # Setting this to empty tuple prevents the class from querying the fs
+            # Setting this to empty tuple prevents the class
+            # from querying the fs
             kwargs['children'] = ()
 
     # If the mode carries object type fields, check this against the object
     objmode = osstat.S_IFMT(data.get('mode', objcls.objmode))
     if objmode and objmode != objcls.objmode:
-        raise DirscanException(f"Object type '{objtype}' does not match mode 'o{data['mode']:o}'")
+        raise DirscanException(f"Object type '{objtype}' does not match mode "
+                               f"'o{data['mode']:o}'")
 
     # Make a fake stat element from the given meta-data
-    # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-    fakestat = os.stat_result((
-        data.get('mode',0)|objcls.objmode, None, None, None,
-        data.get('uid'), data.get('gid'), data.get('size'),
-        None, data.get('mtime'), None
+    fakestat = os.stat_result((  # type: ignore
+        data.get('mode', 0) | objcls.objmode,  # st_mode
+        0,  # st_ino
+        0,  # st_dev
+        0,  # st_nlink
+        data.get('uid', 0),  # st_uid
+        data.get('gid', 0),  # st_gid
+        data.get('size', 0),  # st_size
+        0,  # st_atime
+        data.get('mtime', 0.),  # st_mtime
+        0,  # st_ctime
     ))
     kwargs['stat'] = fakestat
 
@@ -443,9 +510,15 @@ def create_from_dict(data):
 #
 ############################################################
 
-def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
-             traverse_oneside=None, exception_fn=None, close_during=True,
-             sequential=False):
+def walkdirs(dirs: Collection[DirscanObj],
+             reverse: bool=False,
+             excludes: Optional[Collection[TPath]]=None,
+             onefs: bool=False,
+             traverse_oneside: Optional[bool]=None,
+             exception_fn: Optional[Callable[[Exception], bool]]=None,
+             close_during: bool=True,
+             sequential: bool=False,
+             ) -> Generator[Tuple[Path, Tuple[DirscanObj, ...]], None, None]:
     '''
     Generator function that recursively traverses the directories in
     list ``dirs``. This function can scan a file system or compare two
@@ -504,7 +577,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         for obj in dirs:
             yield from walkdirs((obj,), reverse=reverse, excludes=excludes,
                                 onefs=onefs, traverse_oneside=traverse_oneside,
-                                exception_fn=exception_fn, close_during=close_during,
+                                exception_fn=exception_fn,
+                                close_during=close_during,
                                 sequential=False)
         return
 
@@ -534,7 +608,7 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
         base.append(obj)
 
     # Start the queue
-    queue = [(Path('.'), tuple(base))]
+    queue: List[Tuple[Path, Tuple[DirscanObj, ...]]] = [(Path('.'), tuple(base))]
 
     debug(2, "")
 
@@ -597,8 +671,8 @@ def walkdirs(dirs, reverse=False, excludes=None, onefs=False,
                 # Append the children collected so far
                 childobjs.append(children)
 
-        # Merge all found objects into a single list of unique, sorted, children names
-        # and iterate over it
+        # Merge all found objects into a single list of unique, sorted,
+        # children names and iterate over it
         for name in sorted(set(itertools.chain.from_iterable(childobjs)),
                            reverse=not reverse):
 

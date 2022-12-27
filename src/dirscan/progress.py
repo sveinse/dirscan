@@ -6,6 +6,7 @@ Copyright (C) 2010-2022 Svein Seldal
 This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
+from typing import Any, TextIO
 import sys
 import datetime
 
@@ -20,7 +21,8 @@ class PrintProgress:
         print() will also overwrite the last progress() printed line.
          '''
 
-    def __init__(self, file=sys.stdout, delta_ms=200, show_progress=True):
+    def __init__(self, file: TextIO=sys.stdout, delta_ms: int=200,
+                 show_progress: bool=True):
         ''' file - stream to print to
             delta_ms - Minimum time between each progress() prints
             show_progress - Enables progress printing altogether
@@ -31,7 +33,7 @@ class PrintProgress:
         self.show_progress = show_progress
         self.next_clear = False
 
-    def print(self, *args, **kwargs):
+    def print(self, *args: Any, **kwargs: Any) -> None:
         ''' Print a message '''
 
         if self.next_clear:
@@ -42,7 +44,7 @@ class PrintProgress:
         print(*args, file=self.file, **kwargs)
         self.file.flush()
 
-    def progress(self, *args, **kwargs):
+    def progress(self, *args: Any, **kwargs: Any) -> None:
         ''' Print a progress message. force will print the
             progress message regardless of time '''
         force = kwargs.get('false')
@@ -56,7 +58,7 @@ class PrintProgress:
                 self.print(*args, end='', **kwargs)
                 self.next_clear = True
 
-    def close(self):
+    def close(self) -> None:
         ''' Close the progress '''
 
         if self.next_clear:

@@ -6,66 +6,38 @@ Copyright (C) 2010-2022 Svein Seldal
 This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
-from typing import Dict, List, Tuple
+from typing import Callable, Collection, List, Optional
 from pathlib import PurePosixPath
 import sys
 
-import dirscan.formatfields as fmtfields
 from dirscan.log import set_debug, debug
 from dirscan.scanfile import read_scanfile, get_fileheader, is_scanfile
 from dirscan.scanfile import file_quote, text_quote, SCANFILE_FORMAT
-from dirscan.compare import dir_compare1, dir_compare2
-from dirscan.dirscan import walkdirs, create_from_fs, DirscanException, DirscanObj, FileObj
+from dirscan.compare import dir_compare1, dir_compare2, scan_shadb
+from dirscan.dirscan import (
+    walkdirs, create_from_fs, DirscanException, DirscanObj, FileObj,
+)
+from dirscan.formatfields import (
+    get_compare_types, get_file_types, get_fieldnames,
+    get_fields, write_fileinfo, write_summary, Statistics,
+)
 from dirscan.usage import argument_parser, DIRSCAN_FORMAT_HELP
 from dirscan.progress import PrintProgress
+import dirscan.formatfields as fmtfields
+
+# Typings
+from dirscan.formatfields import TFields, TSummary
 
 
 # Update interval of the progress in ms
 UPDATE_INTERVAL = 300
 
 
-def scan_shadb(dirs, reverse=False, excludes=None, onefs=False,
-               exception_fn=None, progress=None):
-    """ Build a sha database for a scanned tree """
-
-    # -- Build the sha database
-    shadb: Dict[bytes, List[Tuple[int, DirscanObj]]] = {}
-
-    # Prepare progress values
-    count = 0
-
-    for i, sdir in enumerate(dirs):
-        for (path, objs) in walkdirs(
-                [sdir],
-                reverse=reverse,
-                excludes=excludes,
-                onefs=onefs,
-                exception_fn=exception_fn,
-                close_during=False):
-
-            # Progress printing
-            count += 1
-            if progress:
-                progress.progress("Scanning %s files:  %s " %(count, objs[0].fullpath))
-
-            # Evaluate the hashsum for each of the objects and store in
-            # sha database
-            for obj in objs:
-                if not isinstance(obj, FileObj) or obj.excluded:
-                    continue
-
-                try:
-                    # Get the hashsum and store it to the shadb list
-                    shadb.setdefault(obj.hashsum, []).append((i, obj))
-                except IOError as err:
-                    if not exception_fn or not exception_fn(err):
-                        raise
-
-    return shadb
-
-
-def main(argv=None):
+def main(argv=None):  # type: ignore
     ''' Dirscan command-line entry-point '''
+
+    # -- Typings
+    summary: List[TSummary]
 
     #
     # Input validation and option parsing
@@ -82,8 +54,8 @@ def main(argv=None):
     # -- Parsing
     opts = argp.parse_args(args=argv)
     prog = argp.prog
-    left = opts.dir1
-    right = opts.dir2
+    left: Optional[str] = opts.dir1
+    right: Optional[str] = opts.dir2
     set_debug(opts.debug)
     end = '\x00' if opts.print0 else '\n'
 
@@ -102,7 +74,7 @@ def main(argv=None):
     if right is None or opts.duplicates:
         # -- Settings for scanning
         printfmt = fmtfields.FMT_DEF
-        writefmt = None
+        writefmt = ''
         comparetypes = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
         filetypes = fmtfields.FILE_TYPES_DEFAULT_SCAN
         field_prefix = ['']
@@ -117,10 +89,10 @@ def main(argv=None):
         if opts.outfile:
             writefmt = SCANFILE_FORMAT
             if not opts.verbose:
-                printfmt = None
+                printfmt = ''
         else:
             if opts.quiet:
-                printfmt = None
+                printfmt = ''
             elif opts.all and opts.long:
                 printfmt = fmtfields.FMT_AHL if opts.human else fmtfields.FMT_AL
             elif opts.all:
@@ -148,7 +120,7 @@ def main(argv=None):
     else:
         # -- Settings for comparing
         printfmt = fmtfields.FMT_COMP_DEF
-        writefmt = None
+        writefmt = ''
         comparetypes = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
         filetypes = fmtfields.FILE_TYPES_DEFAULT_COMPARE
         field_prefix = ['l_', 'r_']
@@ -158,9 +130,10 @@ def main(argv=None):
         sequential = False
 
         if opts.outfile:
-            argp.error("Writing to an outfile is not supported when comparing directories")
+            argp.error("Writing to an outfile is not supported "
+                       "when comparing directories")
         if opts.quiet:
-            printfmt = None
+            printfmt = ''
 
         # The all or verbose option will show all compare types
         if opts.all or opts.verbose:
@@ -178,10 +151,10 @@ def main(argv=None):
     # -- User provided formats overrides any defaults
     try:
         printfmt = opts.format or printfmt
-        comparetypes = fmtfields.get_compare_types(opts.comparetypes, comparetypes)
-        filetypes = fmtfields.get_file_types(opts.filetypes, filetypes)
+        comparetypes = get_compare_types(opts.comparetypes, comparetypes)
+        filetypes = get_file_types(opts.filetypes, filetypes)
     except ValueError as err:
-        argp.error(err)
+        argp.error(str(err))
 
     # -- Extra verbose
     if opts.verbose > 1:
@@ -206,9 +179,9 @@ def main(argv=None):
     try:
         fieldnames = set()
         if printfmt:
-            fieldnames.update(fmtfields.get_fieldnames(printfmt))
+            fieldnames.update(get_fieldnames(printfmt))
         if writefmt:
-            fieldnames.update(fmtfields.get_fieldnames(writefmt))
+            fieldnames.update(get_fieldnames(writefmt))
 
         # FIXME: Evaluate valid format fields in summary, printfmt and writefmt
     except ValueError as err:
@@ -233,16 +206,17 @@ def main(argv=None):
                              show_progress=opts.progress)
 
     # -- Prepare the histograms to collect statistics
-    stats = fmtfields.Statistics(left, right)
+    stats = Statistics(left, right)
 
     # -- Error handler
-    def error_handler(exception):
+    def error_handler(exception: Exception) -> bool:
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
             progress.print(f"{prog}: {exception}")
 
-        # True will swallow the exception. In debug mode the error will be raised
+        # True will swallow the exception. In debug mode
+        # the error will be raised
         return not opts.debug
 
     #
@@ -251,24 +225,26 @@ def main(argv=None):
     #
 
     # The filter must return True to show the line
-    show_filter = lambda obj: True
+    show_filter: Callable[[Collection[DirscanObj]], bool] = lambda objs: True
 
     outfile = None
     try:
+        dirs: Collection[DirscanObj]
 
         # -- Check and read the scan files
-        dirs = [None] if right is None else [None, None]
-
         if is_scanfile(left):
-            dirs[0] = read_scanfile(left, root=opts.leftprefix)
+            da: DirscanObj = read_scanfile(left, root=opts.leftprefix)
         else:
-            dirs[0] = create_from_fs(left)
+            da = create_from_fs(left)
 
-        if right is not None:
+        if right is None:
+            dirs = [da]
+        else:
             if is_scanfile(right):
-                dirs[1] = read_scanfile(right, root=opts.rightprefix)
+                db: DirscanObj = read_scanfile(right, root=opts.rightprefix)
             else:
-                dirs[1] = create_from_fs(right)
+                db = create_from_fs(right)
+            dirs = [da, db]
 
         # -- Scan the database
         shadb = {}
@@ -287,7 +263,9 @@ def main(argv=None):
 
         # -- Open output file
         if opts.outfile:
-            outfile = open(opts.outfile, 'w', encoding='utf-8', errors='surrogateescape')  # pylint: disable=consider-using-with
+            # pylint: disable=consider-using-with
+            outfile = open(opts.outfile, 'w', encoding='utf-8',
+                           errors='surrogateescape')
             outfile.write(get_fileheader())
 
         # Prepare progress values
@@ -351,7 +329,7 @@ def main(argv=None):
             stats.add_filestats(objs)
 
             # Set the base fields
-            fields = {
+            fields: TFields = {
                 'relpath': str(path),
                 'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
                 'change': change,
@@ -382,27 +360,28 @@ def main(argv=None):
                     compares = [str(o[1].fullpath) for o in shadb[sha]]
                     fields['dupcount'] = len(compares)
                     if len(compares) > 1:
-                        fields['dupinfo'] = f'File duplicated {len(compares)} times:\n    ' + \
-                            '\n    '.join(compares) + '\n'
+                        lec = len(compares)
+                        j = '\n    '.join(compares)
+                        fields['dupinfo'] = f'File duplicated {lec} times:\n    {j}\n'
                         fields['dup'] = 'DUP'
 
             # Update the fields from the file objects. This retries the values
             # for the fields which are in actual use. This saves a lot of
             # resources instead of fetching everything
-            (errors, filefields) = fmtfields.get_fields(objs, field_prefix, fieldnames)
+            (errors, filefields) = get_fields(objs, field_prefix, fieldnames)
             fields.update(filefields)
             for error in errors:
                 error_handler(error)
 
             # Print to stdout
             if printfmt:
-                fmtfields.write_fileinfo(printfmt, fields, quoter=text_quote,
-                                         file=sys.stdout, end=end)
+                write_fileinfo(printfmt, fields, quoter=text_quote,
+                               file=sys.stdout, end=end)
 
             # Write to file -- don't write if we couldn't get all fields
-            if writefmt and not errors:
-                fmtfields.write_fileinfo(writefmt, fields, quoter=file_quote,
-                                         file=outfile)
+            if outfile and writefmt and not errors:
+                write_fileinfo(writefmt, fields, quoter=file_quote,
+                               file=outfile)
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors
@@ -434,7 +413,7 @@ def main(argv=None):
     fields.update(stats.get_fields(field_prefix))
 
     # Print the summary
-    fmtfields.write_summary(summary, fields, file=sys.stderr)
+    write_summary(summary, fields, file=sys.stderr)
 
     # Return error code if we have encountered any errors scanning
     if fields.get('n_err'):
@@ -444,4 +423,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main()
+    main()  # type: ignore

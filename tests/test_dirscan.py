@@ -12,7 +12,7 @@ import dirscan as ds
 # pylint: disable-all
 
 # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-FAKESTAT = os.stat_result((0o123456, None, None, None, 'uid', 'gid', 'size', 11, 42, None))
+FAKESTAT = os.stat_result((0o123456, 0, 0, 0, 'uid', 'gid', 'size', 11, 42, 0))
 
 
 def test_dirscanobj():
@@ -46,7 +46,7 @@ def test_dirscanobj():
 
 def test_fileobj():
 
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=False)
+    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'1234')
 
     assert type(a) is ds.FileObj
 
@@ -61,11 +61,9 @@ def test_fileobj():
     assert a.dev == FAKESTAT.st_dev
 
     # Properties
-    assert a.mtime == datetime.datetime.fromtimestamp(42)
+    assert a.mtime == datetime.datetime.fromtimestamp(FAKESTAT.st_mtime)
     assert a.fullpath == Path('b/a')
-    assert a.hashsum == False
-    with raises(TypeError):
-        assert a.hashsum_hex == False
+    assert a.hashsum == b'1234'
 
     # Methods
     assert a.children() == ()
@@ -83,7 +81,7 @@ def test_fileobj():
         'dev': FAKESTAT.st_dev,
         'size': FAKESTAT.st_size,
         'mtime': FAKESTAT.st_mtime,
-        'hashsum': None,
+        'hashsum': '31323334',
     }
 
 
@@ -102,11 +100,11 @@ def test_dirobj():
     assert a.mode == osstat.S_IMODE(FAKESTAT.st_mode)
     assert a.uid == FAKESTAT.st_uid
     assert a.gid == FAKESTAT.st_gid
-    assert a.size == None  # Dir has no size
+    assert a.size == 0  # Dir has no size
     assert a.dev == FAKESTAT.st_dev
 
     # Properties
-    assert a.mtime == datetime.datetime.fromtimestamp(42)
+    assert a.mtime == datetime.datetime.fromtimestamp(FAKESTAT.st_mtime)
     assert a.fullpath == Path('b/a')
 
     # Methods
@@ -123,9 +121,9 @@ def test_dirobj():
         'uid': FAKESTAT.st_uid,
         'gid': FAKESTAT.st_gid,
         'dev': FAKESTAT.st_dev,
-        'size': None,
+        'size': 0,
         'mtime': FAKESTAT.st_mtime,
-        'children': [],
+        'children': (),
     }
 
 
@@ -134,8 +132,8 @@ def test_fileobj_hashsum():
     # TODO: Test hashsum input
 
     a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=None)
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=False)
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum='something')
+    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'')
+    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'something')
 
 
 def test_dirobj_children():
@@ -143,7 +141,6 @@ def test_dirobj_children():
     # TODO: Test children input
 
     a = ds.DirObj('a', path='b', stat=FAKESTAT, children=None)
-    a = ds.DirObj('a', path='b', stat=FAKESTAT, children=False)
     a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
 
 
@@ -169,7 +166,7 @@ def test_create_from_fs(wd):
     assert a.name == 'a'
     assert a.path == ''
     assert a.mode == osstat.S_IMODE(stat.st_mode)
-    assert a.size == None  # Dir has no size
+    assert a.size == 0  # Dir has no size
     assert a.uid == stat.st_uid
     assert a.gid == stat.st_gid
     assert a.mtime == datetime.datetime.fromtimestamp(stat.st_mtime)
@@ -182,7 +179,19 @@ def test_create_from_dict_roundtrip(wd):
 
     a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
     d = a.to_dict()
+
     b = ds.create_from_dict(d)
+
+    assert type(b) is ds.DirObj
+    assert b.objtype == 'd'
+    assert b.name == 'a'
+    assert b.path == 'b'
+    assert b.mode == osstat.S_IMODE(FAKESTAT.st_mode)
+    assert b.uid == FAKESTAT.st_uid
+    assert b.gid == FAKESTAT.st_gid
+    assert b.size == 0  # Dir has no size
+    assert b.dev == FAKESTAT.st_dev
+    assert b.mtime == datetime.datetime.fromtimestamp(FAKESTAT.st_mtime)
 
     # TODO: Do we need a == operator in DirscanObj?
     assert tuple(a.compare(b)) == ()
@@ -201,6 +210,8 @@ def xtest_dirscan_create(wd):
     wd.wrdata('a/d', 'Hello')
     wd.wrdata('a/b/e', 'World')
 
-    a = ds.create_from_fs('.').traverse()
+    a = ds.create_from_fs('.')
+    for _ in ds.walkdirs((a,), close_during=False):
+        pass
     #tuple(ds.walkdirs((a,), close_during=False))
     pprint(a.to_dict())

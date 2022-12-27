@@ -7,14 +7,71 @@ This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
 
-from typing import List
-from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj
+from typing import List, Optional, Sequence, Tuple, Dict, Collection, Callable
+
+from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, walkdirs
 from dirscan.formatfields import COMPARE_TYPES_ALL
+from dirscan.progress import PrintProgress
+
+# Typings
+from dirscan.dirscan import TPath
+
+TCompare = Tuple[str, str]
+TShadb = Dict[bytes, List[Tuple[int, DirscanObj]]]
+
+
+def scan_shadb(dirs: Collection[DirscanObj],
+               reverse: bool=False,
+               excludes: Optional[Collection[TPath]]=None,
+               onefs: bool=False,
+               exception_fn: Optional[Callable[[Exception], bool]]=None,
+               progress: Optional[PrintProgress]=None
+               ) -> TShadb:
+    """ Build a sha database for a scanned tree """
+
+    # -- Build the sha database
+    shadb: TShadb = {}
+
+    # Prepare progress values
+    count = 0
+
+    for i, sdir in enumerate(dirs):
+        for (_, objs) in walkdirs(
+                [sdir],
+                reverse=reverse,
+                excludes=excludes,
+                onefs=onefs,
+                exception_fn=exception_fn,
+                close_during=False):
+
+            # Progress printing
+            count += 1
+            if progress:
+                progress.progress(f"Scanning {count} files:  {objs[0].fullpath}")
+
+            # Evaluate the hashsum for each of the objects and store in
+            # sha database
+            for obj in objs:
+                if not isinstance(obj, FileObj) or obj.excluded:
+                    continue
+
+                try:
+                    # Get the hashsum and store it to the shadb list
+                    shadb.setdefault(obj.hashsum, []).append((i, obj))
+                except IOError as err:
+                    if not exception_fn or not exception_fn(err):
+                        raise
+
+    return shadb
 
 
 # pylint: disable=unused-argument
-def dir_compare1(objs: List[DirscanObj], ignores='', comparetypes='',
-                 compare_time=False, shadb=None):
+def dir_compare1(objs: Sequence[DirscanObj],
+                 ignores: str='',
+                 comparetypes: str='',
+                 compare_time: bool=False,
+                 shadb: Optional[TShadb]=None
+                 ) -> TCompare:
     ''' Object comparator for one object. The only thing this function tests
         for is if the object is excluded. Returns tuple with (change, text)
     '''
@@ -41,8 +98,12 @@ def dir_compare1(objs: List[DirscanObj], ignores='', comparetypes='',
     return ('scan', 'scan')
 
 
-def dir_compare2(objs: List[DirscanObj], ignores='', comparetypes=COMPARE_TYPES_ALL,
-                 compare_time=False, shadb=None):
+def dir_compare2(objs: Sequence[DirscanObj],
+                 ignores: str='',
+                 comparetypes: str=COMPARE_TYPES_ALL,
+                 compare_time: bool=False,
+                 shadb: Optional[TShadb]=None
+                 ) -> TCompare:
     ''' Object comparator for two objects. Returns a tuple with (change, text)
     '''
     assert len(objs) == 2
@@ -83,14 +144,15 @@ def dir_compare2(objs: List[DirscanObj], ignores='', comparetypes=COMPARE_TYPES_
             text += ", left is excluded"
         elif shadb and isinstance(right, FileObj):
             sha = right.hashsum
-            shalist = shadb.get(sha, [])
-            other = None
-            for i, o in shalist:
-                if i == 0:  # This ensures that only left sources are used
-                    other = o
-            if other:
-                text = "renamed, in left %s" %(other.fullpath)
-                return ('right_renamed', text)
+            if sha:
+                shalist = shadb.get(sha, [])
+                other = None
+                for i, obj in shalist:
+                    if i == 0:  # This ensures that only left sources are used
+                        other = obj
+                if other:
+                    text = f"renamed, in left {other.fullpath}"
+                    return ('right_renamed', text)
         return ('right_only', text)
 
     # File present LEFT only
@@ -101,14 +163,15 @@ def dir_compare2(objs: List[DirscanObj], ignores='', comparetypes=COMPARE_TYPES_
             text += ", right is excluded"
         elif shadb and isinstance(left, FileObj):
             sha = left.hashsum
-            shalist = shadb.get(sha, [])
-            other = None
-            for i, o in shalist:
-                if i == 1:  # This ensures that only right sources are used
-                    other = o
-            if other:
-                text = "renamed, in right %s" %(other.fullpath)
-                return ('left_renamed', text)
+            if sha:
+                shalist = shadb.get(sha, [])
+                other = None
+                for i, obj in shalist:
+                    if i == 1:  # This ensures that only right sources are used
+                        other = obj
+                if other:
+                    text = f"renamed, in right {other.fullpath}"
+                    return ('left_renamed', text)
         return ('left_only', text)
 
     # File type DIFFERENT

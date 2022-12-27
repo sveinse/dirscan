@@ -5,6 +5,7 @@
 * Added new features:
    * Finding duplicate files (--duplicates)
    * Tracking renamed files when comparing (--shadiff)
+* Library fully type hinted
 * Fixed debug info with -D, and extra info with -vv
 * Added argument `sequential` to `walkdirs()` that allows sequential scanning
   instead of scanning in parallel.
@@ -25,6 +26,7 @@
    * Adding `-H, --shadiff` to track renamed files while diffing dirs
    * Rename `-c, --compare` to `-f, --filter`
    * Implemented proper invert `^` in `-f, --filter` and `-t, --types`
+* Removed `DirObj.traverse()`
 
 
 ## v0.10

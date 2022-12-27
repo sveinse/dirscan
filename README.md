@@ -183,8 +183,7 @@ by querying the filesystem by the path given by `path/name`. If `stat` is
 None, the function will fetch the information itself from the filesystem.
 
 If querying a directory, this function will not automatically traverse the
-filesystem. This will happen when `obj.children()` is called. Use the
-`obj.traverse()` method to traverse the whole tree into memory.
+filesystem. This will happen when `obj.children()` is called.
 
 
 ### `dirscan.create_from_dict()`
@@ -287,9 +286,3 @@ This base class should not be used directly.
   - `obj.to_dict(self)`
     Serialize and return a dict representation of the object. In DirObj it will
     recurse and return the full file tree.
-
-  - `obj.traverse(self)` (DirObj only)
-    Traverse through the directory tree. This will read the full tree into
-    memory. This function is necessary when creating a `DirObj` instance with
-    `create_from_fs()` to traverse the whole file system tree into children
-    objects.

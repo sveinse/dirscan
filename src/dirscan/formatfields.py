@@ -6,26 +6,35 @@ Copyright (C) 2010-2022 Svein Seldal
 This code is licensed under MIT license (see LICENSE for details)
 URL: https://github.com/sveinse/dirscan
 '''
+from typing import (Any, Callable, Collection, Dict, List, Optional, Set,
+                    TextIO, Tuple, Union)
+
 import sys
 import stat
 import string
 
-from dirscan.dirscan import FileObj, LinkObj
+from dirscan.dirscan import DirscanObj, FileObj, LinkObj
 
-if not sys.platform == 'win32':
+if sys.platform != 'win32':
     from pwd import getpwuid
     from grp import getgrgid
 else:
     # Make a fake windows implementation
-    def getpwuid(a):
-        class _PwuidFake:
-            pw_name = 'N/A'
+    class _PwuidFake:
+        pw_name: str = 'N/A'
+    class _GrgidFake:
+        gr_name: str = 'N/A'
+    def getpwuid(_: Any) -> _PwuidFake:
+        ''' Fake getpwuid '''
         return _PwuidFake()
-    def getgrgid(a):
-        class _GrgidFake:
-            gr_name = 'N/A'
+    def getgrgid(_: Any) -> _GrgidFake:
+        ''' Fake getgrgid '''
         return _GrgidFake()
 
+# Typing definitions
+TSummary = Tuple[Union[bool, str], str]
+TField = Union[str, int, float, None]
+TFields = Dict[str, TField]
 
 # Print formats in scan mode
 #     A = --all,  H = --human,  L = --long
@@ -55,7 +64,7 @@ FILE_TYPES_DEFAULT_COMPARE = FILE_TYPES_ALL
 # LIST OF FORMAT FIELDS
 # =====================
 #
-FILE_FIELDS = {
+FILE_FIELDS: Dict[str, Callable[[DirscanObj], TField]] = {
 
     # (bare) filename
     'name': lambda o: o.name,
@@ -87,7 +96,8 @@ FILE_FIELDS = {
     'mtime_f': lambda o: o.mtime.timestamp(),
     'mtime_x': lambda o: f"{int(o.mtime.timestamp()):x}",
 
-    # Special data-payload of the file. For files: the hashsum, links: the link destination
+    # Special data-payload of the file.
+    # Files: the hashsum, links: the link destination
     'data': lambda o: format_data(o),  # pylint: disable=unnecessary-lambda
 
     # The device node which the file resides
@@ -114,7 +124,7 @@ COMPARE_ARROWS = {
 }
 
 
-SCAN_SUMMARY = (
+SCAN_SUMMARY: Tuple[TSummary, ...] = (
     # Condition,         Line to print
     (True,               "\nSummary of '{dir}':"),
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
@@ -130,7 +140,7 @@ SCAN_SUMMARY = (
 )
 
 
-COMPARE_SUMMARY = (
+COMPARE_SUMMARY: Tuple[TSummary, ...] = (
     # Condition,         Line to print
     (True,               "\nSummary of compare between left '{left}' and right '{right}':"),
     ('n_equal',          "    {n_equal}  equal files or directories"),
@@ -148,7 +158,7 @@ COMPARE_SUMMARY = (
 )
 
 
-FINAL_SUMMARY = (
+FINAL_SUMMARY: Tuple[TSummary, ...] = (
     # Condition,         Line to print
     ('n_err',            "\n{prog}: **** {n_err} files or directories could not be read"),
 )
@@ -158,7 +168,7 @@ FINAL_SUMMARY = (
 ERROR_FIELD = '**-ERROR-**'
 
 
-def split_number(number):
+def split_number(number: int) -> str:
     ''' Split a number into groups of 3 chars. E.g "1234776" will be
         returned as "1 234 776".
     '''
@@ -173,17 +183,15 @@ def split_number(number):
     return ''.join(group).lstrip()
 
 
-def format_bytes(size, print_full=False, short=False):
+def format_bytes(size: int, print_full: bool=False, short: bool=False) -> str:
     ''' Return a string with a human printable representation of a
         (file) size.  The print_full option will append "(26 552 946
         485 bytes)" to the string.  E.g. format_bytes(26552946485)
         will return "24.74 GiB"
     '''
+    sizestr = ''
 
     # Make exceptions for low values
-    if size is None:
-        return None
-
     if size < 10000:
         sizestr = str(size)
 
@@ -192,7 +200,7 @@ def format_bytes(size, print_full=False, short=False):
         # scaled_size = reconstructed float
         kb_int = size
         kb_mod = 0
-        scaled_size = kb_int
+        scaled_size = float(kb_int)
         # Iterate through each "decade" unit
         for unit in "BKMGTP":
 
@@ -201,7 +209,8 @@ def format_bytes(size, print_full=False, short=False):
 
             scaled_size = float(kb_int) + float(kb_mod)/1024
 
-            # Various print options. If a matching value range is found then exit loop
+            # Various print options. If a matching value range
+            # is found then exit loop
             if kb_int < 10:
                 sizestr = f"{scaled_size:.2f}{unit}"
                 break
@@ -229,10 +238,10 @@ def format_bytes(size, print_full=False, short=False):
     return sizestr
 
 
-def format_data(obj):
-    ''' Return the information for the special field 'data', which return various
-        information, depending on type. Files return their sha256 hashsum, links
-        their symlink target.
+def format_data(obj: DirscanObj) -> Union[None, str]:
+    ''' Return the information for the special field 'data', which return
+        various information, depending on type. Files return their sha256
+        hashsum, links their symlink target.
     '''
     if isinstance(obj, FileObj) and obj.size:
         return obj.hashsum_hex
@@ -241,13 +250,16 @@ def format_data(obj):
     return None
 
 
-def get_fields(objs, prefixes, fieldnames):
+def get_fields(objs: Collection[DirscanObj],
+               prefixes: List[str],
+               fieldnames: Set[str]
+               ) -> Tuple[List[Exception], TFields]:
     ''' Get a dict of field values from the objects using the given
         fieldnames.
     '''
 
-    fields = {}
-    errs = []
+    fields: TFields = {}
+    errs: List[Exception] = []
 
     for field in fieldnames:
 
@@ -279,7 +291,7 @@ def get_fields(objs, prefixes, fieldnames):
     return (errs, fields)
 
 
-def get_fieldnames(formatstr):
+def get_fieldnames(formatstr: str) -> Set[str]:
     ''' Get a set of {fields} used in formatstr '''
 
     fieldnames = set()
@@ -289,7 +301,9 @@ def get_fieldnames(formatstr):
     return fieldnames
 
 
-def write_fileinfo(formatstr, fields, quoter=None, file=sys.stdout, end='\n'):
+def write_fileinfo(formatstr: str, fields: TFields,
+                   quoter: Optional[Callable[[str], str]]=None,
+                   file: TextIO=sys.stdout, end: str='\n') -> None:
     ''' Write the formatstr to the given file. The format fields are
         read from the fields dicts.
     '''
@@ -302,23 +316,25 @@ def write_fileinfo(formatstr, fields, quoter=None, file=sys.stdout, end='\n'):
         file.write(line + end)
 
 
-def write_summary(summary, fields, file=sys.stdout, end='\n'):
+def write_summary(summary: Collection[TSummary],
+                  fields: TFields, file: TextIO=sys.stdout,
+                  end: str='\n') -> None:
     ''' Write the summary '''
 
     # Use the pre-defined summary_text
     for (var, line) in summary:
         # d.get(n,n) will return d[n] if n exists, otherwise return n.
         # Thus if n is True, True will be returned
-        if line and fields.get(var, var):
+        if line and fields.get(var, var):  # type: ignore
             file.write(line.format(**fields) + end)
 
 
-def get_compare_types(comparestr, default):
+def get_compare_types(comparestr: str, default: str) -> str:
     ''' Parse the compare types argument to --compare '''
     if not comparestr:
         return default
     if comparestr.lower() == 'all':
-        return set(COMPARE_TYPES_ALL)
+        return COMPARE_TYPES_ALL
     invert = comparestr.startswith('^')
     if invert:
         cset = set(comparestr[1:])
@@ -330,16 +346,16 @@ def get_compare_types(comparestr, default):
             f"Unknown filter: '{''.join(foreign)}', "
             f"valid values in '{''.join(sorted(COMPARE_TYPES_ALL))}' or 'all'"))
     if invert:
-        return set(default).difference(cset)
-    return cset
+        return ''.join(set(default).difference(cset))
+    return ''.join(cset)
 
 
-def get_file_types(typestr, default):
+def get_file_types(typestr: str, default: str) -> str:
     ''' Parse the type to --types '''
     if not typestr:
         return default
     if typestr.lower() == 'all':
-        return set(FILE_TYPES_ALL)
+        return FILE_TYPES_ALL
     invert = typestr.startswith('^')
     if invert:
         cset = set(typestr[1:])
@@ -351,8 +367,8 @@ def get_file_types(typestr, default):
             f"Unknown file type(s): '{''.join(foreign)}', "
             f"valid values '{''.join(sorted(FILE_TYPES_ALL))}' or 'all'"))
     if invert:
-        return set(default).difference(cset)
-    return cset
+        return ''.join(set(default).difference(cset))
+    return ''.join(cset)
 
 
 class Formatter(string.Formatter):
@@ -361,11 +377,11 @@ class Formatter(string.Formatter):
         function prior to printing it with '{name:s}'
     '''
 
-    def __init__(self, quoter, *args, **kwargs):
+    def __init__(self, quoter: Callable[[str], str], *args: Any, **kwargs: Any):
         self.quoter = quoter
         super().__init__(*args, **kwargs)
 
-    def format_field(self, value, format_spec):
+    def format_field(self, value: Any, format_spec: str) -> Any:
         if format_spec == 'qs':
             format_spec = 's'
             value = self.quoter(value)
@@ -375,24 +391,24 @@ class Formatter(string.Formatter):
 class FileHistogram:
     ''' Histogram for counting file objects '''
 
-    def __init__(self, directory):
+    def __init__(self, directory: str):
         self.dir = directory
         self.size = 0
-        self.bins = {}
+        self.bins: Dict[str, int] = {}
 
-    def add(self, item):
+    def add(self, item: str) -> None:
         ''' Increase count of variable item '''
         self.bins[item] = self.bins.get(item, 0) + 1
 
-    def get(self, item):
+    def get(self, item: str) -> int:
         ''' Return count value of v '''
         return self.bins.get(item, 0)
 
-    def add_size(self, size):
+    def add_size(self, size: int) -> None:
         ''' Add size variable '''
         self.size += size
 
-    def get_summary_fields(self):
+    def get_summary_fields(self) -> TFields:
         ''' Return a dict with all histogram fields '''
         return {
             'dir': self.dir,
@@ -415,20 +431,20 @@ class FileHistogram:
 class CompareHistogram:
     ''' Histogram for counting compare relationship '''
 
-    def __init__(self, left, right):
+    def __init__(self, left: str, right: Optional[str]):
         self.left = left
         self.right = right
-        self.bins = {}
+        self.bins: Dict[str, int] = {}
 
-    def add(self, item):
+    def add(self, item: str) -> None:
         ''' Increase count of variable item '''
         self.bins[item] = self.bins.get(item, 0) + 1
 
-    def get(self, item):
+    def get(self, item: str) -> int:
         ''' Return count value of item '''
         return self.bins.get(item, 0)
 
-    def get_summary_fields(self):
+    def get_summary_fields(self) -> TFields:
         ''' Return a dict with all histogram fields '''
         return {
             'left': self.left,
@@ -452,18 +468,20 @@ class CompareHistogram:
 class Statistics:
     ''' Class for collecting dirscan statistics '''
 
-    def __init__(self, left, right):
+    filehist: List[FileHistogram]
+
+    def __init__(self, left: str, right: Optional[str]):
         self.compare = CompareHistogram(left, right)
         if right is None:
             self.filehist = [FileHistogram(left)]
         else:
             self.filehist = [FileHistogram(left), FileHistogram(right)]
 
-    def add_stats(self, change):
+    def add_stats(self, change: str) -> None:
         ''' Collect compare statistics '''
         self.compare.add(change)
 
-    def add_filestats(self, objs):
+    def add_filestats(self, objs: Collection[DirscanObj]) -> None:
         ''' Collect file statistics from objs list '''
 
         for (obj, filehist) in zip(objs, self.filehist):
@@ -472,7 +490,7 @@ class Statistics:
             if objtype == 'f':
                 filehist.add_size(obj.size)
 
-    def get_fields(self, prefixes):
+    def get_fields(self, prefixes: Collection[str]) -> TFields:
         ''' Get the summary fields '''
 
         # Get the main comparison fields

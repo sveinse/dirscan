@@ -32,6 +32,7 @@ from dirscan.scanfile import (
     read_scanfile,
 )
 from dirscan.compare import (
+    scan_shadb,
     dir_compare1,
     dir_compare2,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "set_debug",
     "is_scanfile",
     "read_scanfile",
+    "scan_shadb",
     "dir_compare1",
     "dir_compare2",
 ]
