@@ -1,11 +1,9 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - helpers for command-line printing and output '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
 from typing import (Any, Callable, Collection, Dict, List, Optional, Set,
                     TextIO, Tuple, Union)
 
@@ -16,6 +14,7 @@ import string
 from dirscan.dirscan import DirscanObj, FileObj, LinkObj
 
 if sys.platform != 'win32':
+    # pylint: disable=import-error
     from pwd import getpwuid
     from grp import getgrgid
 else:
@@ -106,7 +105,7 @@ FILE_FIELDS: Dict[str, Callable[[DirscanObj], TField]] = {
 
 
 COMPARE_ARROWS = {
-    # Change type    : ( filter, arrow )
+    # Change type    : (filter, arrow)
     'error'          : ('E', 'ERROR'),
     'excluded'       : ('x', '    x'),
     'right_only'     : ('r', '   >>'),

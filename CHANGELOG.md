@@ -5,6 +5,7 @@
 * Added new features:
    * Finding duplicate files (--duplicates)
    * Tracking renamed files when comparing (--shadiff)
+   * Added documentation
 * Library fully type hinted
 * Fixed debug info with -D, and extra info with -vv
 * Added argument `sequential` to `walkdirs()` that allows sequential scanning
@@ -26,7 +27,13 @@
    * Adding `-H, --shadiff` to track renamed files while diffing dirs
    * Rename `-c, --compare` to `-f, --filter`
    * Implemented proper invert `^` in `-f, --filter` and `-t, --types`
-* Removed `DirObj.traverse()`
+* Dirscan object changes:
+  * Removed `DirObj.traverse()`
+  * Added `DirscanObj.support_children()`
+  * Renamed `DirscanObj.exclude_files()` into `DirscanObj.set_exclude()`
+  * Removed `DirscanObj.exclude_otherfs()` and merge into
+    `DirscanObj.set_exclude()`
+* Update to 2023
 
 
 ## v0.10

@@ -1,19 +1,16 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - directory objects '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
 from __future__ import annotations  # for Python 3.7-3.9
-from typing import (Any, Callable, Collection, Dict, Generator, List, Optional,
+from typing import (Any, Collection, Dict, Generator, Optional,
                     Type, Union, Tuple)
 
 import os
 import datetime
 import stat as osstat
-import itertools
 import hashlib
 import filecmp
 import fnmatch
@@ -21,8 +18,6 @@ import binascii
 from pathlib import Path
 
 from typing_extensions import NotRequired, TypedDict  # for Python <3.11
-from dirscan.log import debug
-
 
 # Select hash algorthm to use
 HASHALGORITHM = hashlib.sha256
@@ -68,7 +63,17 @@ class DirscanException(Exception):
 ############################################################
 
 class DirscanObj:
-    ''' Directory scan file objects base class '''
+    '''
+    Base class for directory scan file objects, and it provides the common
+    functionality of the dirscan file objects. This class shouldn't be
+    used directly, but rather the derived classes :py:class:`DirObj`,
+    :py:class:`FileObj`, :py:class:`LinkObj`, :py:class:`BlockDevObj`,
+    :py:class:`CharDevObj`, :py:class:`FifoObj`, :py:class:`SocketObj`.
+    These derived classes represents the different file types that can be
+    encounted in a file system. :py:class:`NonexistingObj` represents an
+    object that doesn't exist and is used when comparing multiple directories
+    and a file is missing from one side.
+    '''
 
     # Declare to help type checkers
     objtype: str
@@ -80,16 +85,40 @@ class DirscanObj:
 
     # Type definitions
     name: str
+    ''' Object filename without preceding path. It can be empty when its
+        the top-level object.
+    '''
+
     path: TPath
+    ''' Object path, excluding its name. '''
+
     excluded: bool
+    ''' Flag indicating that the object has been excluded '''
+
     mode: int
+    ''' Mode bits '''
+
     uid: int
+    ''' User ID of the owner '''
+
     gid: int
+    ''' Group ID of the owner '''
+
     dev: int
+    ''' Device inode '''
+
     size: int
+    ''' Size in bytes '''
+
     _mtime: float
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result):
+        '''
+        Args:
+            name: Name of file object, without preceing path
+            path: Path of the file object excluding the name of the object
+            stat: The stat information to copy into the object
+        '''
 
         # Ensure the name does not end with a slash, that messes up path
         # calculations later in directory compares
@@ -111,24 +140,49 @@ class DirscanObj:
 
     @property
     def fullpath(self) -> Path:
-        ''' Return the complete path of the object '''
+        '''
+        Returns the full path of the object, i.e. the concatenation of path and
+        name
+        '''
         return Path(self.path, self.name)
 
     @property
     def mtime(self) -> datetime.datetime:
-        ''' Return the modified timestamp of the file '''
+        '''
+        Returns the last modified timestamp of the object
+        '''
         return datetime.datetime.fromtimestamp(self._mtime)
 
+    def support_children(self) -> bool:
+        '''
+        Returns:
+            Boolean if this object supports children objects
+        '''
+        return False
+
     def children(self) -> Tuple['DirscanObj', ...]:  # pylint: disable=no-self-use
-        ''' Return iterator of sub objects. Non-directory file objects that
-            does not have any children will return an empty tuple. '''
+        '''
+        Returns:
+            A tuple containing the children of this object. It will return
+            an empty tuple even if the object doesn't support children.
+        '''
         return ()
 
     def close(self) -> None:
-        ''' Delete any allocated objecs within this class '''
+        ''' Delete any allocated objecs used in this class to allow GC cleanup
+        when parsing larger directory trees. It will unset any references to
+        its children. Please note that once this function has been called,
+        :py:meth:`DirscanObj.children()` will return an empty list of children.
+        '''
 
     def compare(self, other: 'DirscanObj') -> Generator[str, None, None]:
-        ''' Return a list of differences '''
+        ''' Generator that yields the differences between this and ``other``.
+
+        Args:
+            other: Object to compare with
+        Returns:
+            A generator that indicates differences between the object
+        '''
         if not isinstance(other, type(self)):
             yield 'type mismatch'
             return
@@ -147,27 +201,41 @@ class DirscanObj:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.path},{self.name})"
 
-    def exclude_otherfs(self, other: 'DirscanObj') -> None:
-        ''' Set excluded flag if this object resides on
-            another fs than other  '''
+    def set_exclude(self, excludes: Collection[TPath],
+                    base: 'DirscanObj',
+                    onefs: bool=False,
+                    ) -> None:
+        '''
+        Set excluded flag if any of the entries in exludes matches
+        this object or if it resides on another file system when onefs is
+        True.
 
-        # Note that self.excluded will be set on NonExistingObj() since they
-        # have dev = None
-        if self.dev != other.dev:
-            self.excluded = True
-
-    def exclude_files(self, excludes: Collection[TPath],
-                      base: 'DirscanObj') -> None:
-        ''' Set excluded flag if any of the entries in exludes matches
-            this object '''
+        Args:
+            excludes: Collection of paths to exclude. If this object matches
+                any in the excludes list, the excluded flag will be set. Each
+                path can support wild-cards according to the
+                ``fnmatch.fnmatch()`` function.
+            base: Top-level base object for this tree. This is used to determine
+                the path to compare against
+            onefs: If set, the exclude flag will be set.
+        '''
         for ex in excludes:
             ex = Path(base.fullpath, ex)
             if fnmatch.fnmatch(self.fullpath, ex):  # type: ignore
                 self.excluded = True
                 return
 
+        # If set, exclude if this object resides on another fs than the base
+        if onefs and self.dev != base.dev:
+            self.excluded = True
+
     def to_dict(self) -> DirscanDict:
-        ''' Return a dict representation of this class '''
+        '''
+        Returns:
+            Serialization of this object into a dict. The dict can
+            later be input to :py:func:`create_from_dict()` to recreate this
+            object.
+        '''
         data: DirscanDict = {  # type: ignore
             k: getattr(self, k) for k in (
                 # Not exactly __slots__
@@ -178,7 +246,10 @@ class DirscanObj:
 
 
 class FileObj(DirscanObj):
-    ''' Regular File Object '''
+    ''' Regular file object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 'f'
     objname = 'file'
     objmode = osstat.S_IFREG
@@ -190,6 +261,14 @@ class FileObj(DirscanObj):
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
                  hashsum: Optional[bytes]=None):
+        '''
+        Args:
+            name: Name of file object, without preceing path
+            path: Path of the file object excluding the name of the object
+            stat: The stat information to copy into the object
+            hashsum: Optional cached hashsum to initalize with. If default
+                ``None``, the hashsum will be read from the file system.
+        '''
         super().__init__(name, path=path, stat=stat)
 
         # Protocol:
@@ -200,7 +279,10 @@ class FileObj(DirscanObj):
 
     @property
     def hashsum(self) -> bytes:
-        ''' Return the hashsum of the file '''
+        '''
+        Returns the hashsum of the file. If no data exists, an empty ``''``
+        bytes sequence is returned.
+        '''
 
         # This is not a part of the parse() structure because it can take
         # considerable time to evaluate the hashsum, hence its done on
@@ -225,7 +307,6 @@ class FileObj(DirscanObj):
         return binascii.hexlify(self.hashsum).decode('ascii')
 
     def compare(self, other: DirscanObj) -> Generator[str, None, None]:
-        ''' Compare two file objects '''
         if not isinstance(other, type(self)):
             yield 'type mismatch'
             return
@@ -248,7 +329,6 @@ class FileObj(DirscanObj):
             yield 'contents differs'
 
     def to_dict(self) -> DirscanDict:
-        ''' Return a dict representation of this class '''
         data = super().to_dict()
         if self._hashsum is not None:
             data['hashsum'] = self.hashsum_hex
@@ -256,7 +336,10 @@ class FileObj(DirscanObj):
 
 
 class LinkObj(DirscanObj):
-    ''' Symbolic Link File Object '''
+    ''' Symbolic link file object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 'l'
     objname = 'symbolic link'
     objmode = osstat.S_IFLNK
@@ -265,14 +348,21 @@ class LinkObj(DirscanObj):
 
     # Type definitions
     link: str
+    ''' Link destination '''
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
                  link:str=''):
+        '''
+        Args:
+            name: Name of file object, without preceing path
+            path: Path of the file object excluding the name of the object
+            stat: The stat information to copy into the object
+            link: Link destination
+        '''
         super().__init__(name, path=path, stat=stat)
         self.link = link
 
     def compare(self, other: 'DirscanObj') -> Generator[str, None, None]:
-        ''' Compare two link objects '''
         if not isinstance(other, type(self)):
             yield 'type mismatch'
             return
@@ -281,14 +371,16 @@ class LinkObj(DirscanObj):
             yield 'link differs'
 
     def to_dict(self) -> DirscanDict:
-        ''' Return a dict representation of this class '''
         data = super().to_dict()
         data['link'] = self.link
         return data
 
 
 class DirObj(DirscanObj):
-    ''' Directory File Object '''
+    ''' Directory file object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 'd'
     objname = 'directory'
     objmode = osstat.S_IFDIR
@@ -299,6 +391,14 @@ class DirObj(DirscanObj):
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
                  children: Optional[Collection[DirscanObj]]=None):
+        '''
+        Args:
+            name: Name of file object
+            path: Path of the file object (excluding the name itself)
+            stat: The stat information to copy into the object
+            children: Optional list children of this object. If ``None``,
+                the file system will be read when children() is called.
+        '''
         super().__init__(name, path=path, stat=stat)
 
         # Override the stat default filled in by super().__init__
@@ -308,63 +408,98 @@ class DirObj(DirscanObj):
         self._children = children if children is None else tuple(children)
 
     def close(self) -> None:
-        ''' Delete all used references to allow GC cleanup '''
+        # Don't traverse into children and close them, because that will
+        # interfer with the close option of walkdirs()
+        self._children = ()
         super().close()
-        self._children = None
+
+    def support_children(self) -> bool:
+        return True
 
     def children(self) -> Tuple[DirscanObj, ...]:
-        ''' Return an iterator of the sub object names '''
+        '''
+        Returns:
+            A tuple containing the children of this object. If the list of
+            children is unset, the function will read the list of children
+            from the file system. Subsequent calls will returned the cached
+            list of children.
+        '''
         if self._children is None:
             self._children = tuple(create_from_fsdir(self.fullpath))
         return self._children
 
     def set_children(self, children: Collection[DirscanObj]) -> None:
-        ''' Set the directory children '''
+        ''' Set the children of this object
+
+        Args:
+            children: A collection of children
+        '''
         self._children = tuple(children)
 
     def to_dict(self) -> DirscanDict:
-        ''' Return a dict representation of this class '''
         data = super().to_dict()
         data['children'] = tuple(c.to_dict() for c in self._children or {})
         return data
 
 
 class BlockDevObj(DirscanObj):
-    ''' Block Device Object '''
+    ''' Block device object.
+        No info is stored from the block device in this object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 'b'
     objname = 'block device'
     objmode = osstat.S_IFBLK
 
 
 class CharDevObj(DirscanObj):
-    ''' Char Device Object '''
+    ''' Charater device object.
+        No info is stored from the char device in this object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 'c'
     objname = 'char device'
     objmode = osstat.S_IFCHR
 
 
 class FifoObj(DirscanObj):
-    ''' Fifo File Object '''
+    ''' Fifo file object.
+        No info is stored about the fifo in this object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 'p'
     objname = 'fifo'
     objmode = osstat.S_IFIFO
 
 
 class SocketObj(DirscanObj):
-    ''' Socket File Object '''
+    ''' Socket file object.
+        No info is stored about the socket object.
+        Derived from :py:class:`DirscanObj` and it inherits attributes
+        and methods.
+    '''
     objtype = 's'
     objname = 'socket'
     objmode = osstat.S_IFSOCK
 
 
 class NonExistingObj(DirscanObj):
-    ''' NonExisting File Object. Evaluates to false for everything. Used by the
-        walkdirs() when parsing multiple trees in parallell to indicate a
-        non-existing file object in one or more of the trees. '''
+    ''' NonExisting File Object. Used by :py:func:`walkdirs()` when parsing
+        multiple trees in parallell to indicate a non-existing file object in
+        one or more of the trees.
+    '''
     objtype = '-'
     objname = 'missing file'
 
     def __init__(self, name: str, *, path: TPath=''):
+        '''
+        Args:
+            name: Name of file object
+            path: Path of the file object (excluding the name itself)
+        '''
         stat = os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
         super().__init__(name, path=path, stat=stat)
 
@@ -395,12 +530,26 @@ OBJTYPES = {cls.objtype: cls for cls in ALL_FILEOBJECT_CLASS}
 #
 ############################################################
 
-def create_from_fs(name: str, path: TPath='',
+def create_from_fs(name: TPath,
+                   path: TPath='',
                    stat: Optional[os.stat_result]=None,
                    ) -> DirscanObj:
-    ''' Create a new object from file system path and return an
-        instance of the object. The object type returned is based on
-        stat of the actual file system entry.'''
+    '''
+    Factory for creating a new :py:class:`DirscanObj`-like object read from the
+    file system. The object type returned is based on the type of the actual
+    file system entry.
+
+    Args:
+        name: Name of the file object
+        path: Path of the file object (excluding the name itself)
+        stat: Optional cached stat value for the file. If unset, the stat value
+            will be read from the file system
+    Returns:
+        A :py:class:`DirscanObj`-derived object instance representing the file
+        in the file system. The type of the object depends on the type of file.
+        See :py:class:`FileObj`, :py:class:`DirObj`, :py:class:`LinkObj` as the
+        most common types.
+    '''
     fullpath = Path(path, name)
     if not stat:
         stat = os.stat(fullpath, follow_symlinks=False)
@@ -419,10 +568,10 @@ def create_from_fs(name: str, path: TPath='',
     # in a full traversal of the directory, which could take considerable time.
     # Reading the directory objects are done with the .children() function
 
-    return objcls(name, path=path, stat=stat, **kwargs)
+    return objcls(str(name), path=path, stat=stat, **kwargs)
 
 
-def create_from_fsdir(path: Path) -> Generator[DirscanObj, None, None]:
+def create_from_fsdir(path: TPath) -> Generator[DirscanObj, None, None]:
     ''' Generator that produces file object instances for directory 'path' '''
 
     # Iterate over the directory
@@ -435,7 +584,18 @@ def create_from_fsdir(path: Path) -> Generator[DirscanObj, None, None]:
 
 
 def create_from_dict(data: DirscanDict) -> DirscanObj:
-    ''' Create a new fs object from a dict '''
+    '''
+    Create a new :py:class:`DirscanObj`-like instance from a dict. This function
+    is the inverse of :py:meth:`DirscanObj.to_dict()`.
+
+    Args:
+        data: Dict-like object representing the data contents of a
+            :py:class:`DirscanObj`-like object.
+
+    Returns:
+        A :py:class:`DirscanObj`-derived object instance. The type of object
+        is determined by the dict member ``objtype``.
+    '''
 
     # Get the file object class from the type
     objtype = data['objtype']
@@ -500,192 +660,3 @@ def create_from_dict(data: DirscanDict) -> DirscanObj:
 
     # Make the file object instance
     return objcls(**kwargs)
-
-
-
-############################################################
-#
-#  DIRECTORY TRAVERSER
-#  ===================
-#
-############################################################
-
-def walkdirs(dirs: Collection[DirscanObj],
-             reverse: bool=False,
-             excludes: Optional[Collection[TPath]]=None,
-             onefs: bool=False,
-             traverse_oneside: Optional[bool]=None,
-             exception_fn: Optional[Callable[[Exception], bool]]=None,
-             close_during: bool=True,
-             sequential: bool=False,
-             ) -> Generator[Tuple[Path, Tuple[DirscanObj, ...]], None, None]:
-    '''
-    Generator function that recursively traverses the directories in
-    list ``dirs``. This function can scan a file system or compare two
-    or more directories in parallel.
-
-    As it walks the directories, it will yield tuples containing
-    ``(path, objs)`` for each file object it finds. ``path`` represents the
-    common file path. ``objs`` is a tuple of file objects representing the
-    respective found file object from the directories given by the ``dirs``
-    list. The objects returned are derived types of ``DirscanObj``, such
-    as ``FileObj``, ``DirObj``. If a file is only present in one of the
-    dirs,  the object returned in the dirs where the file isn't present will
-    be returned as a ``NonExistingObj`` object.
-
-    **Arguments:**
-     ``dirs``
-        List of directories to walk. The elements must either be a path string
-        to a physical directory or a previously parsed ``DirObj`` object.
-        If a string is given, the file system given by the path will be
-        recursively scanned for files. If a ``DirObj`` object is given, the
-        in-object cached data will be used for traversal. The latter is useful
-        e.g. when reading scan files from disk.
-
-     ``reverse``
-        Reverses the scanning order
-
-     ``excludes``
-        List of excluded paths, relative to the common path
-
-     ``onefs``
-        Scan file objects belonging to the same file system only
-
-     ``traverse_onside``
-        Will walk/yield all file objects in a directory that exists on only one
-        side. Otherwise the one-sided directory will be skipped from scanning/
-        traversal.
-
-     ``exception_fn``
-        Exception handler callback. It has format ``exception_fn(exception)``
-        returning ``Bool``. It will be called if any scanning exceptions occur
-        during traversal. If exception_fn() returns False or is not set, an
-        ordinary exception will be raised.
-
-     ``close_during``
-        will call ``obj.close()`` on objects that have been yielded to the
-        caller. This allows freeing up parsed objects to conserve memory. Note
-        that this tears down the in-memory directory tree, making it impossible
-        to reuse the object tree after ``walkdirs()`` is complete.
-
-     ``ìn_tandem``
-        If True, the directories will be traversed in parallel simulaneously.
-        If False, each of the directories will be scanned one by one.
-    '''
-
-    if sequential:
-        for obj in dirs:
-            yield from walkdirs((obj,), reverse=reverse, excludes=excludes,
-                                onefs=onefs, traverse_oneside=traverse_oneside,
-                                exception_fn=exception_fn,
-                                close_during=close_during,
-                                sequential=False)
-        return
-
-    # Ensure the exclusion list is a list
-    if excludes is None:
-        excludes = []
-
-    # Set default of traverse_oneside depending on if one-dir scanning or
-    # comparing multiple dirs
-    if traverse_oneside is None:
-        # Not set, default value. True for scanning, False for comparing
-        traverse_oneside = len(dirs) == 1
-
-    # Check list of dirs indeed are dirs and create initial object list to
-    # start from
-    base = []
-    for obj in dirs:
-
-        # If we're not handed a FileObj-instance
-        if not isinstance(obj, DirscanObj):
-            obj = create_from_fs(obj)
-
-        # The object must be a directory object
-        if not isinstance(obj, DirObj):
-            raise NotADirectoryError()
-
-        base.append(obj)
-
-    # Start the queue
-    queue: List[Tuple[Path, Tuple[DirscanObj, ...]]] = [(Path('.'), tuple(base))]
-
-    debug(2, "")
-
-    # Traverse the queue
-    while queue:
-
-        # Get the next set of objects
-        path, objs = queue.pop(-1)
-
-        debug(2, ">>>>  OBJECT {}:  {}", path, objs)
-
-        # Parse the objects, getting object metadata
-        for obj, baseobj in zip(objs, base):
-            try:
-                # Test for exclusions
-                obj.exclude_files(excludes, base=baseobj)
-                if onefs:
-                    obj.exclude_otherfs(baseobj)
-
-            # Parsing the object failed
-            except OSError as err:
-                # Call the user exception callback, raise if not
-                if not exception_fn or not exception_fn(err):
-                    raise
-
-        # How many objects are present?
-        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded
-                      for obj in objs)
-
-        # Send back object list to caller
-        yield (path, objs)
-
-        # Create a list of unique children names seen across all objects, where
-        # excluded objects are removed from parsing
-        childobjs = []
-        for obj in objs:
-            children = {}
-            try:
-                # Skip the children if...
-
-                # ...the parent is excluded
-                if obj.excluded:
-                    continue
-
-                # ..the parent is the only one
-                if not traverse_oneside and present == 1:
-                    continue
-
-                # Get and append the children names
-                children = {obj.name: obj for obj in obj.children()}
-                debug(4, "      Children of {} is {}", obj, children)
-
-            # Getting the children failed
-            except OSError as err:
-                # Call the user exception callback, raise if not
-                if not exception_fn or not exception_fn(err):
-                    raise
-
-            finally:
-                # Append the children collected so far
-                childobjs.append(children)
-
-        # Merge all found objects into a single list of unique, sorted,
-        # children names and iterate over it
-        for name in sorted(set(itertools.chain.from_iterable(childobjs)),
-                           reverse=not reverse):
-
-            # Get the child if it exists for each of the dirs being traversed
-            child = tuple(
-                children.get(name) or NonExistingObj(name, path=parent.fullpath)
-                for parent, children in zip(objs, childobjs)
-            )
-
-            # Append the newly discovered objects to the queue
-            queue.append((Path(path, name), child))
-
-        # Close objects to conserve memory
-        if close_during:
-            for obj in objs:
-                obj.close()

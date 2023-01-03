@@ -1,18 +1,14 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
-
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
+''' Dirscan - recursively scanning and comparing one or more directories '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
 __version__ = '0.11a1'
 
 
 from dirscan.__main__ import main
 from dirscan.dirscan import (
-    walkdirs,
     create_from_fs,
     create_from_dict,
     DirscanException,
@@ -31,18 +27,32 @@ from dirscan.scanfile import (
     is_scanfile,
     read_scanfile,
 )
-from dirscan.compare import (
+from dirscan.walkdirs import (
+    walkdirs,
     scan_shadb,
-    dir_compare1,
-    dir_compare2,
+    obj_compare1,
+    obj_compare2,
 )
 
+# Order matter to documentation
 __all__ = [
+
+    # Primary functions
     "main",
     "walkdirs",
+    "scan_shadb",
+    "obj_compare1",
+    "obj_compare2",
+
+    # Scanfile functions
+    "is_scanfile",
+    "read_scanfile",
+
+    # Factories
     "create_from_fs",
     "create_from_dict",
-    "DirscanException",
+
+    # Dirscan objects
     "DirscanObj",
     "FileObj",
     "LinkObj",
@@ -52,10 +62,8 @@ __all__ = [
     "SocketObj",
     "FifoObj",
     "NonExistingObj",
+
+    # Helpers
     "set_debug",
-    "is_scanfile",
-    "read_scanfile",
-    "scan_shadb",
-    "dir_compare1",
-    "dir_compare2",
+    "DirscanException",
 ]

@@ -1,12 +1,10 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - functions for reading and writing scanfiles '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
-from typing import Dict, Generator, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple
 import os
 from pathlib import Path
 
@@ -26,8 +24,13 @@ TDirtree = Dict[str, Tuple[DirObj, Dict[str, DirscanObj], str]]
 
 
 def is_scanfile(filename: TPath) -> bool:
-    ''' Check if the given file is a scanfile. It will return a boolean with
-        the results, unless it is unable to read the file
+    '''
+    Check if the given file is a scanfile
+
+    Args:
+        filename: Filename to check
+    Returns:
+        ``True`` if the given file is a scan file.
     '''
 
     if not filename:
@@ -74,8 +77,21 @@ def int_positive(value: str, radix: int=10) -> int:
 
 
 def read_scanfile(filename: TPath, root: Optional[str]=None) -> DirObj:
-    ''' Read filename scan file and return a DirObj() with
-        the file tree root '''
+    '''
+    Read filename scan file and return a :py:class:`DirObj` instance containing
+    the file tree root
+
+    Args:
+        filename: Filename to read
+        root: The path to use as root from the scanfile. The value is ``.`` if
+            unset which will use the top object in the file as root. Setting
+            another value will use the sub-entry as root. This can be
+            used to load a subset of the scanfile.
+
+    Returns:
+        Top-level :py:class:`DirObj` object in the hierarchy loaded from the
+        file.
+    '''
 
     base_fname = Path(filename).name
 
@@ -104,14 +120,14 @@ def read_scanfile(filename: TPath, root: Optional[str]=None) -> DirObj:
                 parse_line(line, base_fname, dirtree)
 
             except ValueError as err:
-                exc = err if debug_level() else None
+                exc1 = err if debug_level() else None
                 raise DirscanException(f"{filename}:{lineno}: Field error, "
-                                       f"{err}") from exc
+                                       f"{err}") from exc1
 
             except DirscanException as err:
-                exc = err if debug_level() else None
+                exc2 = err if debug_level() else None
                 raise DirscanException(f"{filename}:{lineno}: Data error, "
-                                       f"{err}") from exc
+                                       f"{err}") from exc2
 
     # Second pass, inserting all the children into the list of parents,
     # building the entire tree structure
@@ -182,8 +198,10 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
 
     # First top-level entry has path='', name='.'.
     if path == '' and name == '.':
-        fpath = ''
-        fname = base_fname
+        # In the top-level entry the scan filename as path, while keeping
+        # the name empty
+        fpath = base_fname
+        fname = ''
 
     # First level entries has path='.', name=*
     elif path == '.':
@@ -213,7 +231,7 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
             raise DirscanException(f"'{objpath}' already exists in file")
         # (parent, children, path)
         dirtree[str(relpath)] = (
-            fileobj, {}, fpath + '/' + fname if fpath else fname)
+            fileobj, {}, fpath + '/' + fname if fname else fpath)
 
     if parent:
         # Add the object into the parent's children list

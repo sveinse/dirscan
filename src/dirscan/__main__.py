@@ -1,21 +1,21 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - command line interface '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
-from typing import Callable, Collection, List, Optional
+from typing import Callable, Collection, List, Optional, Sequence
 from pathlib import PurePosixPath
 import sys
 
 from dirscan.log import set_debug, debug
 from dirscan.scanfile import read_scanfile, get_fileheader, is_scanfile
 from dirscan.scanfile import file_quote, text_quote, SCANFILE_FORMAT
-from dirscan.compare import dir_compare1, dir_compare2, scan_shadb
+from dirscan.walkdirs import (
+    walkdirs, obj_compare1, obj_compare2, scan_shadb
+)
 from dirscan.dirscan import (
-    walkdirs, create_from_fs, DirscanException, DirscanObj, FileObj,
+    create_from_fs, DirscanException, DirscanObj, FileObj,
 )
 from dirscan.formatfields import (
     get_compare_types, get_file_types, get_fieldnames,
@@ -33,8 +33,17 @@ from dirscan.formatfields import TFields, TSummary
 UPDATE_INTERVAL = 300
 
 
-def main(argv=None):  # type: ignore
-    ''' Dirscan command-line entry-point '''
+def main(argv: Optional[Sequence[str]]=None) -> int:
+    '''
+    Entry-point for command-line and ``-mdirscan`` usage.
+
+    Args:
+        argv: Optional list of arguments. If omitted, ``sys.argv`` will be
+            used.
+
+    Returns:
+        Error code of the operation, where 0 indicates success
+    '''
 
     # -- Typings
     summary: List[TSummary]
@@ -75,11 +84,11 @@ def main(argv=None):  # type: ignore
         # -- Settings for scanning
         printfmt = fmtfields.FMT_DEF
         writefmt = ''
-        comparetypes = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
+        compare_types = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
         filetypes = fmtfields.FILE_TYPES_DEFAULT_SCAN
         field_prefix = ['']
         summary = list(fmtfields.SCAN_SUMMARY)
-        dir_comparator = dir_compare1
+        dir_comparator = obj_compare1
         pr_prefix = 'Scanned'
         sequential = True
 
@@ -102,7 +111,7 @@ def main(argv=None):  # type: ignore
             elif opts.verbose:
                 printfmt = '{path}'
             elif opts.duplicates:
-                comparetypes = 'd'
+                compare_types = 'd'
                 duponce = not bool(opts.format)
                 printfmt = '{dupinfo}'
 
@@ -121,11 +130,11 @@ def main(argv=None):  # type: ignore
         # -- Settings for comparing
         printfmt = fmtfields.FMT_COMP_DEF
         writefmt = ''
-        comparetypes = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
+        compare_types = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
         filetypes = fmtfields.FILE_TYPES_DEFAULT_COMPARE
         field_prefix = ['l_', 'r_']
         summary = list(fmtfields.COMPARE_SUMMARY)
-        dir_comparator = dir_compare2
+        dir_comparator = obj_compare2
         pr_prefix = 'Compared'
         sequential = False
 
@@ -137,7 +146,7 @@ def main(argv=None):  # type: ignore
 
         # The all or verbose option will show all compare types
         if opts.all or opts.verbose:
-            comparetypes = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
+            compare_types = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
 
         if opts.shadiff:
             # Want to walk the entire tree on both sides to find any
@@ -151,10 +160,14 @@ def main(argv=None):  # type: ignore
     # -- User provided formats overrides any defaults
     try:
         printfmt = opts.format or printfmt
-        comparetypes = get_compare_types(opts.comparetypes, comparetypes)
+        compare_types = get_compare_types(opts.compare_types, compare_types)
         filetypes = get_file_types(opts.filetypes, filetypes)
     except ValueError as err:
         argp.error(str(err))
+
+    # Unless compare_types contains these compares, there isn't any need to
+    # make any detailed comparisons.
+    no_compare = bool(set('cLRe').intersection(compare_types))
 
     # -- Extra verbose
     if opts.verbose > 1:
@@ -194,7 +207,7 @@ def main(argv=None):  # type: ignore
     debug(1, "  Print format  : '{}'", printfmt)
     debug(1, "  Write format  : '{}'", writefmt)
     debug(1, "  Fields in use : {}", fieldnames)
-    debug(1, "  Compare types : '{}'", comparetypes)
+    debug(1, "  Compare types : '{}'", compare_types)
     debug(1, "  File types    : '{}'", filetypes)
     for i, s in enumerate(summary, start=1):
         debug(1, "  Summary {:2d}    : '{}'", i, s)
@@ -293,8 +306,8 @@ def main(argv=None):  # type: ignore
                 (change, text) = dir_comparator(
                     objs,
                     ignores=opts.ignore,
-                    comparetypes=comparetypes,
-                    compare_time=opts.compare_time,
+                    no_compare=no_compare,
+                    ignore_time=not opts.compare_time,
                     shadb=shadb,
                 )
 
@@ -314,7 +327,7 @@ def main(argv=None):  # type: ignore
                 show = False
 
             # Show this compare type?
-            if fmtfields.COMPARE_ARROWS[change][0] not in comparetypes:
+            if fmtfields.COMPARE_ARROWS[change][0] not in compare_types:
                 show = False
 
             # Save histogram info for the change type
@@ -423,4 +436,4 @@ def main(argv=None):  # type: ignore
 
 
 if __name__ == '__main__':
-    main()  # type: ignore
+    main()

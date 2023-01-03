@@ -85,6 +85,12 @@ def test_fileobj():
     }
 
 
+def test_linkobj():
+
+    # TODO: Add test for linkobj
+    pass
+
+
 def test_dirobj():
 
     a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
@@ -125,6 +131,21 @@ def test_dirobj():
         'mtime': FAKESTAT.st_mtime,
         'children': (),
     }
+
+
+def test_objects():
+
+    # TODO: Test BlockDevObj
+    # TODO: Test CharDevObj
+    # TODO: Test FifoObj
+    # TODO: Test SocketObj
+    pass
+
+
+def test_nonexistingobj():
+
+    # TODO: Test NonExistingObj
+    pass
 
 
 def test_fileobj_hashsum():
@@ -173,7 +194,7 @@ def test_create_from_fs(wd):
     assert a.dev == stat.st_dev
 
 
-def test_create_from_dict_roundtrip(wd):
+def test_create_from_dict(wd):
 
     wd.makedirs('a')
 

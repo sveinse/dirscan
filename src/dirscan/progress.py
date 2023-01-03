@@ -1,11 +1,9 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - helper for printing progress while scanning '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
 from typing import Any, TextIO
 import sys
 import datetime

@@ -1,11 +1,9 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - command-line arguments and help descriptions '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
 import argparse
 
 from dirscan import __version__
@@ -16,17 +14,21 @@ Tool for scanning and comparing directories.
 
 A single LEFT_DIR argument will traverse the given directory or scan file and
 print the contents, similar to ls or find, and can provide a customizable
-summary of the found files. It can save the file list into a scan file with the
--o option. The scan file stores all files metadata, including sha256 hashsum
-of the files.
+summary of the found files.
 
-A LEFT_DIR RIGHT_DIR argument is used to compare directories, showing
-differences between LEFT_DIR and RIGHT_DIR. Either *_DIR can be paths to
-directories or to previous generated scan files.
+The -o options will save the directory traversal into a scan file, which can
+be used for later comparisons against other directories or scan files. The
+scan file stores file metadata for the directory tree, and it stores a sha256
+hashsum for the files. This makes it reliable to use a scan file to check for
+changes to a directory.
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see https://github.com/sveinse/dirscan
-for details)
+Using a LEFT_DIR RIGHT_DIR argument will compare directories, showing the
+differences between LEFT_DIR and RIGHT_DIR. Either arguments can be
+directories or scan files.
+
+Copyright (C) 2010-2023 Svein Seldal
+This application is licensed under MIT license (see
+https://github.com/sveinse/dirscan for details)
 
 '''
 
@@ -176,7 +178,7 @@ def argument_parser() -> argparse.ArgumentParser:
         Enable debug output
         ''')
     argp.add_argument('-f', '--filter', metavar='FILTER_TYPES', action='store',
-                      dest='comparetypes', default='', help='''
+                      dest='compare_types', default='', help='''
         When comparing, show only the following compare relationship:
             e=equal,
             c=changed,

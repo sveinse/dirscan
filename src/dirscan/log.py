@@ -1,11 +1,9 @@
-'''
-This file is a part of dirscan, a tool for recursively
-scanning and comparing directories and files
+''' Dirscan - logging utils '''
+#
+# Copyright (C) 2010-2023 Svein Seldal
+# This code is licensed under MIT license (see LICENSE for details)
+# URL: https://github.com/sveinse/dirscan
 
-Copyright (C) 2010-2022 Svein Seldal
-This code is licensed under MIT license (see LICENSE for details)
-URL: https://github.com/sveinse/dirscan
-'''
 from typing import Any
 import sys
 
@@ -13,7 +11,11 @@ _DEBUG_LEVEL = 0
 
 
 def set_debug(level: int) -> None:
-    ''' Set global debug level '''
+    ''' Set global debug level
+
+    Args:
+        level: Verbosity level
+    '''
     global _DEBUG_LEVEL  # pylint: disable=global-statement
     _DEBUG_LEVEL = level
 

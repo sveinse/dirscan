@@ -158,8 +158,8 @@ d,,,,,,,.
 '''))
     d = ds.read_scanfile('a')
     assert isinstance(d, ds.DirObj)
-    assert d.name == 'a'
-    assert d.path == ''
+    assert d.name == ''
+    assert d.path == 'a'
     assert d.size == 0
     assert d.mode == 0
     assert d.uid == 0
@@ -294,8 +294,8 @@ d,,,,,,,b
 '''))
     a = ds.read_scanfile('a')
     b = a.children()
-    assert a.path == ''
-    assert a.name == 'a'
+    assert a.path == 'a'
+    assert a.name == ''
     assert len(b) == 1
     assert b[0].path == 'a'
     assert b[0].name == 'b'
@@ -310,8 +310,8 @@ d,,,,,,,b/c
     a = ds.read_scanfile('a')
     b = a.children()
     c = b[0].children()
-    assert a.path == ''
-    assert a.name == 'a'
+    assert a.path == 'a'
+    assert a.name == ''
     assert len(b) == 1
     assert b[0].path == 'a'
     assert b[0].name == 'b'
@@ -327,8 +327,8 @@ d,,,,,,,./b
 '''))
     a = ds.read_scanfile('a')
     b = a.children()
-    assert a.path == ''
-    assert a.name == 'a'
+    assert a.path == 'a'
+    assert a.name == ''
     assert len(b) == 1
     assert b[0].path == 'a'
     assert b[0].name == 'b'
@@ -343,8 +343,8 @@ d,,,,,,,./b/c
     a = ds.read_scanfile('a')
     b = a.children()
     c = b[0].children()
-    assert a.path == ''
-    assert a.name == 'a'
+    assert a.path == 'a'
+    assert a.name == ''
     assert len(b) == 1
     assert b[0].path == 'a'
     assert b[0].name == 'b'
