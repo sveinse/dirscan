@@ -12,7 +12,6 @@ import os
 import datetime
 import stat as osstat
 import hashlib
-import filecmp
 import fnmatch
 import binascii
 from pathlib import Path
@@ -24,6 +23,7 @@ HASHALGORITHM = hashlib.sha256
 
 # Number of bytes to read per round in the hash reader
 HASHCHUNKSIZE = 16*4096
+CHUNKSIZE = 16*4096
 
 # Minimum difference in seconds to consider it a changed timestamp
 TIME_THRESHOLD = 1
@@ -290,8 +290,10 @@ class FileObj(DirscanObj):
 
         # Only query the fs if None
         if self._hashsum is None:
-            shahash = HASHALGORITHM()
-            with open(self.fullpath, 'rb') as shafile:
+            with (
+                open(self.fullpath, 'rb') as shafile,
+            ):
+                shahash = HASHALGORITHM()
                 while True:
                     data = shafile.read(HASHCHUNKSIZE)
                     if not data:
@@ -325,8 +327,20 @@ class FileObj(DirscanObj):
             # read from listfiles, we have to use hashsums.
             if self.hashsum != other.hashsum:
                 yield 'contents differs'
-        elif not filecmp.cmp(self.fullpath, other.fullpath, shallow=False):
-            yield 'contents differs'
+        else:
+            # Compare the file contents. Type and size are equal prior to
+            # entering this code
+            with (
+                open(self.fullpath, 'rb') as f1,
+                open(other.fullpath, 'rb') as f2,
+            ):
+                while True:
+                    d1 = f1.read(CHUNKSIZE)
+                    d2 = f2.read(CHUNKSIZE)
+                    if d1 != d2:
+                        yield 'contents differs'
+                    if not d1:
+                        break
 
     def to_dict(self) -> DirscanDict:
         data = super().to_dict()

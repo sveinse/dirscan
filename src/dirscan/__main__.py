@@ -15,7 +15,7 @@ from dirscan.walkdirs import (
     walkdirs, obj_compare1, obj_compare2, scan_shadb
 )
 from dirscan.dirscan import (
-    create_from_fs, DirscanException, DirscanObj, FileObj,
+    create_from_fs, DirscanException, DirscanObj, FileObj, OBJTYPES
 )
 from dirscan.formatfields import (
     get_compare_types, get_file_types, get_fieldnames,
@@ -118,7 +118,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
         if opts.duplicates:
             filetypes = 'f'
             # Sneaky way to add DUP to printings
-            printfmt = printfmt.replace('{path}', '{dup}  {path}')
+            printfmt = printfmt.replace('{path}', '{dup}  {dupid}  {path}')
 
             if opts.shadiff:
                 argp.error("--sha doesn't work with --duplicates")
@@ -167,7 +167,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
 
     # Unless compare_types contains these compares, there isn't any need to
     # make any detailed comparisons.
-    no_compare = bool(set('cLRe').intersection(compare_types))
+    no_compare = not bool(set('cLRe').intersection(compare_types))
 
     # -- Extra verbose
     if opts.verbose > 1:
@@ -208,7 +208,9 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     debug(1, "  Write format  : '{}'", writefmt)
     debug(1, "  Fields in use : {}", fieldnames)
     debug(1, "  Compare types : '{}'", compare_types)
+    debug(1, "                : ({})", ", ".join(fmtfields.COMPARE_TYPES[c] for c in compare_types))
     debug(1, "  File types    : '{}'", filetypes)
+    debug(1, "                : ({})", ", ".join(OBJTYPES[o].objname for o in filetypes))
     for i, s in enumerate(summary, start=1):
         debug(1, "  Summary {:2d}    : '{}'", i, s)
     debug(1, "  Opts          : {}", opts)
@@ -261,6 +263,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
 
         # -- Scan the database
         shadb = {}
+        shaid = {}
         shavisited = set()
         if opts.duplicates or opts.shadiff:
 
@@ -273,6 +276,9 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
                 exception_fn=error_handler,
                 progress=progress
             )
+
+            # -- Assign each sha an ID
+            shaid = {sha: i for i, sha in enumerate(shadb, start=1)}
 
         # -- Open output file
         if opts.outfile:
@@ -355,6 +361,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
             if opts.duplicates: # and right is None:
                 fields['dupinfo'] = ''
                 fields['dup'] = '   '
+                fields['dupid'] = '   '
                 fields['dupcount'] = 0
 
                 # Technically not needed, due to sequential setting ensures it
@@ -365,17 +372,21 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
                         continue
                     sha = obj.hashsum
 
+                    visited = sha in shavisited
+                    if not visited:
+                        shavisited.add(sha)
+
                     # Skip if the duplicated entry has already been printed
-                    if duponce and sha in shavisited:
+                    if duponce and visited:
                         continue
 
-                    shavisited.add(sha)
                     compares = [str(o[1].fullpath) for o in shadb[sha]]
                     fields['dupcount'] = len(compares)
                     if len(compares) > 1:
+                        fields['dupid'] = f'{shaid[sha]:3d}'
                         lec = len(compares)
                         j = '\n    '.join(compares)
-                        fields['dupinfo'] = f'File duplicated {lec} times:\n    {j}\n'
+                        fields['dupinfo'] = f'File duplicated {lec} times:  (ID {shaid[sha]})\n    {j}\n'
                         fields['dup'] = 'DUP'
 
             # Update the fields from the file objects. This retries the values

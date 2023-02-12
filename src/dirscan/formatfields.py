@@ -49,9 +49,44 @@ FMT_L = '{mode_h}  {uid:5} {gid:5}  {size:>10}  {mtime_h}  {path}'
 FMT_COMP_DEF = '{arrow}  {relpath}  :  {text}'
 
 # All compare types
-COMPARE_TYPES_ALL = 'elrcLRnmtExsdi'
+COMPARE_TYPES = {
+    'E': 'Error',
+    'x': 'Excluded',
+    'r': 'Right only',
+    'l': 'Left only',
+    'm': 'Renamed in right',
+    'n': 'Renamed in left',
+    't': 'Different type',
+    'c': 'Content changed',
+    'L': 'Left is newer',
+    'R': 'Right is newer',
+    'e': 'Equal',
+    's': 'Scan',
+    'd': 'Duplicated',
+    'i': 'Skipped',
+}
+COMPARE_TYPES_ALL = ''.join(COMPARE_TYPES.keys())
 COMPARE_TYPES_DEFAULT_SCAN = 'sd'
 COMPARE_TYPES_DEFAULT_COMPARE = 'rltcLRnm'
+
+COMPARE_ARROWS = {
+    # Change type    : (filter, arrow)
+    'error'          : ('E', 'ERROR'),
+    'excluded'       : ('x', '    x'),
+    'right_only'     : ('r', '   >>'),
+    'left_only'      : ('l', '<<   '),
+    'right_renamed'  : ('m', 'R-->>'),
+    'left_renamed'   : ('n', '<<--R'),
+    'different_type' : ('t', '<~T~>'),
+    'changed'        : ('c', '<--->'),
+    'left_newer'     : ('L', '<<-->'),
+    'right_newer'    : ('R', '<-->>'),
+    'equal'          : ('e', '     '),
+    'scan'           : ('s', '     '),
+    'duplicated'     : ('d', '  DUP'),
+    'skipped'        : ('i', '    -'),
+}
+
 
 # All file types
 FILE_TYPES_ALL = 'fdlbcps'
@@ -101,25 +136,6 @@ FILE_FIELDS: Dict[str, Callable[[DirscanObj], TField]] = {
 
     # The device node which the file resides
     'dev': lambda o: o.dev,
-}
-
-
-COMPARE_ARROWS = {
-    # Change type    : (filter, arrow)
-    'error'          : ('E', 'ERROR'),
-    'excluded'       : ('x', '    x'),
-    'right_only'     : ('r', '   >>'),
-    'left_only'      : ('l', '<<   '),
-    'right_renamed'  : ('m', 'R-->>'),
-    'left_renamed'   : ('n', '<<--R'),
-    'different_type' : ('t', '<~T~>'),
-    'changed'        : ('c', '<--->'),
-    'left_newer'     : ('L', '<<-->'),
-    'right_newer'    : ('R', '<-->>'),
-    'equal'          : ('e', '     '),
-    'scan'           : ('s', '     '),
-    'duplicated'     : ('d', '  DUP'),
-    'skipped'        : ('i', '    -'),
 }
 
 
