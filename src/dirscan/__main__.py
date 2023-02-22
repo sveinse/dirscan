@@ -22,7 +22,7 @@ from dirscan.formatfields import (
     get_fields, write_fileinfo, write_summary, Statistics,
 )
 from dirscan.usage import argument_parser, DIRSCAN_FORMAT_HELP
-from dirscan.progress import PrintProgress
+from dirscan.progress import setprogress, PrintProgress
 import dirscan.formatfields as fmtfields
 
 # Typings
@@ -30,7 +30,8 @@ from dirscan.formatfields import TFields, TSummary
 
 
 # Update interval of the progress in ms
-UPDATE_INTERVAL = 300
+UPDATE_DELAY = 300
+UPDATE_INTERVAL = 100
 
 
 def main(argv: Optional[Sequence[str]]=None) -> int:
@@ -174,6 +175,11 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
         # Prefix fields
         printfmt = '{change_t}  ' + printfmt
 
+    # Ensure printability in powershell (that won't encode surrogates).
+    # surrogatepass?
+    sys.stderr.reconfigure(errors='backslashreplace')
+    sys.stdout.reconfigure(errors='backslashreplace')
+
     # -- Verify file types
     if opts.duplicates and filetypes != 'f':
         argp.error("Cannot use other filetypes than 'f' in --duplicates mode")
@@ -217,8 +223,10 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     debug(1, "")
 
     # -- Handler for printing progress to stderr
-    progress = PrintProgress(file=sys.stderr, delta_ms=UPDATE_INTERVAL,
-                             show_progress=opts.progress)
+    #    Set the global scope to allow inner functions to report progress
+    progress = PrintProgress(file=sys.stderr, update_interval=UPDATE_INTERVAL,
+                             update_delay=UPDATE_DELAY, show_progress=opts.progress)
+    setprogress(progress)
 
     # -- Prepare the histograms to collect statistics
     stats = Statistics(left, right)
@@ -274,7 +282,6 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
                 excludes=opts.exclude,
                 onefs=opts.onefs,
                 exception_fn=error_handler,
-                progress=progress
             )
 
             # -- Assign each sha an ID
@@ -287,129 +294,131 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
                            errors='surrogateescape')
             outfile.write(get_fileheader())
 
-        # Prepare progress values
-        count = 0
+        # -- Setup progress printing context
+        with progress.progress(
+            text=f"{pr_prefix} {{count}} files:  {{text}}",
+        ) as ctxprogress:
 
-        # -- TRAVERSE THE DIR(S)
-        for (path, objs) in walkdirs(
-                dirs,
-                reverse=opts.reverse,
-                excludes=opts.exclude,
-                onefs=opts.onefs,
-                traverse_oneside=opts.recurse,
-                exception_fn=error_handler,
-                close_during=False,
-                sequential=sequential,
-            ):
+            # -- TRAVERSE THE DIR(S)
+            for (path, objs) in walkdirs(
+                    dirs,
+                    reverse=opts.reverse,
+                    excludes=opts.exclude,
+                    onefs=opts.onefs,
+                    traverse_oneside=opts.recurse,
+                    exception_fn=error_handler,
+                    close_during=False,
+                    sequential=sequential,
+                ):
 
-            # Progress printing
-            count += 1
-            cur = objs[0].fullpath if len(objs) == 1 else path
-            progress.progress(f"{pr_prefix} {count} files:  {cur} ")
+                # Progress printing
+                ctxprogress.step(text=str(objs[0].fullpath if len(objs) == 1 else path))
 
-            # Compare the objects
-            try:
-                (change, text) = dir_comparator(
-                    objs,
-                    ignores=opts.ignore,
-                    no_compare=no_compare,
-                    ignore_time=not opts.compare_time,
-                    shadb=shadb,
-                )
+                # Compare the objects
+                try:
+                    (change, text) = dir_comparator(
+                        objs,
+                        ignores=opts.ignore,
+                        no_compare=no_compare,
+                        ignore_time=not opts.compare_time,
+                        shadb=shadb,
+                    )
 
-            except OSError as err:
-                # Errors here are due to comparisons that fail.
-                error_handler(err)
-                change = 'error'
-                text = 'Compare failed: ' + str(err)
+                except OSError as err:
+                    # Errors here are due to comparisons that fail.
+                    error_handler(err)
+                    change = 'error'
+                    text = 'Compare failed: ' + str(err)
 
-            debug(3, "      Compare: {} {}", change, text)
+                debug(3, "      Compare: {} {}", change, text)
 
-            # Going to show this entry?
-            show = show_filter(objs)
+                # Going to show this entry?
+                show = show_filter(objs)
 
-            # Show this filetype?
-            if not any(o.objtype in filetypes for o in objs):
-                show = False
+                # Show this filetype?
+                if not any(o.objtype in filetypes for o in objs):
+                    show = False
 
-            # Show this compare type?
-            if fmtfields.COMPARE_ARROWS[change][0] not in compare_types:
-                show = False
+                # Show this compare type?
+                if fmtfields.COMPARE_ARROWS[change][0] not in compare_types:
+                    show = False
 
-            # Save histogram info for the change type
-            stats.add_stats(change)
+                # Save histogram info for the change type
+                stats.add_stats(change)
 
-            # Skip this entry if its not going to be printed
-            if not show:
-                debug(3, "     hidden")
-                continue
+                # Skip this entry if its not going to be printed
+                if not show:
+                    debug(3, "     hidden")
+                    continue
 
-            # Save file histogram info
-            stats.add_filestats(objs)
+                # Save file histogram info
+                stats.add_filestats(objs)
 
-            # Set the base fields
-            fields: TFields = {
-                'relpath': str(path),
-                'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
-                'change': change,
-                'change_t': fmtfields.COMPARE_ARROWS[change][0],
-                'arrow' : fmtfields.COMPARE_ARROWS[change][1],
-                'text'  : text.capitalize(),
-            }
+                # Set the base fields
+                fields: TFields = {
+                    'relpath': str(path),
+                    'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
+                    'change': change,
+                    'change_t': fmtfields.COMPARE_ARROWS[change][0],
+                    'arrow' : fmtfields.COMPARE_ARROWS[change][1],
+                    'text'  : text.capitalize(),
+                }
 
-            # Write list of duplicates to the extra field
-            if opts.duplicates: # and right is None:
-                fields['dupinfo'] = ''
-                fields['dup'] = '   '
-                fields['dupid'] = '   '
-                fields['dupcount'] = 0
+                # Write list of duplicates to the extra field
+                if opts.duplicates: # and right is None:
+                    fields['dupinfo'] = ''
+                    fields['dup'] = '   '
+                    fields['dupid'] = '   '
+                    fields['dupcount'] = 0
 
-                # Technically not needed, due to sequential setting ensures it
-                # will only contain one directory. Probably smart to keep this
-                # as a safeguard. Same applies to the FileObj test.
-                for obj in objs:
-                    if not isinstance(obj, FileObj):
-                        continue
-                    sha = obj.hashsum
+                    # Technically not needed, due to sequential setting ensures it
+                    # will only contain one directory. Probably smart to keep this
+                    # as a safeguard. Same applies to the FileObj test.
+                    for obj in objs:
+                        if not isinstance(obj, FileObj):
+                            continue
+                        sha = obj.hashsum
 
-                    visited = sha in shavisited
-                    if not visited:
-                        shavisited.add(sha)
+                        visited = sha in shavisited
+                        if not visited:
+                            shavisited.add(sha)
 
-                    # Skip if the duplicated entry has already been printed
-                    if duponce and visited:
-                        continue
+                        # Skip if the duplicated entry has already been printed
+                        if duponce and visited:
+                            continue
 
-                    compares = [str(o[1].fullpath) for o in shadb[sha]]
-                    fields['dupcount'] = len(compares)
-                    if len(compares) > 1:
-                        fields['dupid'] = f'{shaid[sha]:3d}'
-                        lec = len(compares)
-                        j = '\n    '.join(compares)
-                        fields['dupinfo'] = f'File duplicated {lec} times:  (ID {shaid[sha]})\n    {j}\n'
-                        fields['dup'] = 'DUP'
+                        compares = [str(o[1].fullpath) for o in shadb[sha]]
+                        fields['dupcount'] = len(compares)
+                        if len(compares) > 1:
+                            fields['dupid'] = f'{shaid[sha]:3d}'
+                            lec = len(compares)
+                            j = '\n    '.join(compares)
+                            fields['dupinfo'] = (
+                                f'File duplicated {lec} times:  '
+                                f'(ID {shaid[sha]})\n    {j}\n')
+                            fields['dup'] = 'DUP'
 
-            # Update the fields from the file objects. This retries the values
-            # for the fields which are in actual use. This saves a lot of
-            # resources instead of fetching everything
-            (errors, filefields) = get_fields(objs, field_prefix, fieldnames)
-            fields.update(filefields)
-            for error in errors:
-                error_handler(error)
+                # Update the fields from the file objects. This retries the values
+                # for the fields which are in actual use. This saves a lot of
+                # resources instead of fetching everything
+                (errors, filefields) = get_fields(objs, field_prefix, fieldnames)
+                fields.update(filefields)
+                for error in errors:
+                    error_handler(error)
 
-            # Print to stdout
-            if printfmt:
-                write_fileinfo(printfmt, fields, quoter=text_quote,
-                               file=sys.stdout, end=end)
+                # Print to stdout
+                if printfmt:
+                    write_fileinfo(printfmt, fields, quoter=text_quote,
+                                   file=sys.stdout, end=end)
 
-            # Write to file -- don't write if we couldn't get all fields
-            if outfile and writefmt and not errors:
-                write_fileinfo(writefmt, fields, quoter=file_quote,
-                               file=outfile)
+                # Write to file -- don't write if we couldn't get all fields
+                if outfile and writefmt and not errors:
+                    write_fileinfo(writefmt, fields, quoter=file_quote,
+                                   file=outfile)
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors
-        print(prog + ': ' + str(err))
+        progress.print(prog + ': ' + str(err))
 
         # Show the full traceback in debug mode
         if opts.debug:

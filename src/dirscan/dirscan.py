@@ -18,6 +18,8 @@ from pathlib import Path
 
 from typing_extensions import NotRequired, TypedDict  # for Python <3.11
 
+from dirscan.progress import getprogress
+
 # Select hash algorthm to use
 HASHALGORITHM = hashlib.sha256
 
@@ -27,7 +29,6 @@ CHUNKSIZE = 16*4096
 
 # Minimum difference in seconds to consider it a changed timestamp
 TIME_THRESHOLD = 1
-
 
 # Typings
 TPath = Union[str, Path]
@@ -291,11 +292,15 @@ class FileObj(DirscanObj):
         # Only query the fs if None
         if self._hashsum is None:
             with (
+                # Global scoped progress indicator
+                getprogress().progress(
+                    text="  [{percent:3.1f}% done]", size=self.size) as progress,
                 open(self.fullpath, 'rb') as shafile,
             ):
                 shahash = HASHALGORITHM()
                 while True:
                     data = shafile.read(HASHCHUNKSIZE)
+                    progress.step(size=len(data))
                     if not data:
                         break
                     shahash.update(data)
@@ -331,12 +336,16 @@ class FileObj(DirscanObj):
             # Compare the file contents. Type and size are equal prior to
             # entering this code
             with (
+                # Global scoped progress indicator
+                getprogress().progress(
+                    text="  [{percent:3.1f)% done]", size=self.size) as progress,
                 open(self.fullpath, 'rb') as f1,
                 open(other.fullpath, 'rb') as f2,
             ):
                 while True:
                     d1 = f1.read(CHUNKSIZE)
                     d2 = f2.read(CHUNKSIZE)
+                    progress.step(size=len(d1))
                     if d1 != d2:
                         yield 'contents differs'
                     if not d1:

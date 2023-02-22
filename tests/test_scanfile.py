@@ -499,6 +499,7 @@ ENCODES = (
     ('all', 'ed', 'Δ', 'Δ'),
     ('all', 'ed', 'æ', 'æ'),  # As utf-8 \xc3\xa6
     ('all', 'ed', '\udcfa', '\\xfa'),  # Surrogate escape for 0x80-0xff on some file systems
+    ('all', 'ed', '\udc6d', '\\udc6d'),  # Surrogate outside the python range
     ('all', 'ed', '@Δ😇ab', '@Δ😇ab'),
     ('all', 'd',  '\x40\u0394\U0001f607ab', '\\x40\\u0394\\U0001f607ab'),
     ('all', 'd',  '\n', '\\n'),

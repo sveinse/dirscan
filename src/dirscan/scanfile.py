@@ -262,8 +262,13 @@ def quote(text: str, extended: bool=False) -> str:
                 yield c
 
     text = "".join(_quote(text))
-    # Need this to encode surrogates \udcfa -> \\xfa
-    text = text.encode(errors='surrogateescape').decode(errors='backslashreplace')
+    try:
+        # Need this to encode surrogates \udcfa -> \\xfa
+        btext = text.encode(errors='surrogateescape')
+    except UnicodeEncodeError:
+        # But fails on other surrogates, so \udc6d -> \\udc6d
+        btext = text.encode(errors='backslashreplace')
+    text = btext.decode(errors='backslashreplace')
     return text
 
 

@@ -10,7 +10,7 @@ import itertools
 from pathlib import Path
 
 from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, create_from_fs
-from dirscan.progress import PrintProgress
+from dirscan.progress import getprogress
 from dirscan.log import debug
 
 # Typings
@@ -212,7 +212,6 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
 def scan_shadb(dirs: Collection[DirscanObj],
                *,
                exception_fn: Optional[Callable[[Exception], bool]]=None,
-               progress: Optional[PrintProgress]=None,
                **kwargs: Any,
                ) -> TShadb:
     '''
@@ -225,7 +224,6 @@ def scan_shadb(dirs: Collection[DirscanObj],
         exception_fn: Exception handler callback. It will be called if any
             exceptions occur during traversal, typically file system errors.
             See ``exception_fn`` argument of :py:func:`walkdirs()`.
-        progress: UI helper to show progress.
         kwargs: Additional options passed to :py:func:`walkdirs()`
 
     Returns:
@@ -239,33 +237,32 @@ def scan_shadb(dirs: Collection[DirscanObj],
     # -- Build the sha database
     shadb: TShadb = {}
 
-    # Prepare progress values
-    count = 0
+    # -- Setup the global progress indicator context
+    with getprogress().progress(
+            text="Scanning {count} files:  {text}") as progress:
 
-    for i, sdir in enumerate(dirs):
-        for (_, objs) in walkdirs(
-                [sdir],
-                exception_fn=exception_fn,
-                close_during=False,
-                **kwargs):
+        for i, sdir in enumerate(dirs):
+            for (_, objs) in walkdirs(
+                    [sdir],
+                    exception_fn=exception_fn,
+                    close_during=False,
+                    **kwargs):
 
-            # Progress printing
-            count += 1
-            if progress:
-                progress.progress(f"Scanning {count} files:  {objs[0].fullpath}")
+                # Progress printing
+                progress.step(text=str(objs[0].fullpath))
 
-            # Evaluate the hashsum for each of the objects and store in
-            # sha database
-            for obj in objs:
-                if not isinstance(obj, FileObj) or obj.excluded:
-                    continue
+                # Evaluate the hashsum for each of the objects and store in
+                # sha database
+                for obj in objs:
+                    if not isinstance(obj, FileObj) or obj.excluded:
+                        continue
 
-                try:
-                    # Get the hashsum and store it to the shadb list
-                    shadb.setdefault(obj.hashsum, []).append((i, obj))
-                except IOError as err:
-                    if not exception_fn or not exception_fn(err):
-                        raise
+                    try:
+                        # Get the hashsum and store it to the shadb list
+                        shadb.setdefault(obj.hashsum, []).append((i, obj))
+                    except IOError as err:
+                        if not exception_fn or not exception_fn(err):
+                            raise
 
     return shadb
 
