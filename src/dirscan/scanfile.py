@@ -1,15 +1,17 @@
 ''' Dirscan - functions for reading and writing scanfiles '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple, Union
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from dirscan.dirscan import DirscanException, create_from_dict, TPath
 from dirscan.dirscan import DirscanObj, DirObj, DirscanDict
+from dirscan.walkdirs import walkdirs
+from dirscan.formatfields import write_fileinfo, get_fieldnames, get_fields
 from dirscan.log import debug_level
 
 

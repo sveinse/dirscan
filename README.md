@@ -14,7 +14,7 @@ Project home:
 
           https://github.com/sveinse/dirscan
 
-Copyright 2010-2023, Svein Seldal
+Copyright 2010-2025, Svein Seldal
 
 
 ## Installation
@@ -81,7 +81,7 @@ type of file or comparison result to show. Options `--format` and
 
 ```python
     dirscan.walkdirs(dirs, reverse=False, excludes=None, onefs=False,
-                     traverse_oneside=None, exception_fn=None,
+                     traverse_into_oneside=False, exception_fn=None,
                      close_during=True)
 ```
 

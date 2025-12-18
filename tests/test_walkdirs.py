@@ -195,10 +195,10 @@ def test_walkdirs_scan_reverse(wd):
 
 
 #
-# Test traverse_oneside setting
+# Test traverse_into_oneside setting
 #
 
-def test_walkdirs_traverse_oneside_scan(wd):
+def test_walkdirs_traverse_into_onesided_scan(wd):
 
     maketree(wd, 'a')
     dirs = ('a', )
@@ -211,11 +211,11 @@ def test_walkdirs_traverse_oneside_scan(wd):
         ('x', ds.FileObj),
     )
 
-    compare(dirs, expected, traverse_oneside=False)
-    compare(dirs, expected, traverse_oneside=True)
+    compare(dirs, expected, traverse_into_oneside=False)
+    compare(dirs, expected, traverse_into_oneside=True)
 
 
-def test_walkdirs_traverse_oneside_scan2(wd):
+def test_walkdirs_traverse_into_onesided_scan2(wd):
 
     maketree(wd, 'a')
     maketree(wd, 'b', withb=False)
@@ -236,11 +236,11 @@ def test_walkdirs_traverse_oneside_scan2(wd):
         ('x', ds.FileObj, ds.FileObj),
     )
 
-    compare(dirs, expected_false, traverse_oneside=False)
-    compare(dirs, expected_true, traverse_oneside=True)
+    compare(dirs, expected_false, traverse_into_oneside=False)
+    compare(dirs, expected_true, traverse_into_oneside=True)
 
 
-def test_walkdirs_traverse_oneside_scan3(wd):
+def test_walkdirs_traverse_into_onesided_scan3(wd):
 
     maketree(wd, 'a')
     maketree(wd, 'b')
@@ -267,8 +267,8 @@ def test_walkdirs_traverse_oneside_scan3(wd):
         ('x'  , ds.FileObj, ds.FileObj, ds.FileObj),
     )
 
-    compare(dirs1, expected_false1, traverse_oneside=False)
-    compare(dirs2, expected_false2, traverse_oneside=False)
+    compare(dirs1, expected_false1, traverse_into_oneside=False)
+    compare(dirs2, expected_false2, traverse_into_oneside=False)
 
     expected_true1 = expected_false1
     expected_true2 = (
@@ -279,8 +279,8 @@ def test_walkdirs_traverse_oneside_scan3(wd):
         ('x'  , ds.FileObj, ds.FileObj, ds.FileObj),
     )
 
-    compare(dirs1, expected_true1, traverse_oneside=True)
-    compare(dirs2, expected_true2, traverse_oneside=True)
+    compare(dirs1, expected_true1, traverse_into_oneside=True)
+    compare(dirs2, expected_true2, traverse_into_oneside=True)
 
 
 #

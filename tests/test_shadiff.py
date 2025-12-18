@@ -11,7 +11,7 @@ def scan(dirs, compare=ds.obj_compare2):
 
     for (p, o) in ds.walkdirs(
             dirs,
-            traverse_oneside=True,
+            traverse_into_oneside=True,
         ):
         c, t = compare(
             o,

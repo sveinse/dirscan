@@ -1,6 +1,6 @@
 ''' Dirscan - helpers for command-line printing and output '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -10,6 +10,7 @@ from typing import (Any, Callable, Collection, Dict, List, Optional, Set,
 import sys
 import stat
 import string
+import time
 
 from dirscan.dirscan import DirscanObj, FileObj, LinkObj
 
@@ -151,7 +152,7 @@ SCAN_SUMMARY: Tuple[TSummary, ...] = (
                                 "{n_fifos} fifos, "
                                 "{n_sockets} sockets)"),
     ('n_exclude',        "    {n_exclude}  excluded files or directories"),
-    (True,               "In total {n_objects} file objects"),
+    (True,               "In total {n_objects} file objects in {time_s}"),
 )
 
 
@@ -169,7 +170,7 @@ COMPARE_SUMMARY: Tuple[TSummary, ...] = (
     ('n_excludes',       "    {n_excludes}  excluded files or directories"),
     ('n_errors',         "    {n_errors}  compare errors"),
     ('n_skipped',        "    {n_skipped}  skipped comparisons"),
-    (True,               "In total {n_objects} file objects"),
+    (True,               "In total {n_objects} file objects in {time_s}"),
 )
 
 
@@ -263,6 +264,16 @@ def format_data(obj: DirscanObj) -> Union[None, str]:
     if isinstance(obj, LinkObj):
         return obj.link
     return None
+
+
+def format_time(timestamp: float) -> str:
+    ''' Return a formatted time string '''
+    if timestamp < 60:
+        return f"{timestamp:.1f} seconds"
+    tsint = int(timestamp)
+    if timestamp < 3600:
+        return f"{tsint//60:02d}:{tsint%60:02d} minutes"
+    return f"{tsint//3600:02d}:{(tsint%3600)//60:02f}:{tsint%60:02d} hours"
 
 
 def get_fields(objs: Collection[DirscanObj],
@@ -484,6 +495,8 @@ class Statistics:
     ''' Class for collecting dirscan statistics '''
 
     filehist: List[FileHistogram]
+    start_time: int
+    end_time: int
 
     def __init__(self, left: str, right: Optional[str]):
         self.compare = CompareHistogram(left, right)
@@ -491,6 +504,7 @@ class Statistics:
             self.filehist = [FileHistogram(left)]
         else:
             self.filehist = [FileHistogram(left), FileHistogram(right)]
+        self.set_start_time()
 
     def add_stats(self, change: str) -> None:
         ''' Collect compare statistics '''
@@ -521,4 +535,17 @@ class Statistics:
                     field = field[2:]
                 fields[prefix + field] = data
 
+        # Append the local fields
+        seconds = (self.end_time - self.start_time) / 1e9
+        fields['time'] = seconds
+        fields['time_s'] = format_time(seconds)
+
         return fields
+
+    def set_start_time(self) -> None:
+        ''' Set the start time '''
+        self.start_time = time.perf_counter_ns()
+
+    def set_end_time(self) -> None:
+        ''' Set the end time '''
+        self.end_time = time.perf_counter_ns()

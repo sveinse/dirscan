@@ -1,6 +1,6 @@
 ''' Dirscan - command line interface '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -152,7 +152,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
         if opts.shadiff:
             # Want to walk the entire tree on both sides to find any
             # duplicates
-            opts.traverse_oneside = True
+            opts.recurse = True
 
     # -- Scanfile prefix settings
     opts.leftprefix = opts.leftprefix or opts.prefix
@@ -224,9 +224,12 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
 
     # -- Handler for printing progress to stderr
     #    Set the global scope to allow inner functions to report progress
-    progress = PrintProgress(file=sys.stderr, update_interval=UPDATE_INTERVAL,
-                             update_delay=UPDATE_DELAY, show_progress=opts.progress)
-    setprogress(progress)
+    progressmgr = PrintProgress(file=sys.stderr,
+                                update_interval=UPDATE_INTERVAL,
+                                update_delay=UPDATE_DELAY,
+                                show_progress=opts.progress)
+    progressmgr.__enter__()
+    setprogress(progressmgr)
 
     # -- Prepare the histograms to collect statistics
     stats = Statistics(left, right)
@@ -236,7 +239,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
-            progress.print(f"{prog}: {exception}")
+            progressmgr.print(f"{prog}: {exception}")
 
         # True will swallow the exception. In debug mode
         # the error will be raised
@@ -287,6 +290,34 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
             # -- Assign each sha an ID
             shaid = {sha: i for i, sha in enumerate(shadb, start=1)}
 
+        # -- First pass
+        obj_count = -1
+        if opts.twopass:
+            progressmgr.print("Pass 1...")
+
+            with progressmgr.progress(
+                fixed_prefix=f"{pr_prefix} {{count}} files:  ",
+                format="{text}",
+            ) as progress:
+
+                # -- Do the first pass to count the number of objects
+                for (path, objs) in walkdirs(
+                        dirs,
+                        reverse=opts.reverse,
+                        excludes=opts.exclude,
+                        onefs=opts.onefs,
+                        traverse_into_oneside=opts.recurse,
+                        exception_fn=error_handler,
+                        close_during=False,
+                        sequential=True,
+                    ):
+
+                    # Progress printing
+                    progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
+
+                obj_count = progress.count
+                sequential = False
+
         # -- Open output file
         if opts.outfile:
             # pylint: disable=consider-using-with
@@ -295,9 +326,14 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
             outfile.write(get_fileheader())
 
         # -- Setup progress printing context
-        with progress.progress(
-            text=f"{pr_prefix} {{count}} files:  {{text}}",
-        ) as ctxprogress:
+        with progressmgr.progress(
+            fixed_prefix=f"{pr_prefix} {{count}} files:  " if obj_count < 0 else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
+            total_count=obj_count,
+            format="{text}",
+        ) as progress:
+
+            if opts.twopass:
+                progressmgr.print("Pass 2...")
 
             # -- TRAVERSE THE DIR(S)
             for (path, objs) in walkdirs(
@@ -305,14 +341,14 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
                     reverse=opts.reverse,
                     excludes=opts.exclude,
                     onefs=opts.onefs,
-                    traverse_oneside=opts.recurse,
+                    traverse_into_oneside=opts.recurse,
                     exception_fn=error_handler,
                     close_during=False,
                     sequential=sequential,
                 ):
 
                 # Progress printing
-                ctxprogress.step(text=str(objs[0].fullpath if len(objs) == 1 else path))
+                progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
 
                 # Compare the objects
                 try:
@@ -418,7 +454,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors
-        progress.print(prog + ': ' + str(err))
+        progressmgr.print(prog + ': ' + str(err))
 
         # Show the full traceback in debug mode
         if opts.debug:
@@ -427,6 +463,9 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
         return 1
 
     finally:
+        # Close the statistics
+        stats.set_end_time()
+
         # Close any open output file
         if outfile:
             outfile.close()

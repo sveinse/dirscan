@@ -1,6 +1,6 @@
 ''' Dirscan - directory objects '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -200,7 +200,7 @@ class DirscanObj:
             yield 'GID differs'
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.path},{self.name})"
+        return f"{type(self).__name__}({self.fullpath})"
 
     def set_exclude(self, excludes: Collection[TPath],
                     base: 'DirscanObj',

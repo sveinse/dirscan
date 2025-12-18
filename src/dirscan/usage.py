@@ -1,6 +1,6 @@
 ''' Dirscan - command-line arguments and help descriptions '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -26,7 +26,7 @@ Using a LEFT_DIR RIGHT_DIR argument will compare directories, showing the
 differences between LEFT_DIR and RIGHT_DIR. Either arguments can be
 directories or scan files.
 
-Copyright (C) 2010-2023 Svein Seldal
+Copyright (C) 2010-2025 Svein Seldal
 This application is licensed under MIT license (see
 https://github.com/sveinse/dirscan for details)
 
@@ -165,6 +165,11 @@ def argument_parser() -> argparse.ArgumentParser:
                       default=False, help='''
         Print each line using the NUL char instead of the newline char
         ''')
+    argp.add_argument('-2', '--twopass', action='store_true', dest='twopass',
+                      default=False, help='''
+        Use two-pass scanning to find missing files. This is useful when
+        comparing directories with a large number of files.
+        ''')
     argp.add_argument('-a', '--all', action='store_true', dest='all',
                       default=False, help='''
         Print all file info
@@ -241,7 +246,7 @@ def argument_parser() -> argparse.ArgumentParser:
                       default=False, help='''
         Traverse directories in reverse order
         ''')
-    argp.add_argument('-r', '--recursive', action='store_true',
+    argp.add_argument('-r', '--recurse', action='store_true',
                       dest='recurse', default=False, help='''
         Traverse directories recursively that exists on only one side of
         comparison. Normally dirscan skips entering directories that only exists

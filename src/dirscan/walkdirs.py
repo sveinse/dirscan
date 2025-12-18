@@ -1,6 +1,6 @@
 ''' Dirscan - directory comparison functions '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -26,7 +26,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
              exception_fn: Optional[Callable[[Exception], bool]]=None,
              reverse: bool=False,
              onefs: bool=False,
-             traverse_oneside: bool=True,
+             traverse_into_oneside: bool=True,
              close_during: bool=True,
              sequential: bool=False,
              ) -> Generator[Tuple[Path, Tuple[DirscanObj, ...]], None, None]:
@@ -61,7 +61,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
      ``onefs``
         Scan file objects belonging to the same file system only
 
-     ``traverse_oneside``
+     ``traverse_into_oneside``
         When traversing the directory trees, setting this to ``True`` will
         traverse into all directories even when they only exists in one of
         the directory trees. Setting it to ``False`` will skip
@@ -93,7 +93,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
     if sequential:
         for obj in dirs:
             yield from walkdirs((obj,), reverse=reverse, excludes=excludes,
-                                onefs=onefs, traverse_oneside=traverse_oneside,
+                                onefs=onefs, traverse_into_oneside=traverse_into_oneside,
                                 exception_fn=exception_fn,
                                 close_during=close_during,
                                 sequential=False)
@@ -106,7 +106,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
     # When scanning a single directory 'False' will not work due to the
     # selection logic below.
     if len(dirs) < 2:
-        traverse_oneside = True
+        traverse_into_oneside = True
 
     # Check list of dirs indeed are dirs and create initial object list to
     # start from
@@ -172,7 +172,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
                     continue
 
                 # ...is the only one
-                if not traverse_oneside and present == 1:
+                if not traverse_into_oneside and present == 1:
                     continue
 
                 # Get and append the children names
@@ -239,7 +239,9 @@ def scan_shadb(dirs: Collection[DirscanObj],
 
     # -- Setup the global progress indicator context
     with getprogress().progress(
-            text="Scanning {count} files:  {text}") as progress:
+        fixed_prefix="Scanning {count} files:  ",
+        format="{text}",
+    ) as progress:
 
         for i, sdir in enumerate(dirs):
             for (_, objs) in walkdirs(
@@ -249,7 +251,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
                     **kwargs):
 
                 # Progress printing
-                progress.step(text=str(objs[0].fullpath))
+                progress.update(text=str(objs[0].fullpath))
 
                 # Evaluate the hashsum for each of the objects and store in
                 # sha database

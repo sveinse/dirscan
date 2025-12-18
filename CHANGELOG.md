@@ -33,7 +33,6 @@
   * Renamed `DirscanObj.exclude_files()` into `DirscanObj.set_exclude()`
   * Removed `DirscanObj.exclude_otherfs()` and merge into
     `DirscanObj.set_exclude()`
-* Update to 2023
 
 
 ## v0.10
