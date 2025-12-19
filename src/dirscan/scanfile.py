@@ -95,12 +95,33 @@ def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
         file.
     '''
 
+    # First pass, parse the file
+    dirtree = parse_file(filename, legacy=False)
+
+    # Second pass, inserting all the children into the list of parents,
+    # building the entire tree structure
+    for dparent, children, _ in dirtree.values():
+
+        # Insert the children into the parent object
+        dparent.set_children(children.values())
+
+    if not dirtree:
+        raise DirscanException(f"Scanfile '{filename}' contains no data "
+                               "or no top-level directory")
+
+    # Populate the tree root
+    try:
+        root = root or '.'  # Set a default value
+        return dirtree['./' + root if root[0] != '.' else root][0]
+
+    except KeyError:
+        raise DirscanException(f"No such directory '{root}' "
+                               f"found in scanfile '{filename}'") from None
+
+
+def parse_file(filename: TPath, legacy: bool = False) -> TDirtree:
+
     base_fname = Path(filename).name
-
-    # Set a default value
-    if not root:
-        root = '.'
-
     dirtree: TDirtree = {}
 
     # First pass reading entire file into memory
@@ -131,35 +152,17 @@ def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
                 raise DirscanException(f"{filename}:{lineno}: Data error, "
                                        f"{err}") from exc2
 
-    # Second pass, inserting all the children into the list of parents,
-    # building the entire tree structure
-    for dparent, children, _ in dirtree.values():
-
-        # Insert the children into the parent object
-        dparent.set_children(children.values())
-
-    if not dirtree:
-        raise DirscanException(f"Scanfile '{filename}' contains no data "
-                               "or no top-level directory")
-
-    # Now the tree should be populated
-    try:
-        return dirtree['./' + root if root[0] != '.' else root][0]
-
-    except KeyError:
-        raise DirscanException(f"No such directory '{root}' "
-                               f"found in scanfile '{filename}'") from None
+        return dirtree
 
 
 def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
     ''' Parse line and inject into dirtree dict '''
 
     # Parse the line record
-    args = [file_unquote(e) for e in line.rstrip().split(',')]
-    length = len(args)
-    if length != 8:
+    args = [file_unquote(e) for e in line.rstrip().split(',', maxsplit=8)]
+    if len(args) != 8:
         raise DirscanException("Missing or excess file fields "
-                               f"(got {length}, want 8)")
+                               f"(got {len(args)}, want 8)")
 
     # Must be kept in sync with self.FORMAT
     data: DirscanDict = {
@@ -167,10 +170,10 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         'name': '',  # Will be updated below
         'path': '',  # Will be updated below
         'size': int_positive(args[1]),
-        'mode': int_positive(args[2], 8),  # Octal input
+        'mode': int_positive(args[2], 8),  # Octal input, is integer in legacy files
         'uid': int_positive(args[3]),
         'gid': int_positive(args[4]),
-        'mtime': float(int_positive(args[5], 16)),  # Hex input,
+        'mtime': float(int_positive(args[5], 16)),  # Hex input, is float in legacy files
         'dev': 0,
     }
     objpath = args[7]
