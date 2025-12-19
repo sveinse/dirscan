@@ -4,8 +4,10 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import Any
+from __future__ import annotations
+
 import sys
+from typing import Any
 
 _DEBUG_LEVEL = 0
 
@@ -16,7 +18,7 @@ def set_debug(level: int) -> None:
     Args:
         level: Verbosity level
     '''
-    global _DEBUG_LEVEL  # pylint: disable=global-statement
+    global _DEBUG_LEVEL
     _DEBUG_LEVEL = level
 
 

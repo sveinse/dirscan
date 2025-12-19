@@ -4,37 +4,39 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import Callable, Collection, List, Optional, Sequence
-from pathlib import PurePosixPath
+from __future__ import annotations
+
 import sys
+from pathlib import PurePosixPath
+from typing import Callable, Collection, Sequence
 
-from dirscan.log import set_debug, debug
-from dirscan.scanfile import read_scanfile, get_fileheader, is_scanfile
-from dirscan.scanfile import file_quote, text_quote, SCANFILE_FORMAT
-from dirscan.walkdirs import (
-    walkdirs, obj_compare1, obj_compare2, scan_shadb
-)
-from dirscan.dirscan import (
-    create_from_fs, DirscanException, DirscanObj, FileObj, OBJTYPES
-)
-from dirscan.formatfields import (
-    get_compare_types, get_file_types, get_fieldnames,
-    get_fields, write_fileinfo, write_summary, Statistics,
-)
-from dirscan.usage import argument_parser, DIRSCAN_FORMAT_HELP
-from dirscan.progress import setprogress, PrintProgress
 import dirscan.formatfields as fmtfields
-
-# Typings
-from dirscan.formatfields import TFields, TSummary
-
+from dirscan import digest
+from dirscan import dirscan as _dirscan
+from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj, create_from_fs
+from dirscan.formatfields import (
+    Statistics,
+    TFields,
+    TSummary,
+    get_compare_types,
+    get_fieldnames,
+    get_fields,
+    get_file_types,
+    write_fileinfo,
+    write_summary,
+)
+from dirscan.log import debug, set_debug
+from dirscan.progress import PrintProgress, setprogress
+from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, is_scanfile, read_scanfile, text_quote
+from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
+from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
 # Update interval of the progress in ms
 UPDATE_DELAY = 300
 UPDATE_INTERVAL = 100
 
 
-def main(argv: Optional[Sequence[str]]=None) -> int:
+def main(argv: Sequence[str] | None=None) -> int:
     '''
     Entry-point for command-line and ``-mdirscan`` usage.
 
@@ -47,7 +49,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     '''
 
     # -- Typings
-    summary: List[TSummary]
+    summary: list[TSummary]
 
     #
     # Input validation and option parsing
@@ -64,8 +66,8 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     # -- Parsing
     opts = argp.parse_args(args=argv)
     prog = argp.prog
-    left: Optional[str] = opts.dir1
-    right: Optional[str] = opts.dir2
+    left: str | None = opts.dir1
+    right: str | None = opts.dir2
     set_debug(opts.debug)
     end = '\x00' if opts.print0 else '\n'
 
@@ -320,7 +322,6 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
 
         # -- Open output file
         if opts.outfile:
-            # pylint: disable=consider-using-with
             outfile = open(opts.outfile, 'w', encoding='utf-8',
                            errors='surrogateescape')
             outfile.write(get_fileheader())

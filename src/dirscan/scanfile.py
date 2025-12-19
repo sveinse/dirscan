@@ -4,16 +4,16 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import Any, Dict, Generator, Optional, Tuple, Union
+from __future__ import annotations
+
 import os
 from pathlib import Path, PurePosixPath
+from typing import Any, Generator
 
-from dirscan.dirscan import DirscanException, create_from_dict, TPath
-from dirscan.dirscan import DirscanObj, DirObj, DirscanDict
-from dirscan.walkdirs import walkdirs
-from dirscan.formatfields import write_fileinfo, get_fieldnames, get_fields
+from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, create_from_dict
+from dirscan.formatfields import get_fieldnames, get_fields, write_fileinfo
 from dirscan.log import debug_level
-
+from dirscan.walkdirs import walkdirs
 
 # Known scan file versions
 SCANFILE_VERSIONS = ('v1',)
@@ -22,7 +22,7 @@ SCANFILE_VERSIONS = ('v1',)
 SCANFILE_FORMAT = "{type},{size},{mode:o},{uid},{gid},{mtime_x},{data:qs},{relpath_p:qs}"
 
 # Typing
-TDirtree = Dict[str, Tuple[DirObj, Dict[str, DirscanObj], str]]
+TDirtree = dict[str, tuple[DirObj, dict[str, DirscanObj], str]]
 
 
 def is_scanfile(filename: TPath) -> bool:
@@ -78,7 +78,7 @@ def int_positive(value: str, radix: int=10) -> int:
     return num
 
 
-def read_scanfile(filename: TPath, root: Optional[str]=None) -> DirObj:
+def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
     '''
     Read filename scan file and return a :py:class:`DirObj` instance containing
     the file tree root

@@ -1,13 +1,15 @@
 ''' Dirscan - helper for printing progress while scanning '''
 #
-# Copyright (C) 2010-2023 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import Any, List, TextIO
-from dataclasses import dataclass, field
+from __future__ import annotations
+
 import sys
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any, TextIO
 
 
 @dataclass
@@ -17,7 +19,7 @@ class ProgressorABC:
     count: int
     size: int
 
-    def __enter__(self) -> 'ProgressorABC':
+    def __enter__(self) -> ProgressorABC:
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
@@ -50,7 +52,7 @@ def getprogress() -> ProgressABC:
 
 def setprogress(progress: ProgressABC) -> None:
     ''' Set the current progress instance '''
-    global PROGRESS  # pylint: disable=global-statement
+    global PROGRESS
     PROGRESS = progress
 
 
@@ -63,11 +65,11 @@ class Progressor(ProgressorABC):
     line: str = ''
     total_count: int = -1
     total_size: int = -1
-    progress: 'PrintProgress' = field(repr=False, default_factory=int)  # type: ignore
+    progress: PrintProgress = field(repr=False, default_factory=int)  # type: ignore
     starttime: datetime = field(default_factory=datetime.now)
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def __enter__(self) -> 'Progressor':
+    def __enter__(self) -> Progressor:
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
@@ -110,7 +112,7 @@ class PrintProgress(ProgressABC):
         self.updatedelay = timedelta(milliseconds=update_delay)
         self.show_progress = show_progress
         self.next_clear = False
-        self.progressors: List[Progressor] = []
+        self.progressors: list[Progressor] = []
 
     def progress(self, *, text: str, count: int = -1, size: int = -1) -> Progressor:
         ''' Register a new progress and return a context '''

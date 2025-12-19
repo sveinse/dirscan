@@ -4,6 +4,8 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
+from __future__ import annotations
+
 import argparse
 
 from dirscan import __version__

@@ -4,17 +4,15 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from __future__ import annotations  # for Python 3.7-3.9
-from typing import (Any, Collection, Dict, Generator, Optional,
-                    Type, Union, Tuple)
+from __future__ import annotations
 
-import os
-import datetime
-import stat as osstat
-import hashlib
-import fnmatch
 import binascii
+import datetime
+import fnmatch
+import os
+import stat as osstat
 from pathlib import Path
+from typing import Any, Collection, Generator
 
 from typing_extensions import NotRequired, TypedDict  # for Python <3.11
 
@@ -31,7 +29,7 @@ CHUNKSIZE = 16*4096
 TIME_THRESHOLD = 1
 
 # Typings
-TPath = Union[str, Path]
+TPath = str | Path
 
 
 class DirscanDict(TypedDict):
@@ -49,7 +47,7 @@ class DirscanDict(TypedDict):
     mtime: float
     hashsum: NotRequired[str]
     link: NotRequired[str]
-    children: NotRequired[Collection['DirscanDict']]  # type: ignore
+    children: NotRequired[Collection[DirscanDict]]
 
 
 class DirscanException(Exception):
@@ -112,6 +110,7 @@ class DirscanObj:
     ''' Size in bytes '''
 
     _mtime: float
+    """ Internal storage of the last modified time as a timestamp """
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result):
         '''
@@ -161,7 +160,7 @@ class DirscanObj:
         '''
         return False
 
-    def children(self) -> Tuple['DirscanObj', ...]:  # pylint: disable=no-self-use
+    def children(self) -> tuple[DirscanObj, ...]:
         '''
         Returns:
             A tuple containing the children of this object. It will return
@@ -176,7 +175,7 @@ class DirscanObj:
         :py:meth:`DirscanObj.children()` will return an empty list of children.
         '''
 
-    def compare(self, other: 'DirscanObj') -> Generator[str, None, None]:
+    def compare(self, other: DirscanObj) -> Generator[str, None, None]:
         ''' Generator that yields the differences between this and ``other``.
 
         Args:
@@ -187,7 +186,7 @@ class DirscanObj:
         if not isinstance(other, type(self)):
             yield 'type mismatch'
             return
-        time_delta = self._mtime - other._mtime  # pylint: disable=protected-access
+        time_delta = self._mtime - other._mtime
         if time_delta > TIME_THRESHOLD:
             yield 'newer'
         if time_delta < -TIME_THRESHOLD:
@@ -203,7 +202,7 @@ class DirscanObj:
         return f"{type(self).__name__}({self.fullpath})"
 
     def set_exclude(self, excludes: Collection[TPath],
-                    base: 'DirscanObj',
+                    base: DirscanObj,
                     onefs: bool=False,
                     ) -> None:
         '''
@@ -258,10 +257,10 @@ class FileObj(DirscanObj):
     __slots__ = ('_hashsum',)
 
     # Type definitions
-    _hashsum: Optional[bytes]
+    _hashsum: bytes | None
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
-                 hashsum: Optional[bytes]=None):
+                 hashsum: bytes | None=None):
         '''
         Args:
             name: Name of file object, without preceing path
@@ -318,7 +317,6 @@ class FileObj(DirscanObj):
             yield 'type mismatch'
             return
         yield from super().compare(other)
-        # pylint: disable=protected-access
         if self.size != other.size:
             yield 'size differs'
         elif self._hashsum == b'' and other._hashsum == b'':
@@ -385,7 +383,7 @@ class LinkObj(DirscanObj):
         super().__init__(name, path=path, stat=stat)
         self.link = link
 
-    def compare(self, other: 'DirscanObj') -> Generator[str, None, None]:
+    def compare(self, other: DirscanObj) -> Generator[str, None, None]:
         if not isinstance(other, type(self)):
             yield 'type mismatch'
             return
@@ -410,10 +408,10 @@ class DirObj(DirscanObj):
 
     __slots__ = ('_children',)
 
-    _children: Optional[Tuple[DirscanObj, ...]]
+    _children: tuple[DirscanObj, ...] | None
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
-                 children: Optional[Collection[DirscanObj]]=None):
+                 children: Collection[DirscanObj] | None=None):
         '''
         Args:
             name: Name of file object
@@ -439,7 +437,7 @@ class DirObj(DirscanObj):
     def support_children(self) -> bool:
         return True
 
-    def children(self) -> Tuple[DirscanObj, ...]:
+    def children(self) -> tuple[DirscanObj, ...]:
         '''
         Returns:
             A tuple containing the children of this object. If the list of
@@ -528,7 +526,7 @@ class NonExistingObj(DirscanObj):
 
 
 # Tuple of all real file objects. NonExistingObj is deliberately omitted
-ALL_FILEOBJECT_CLASS: Tuple[Type[DirscanObj], ...] = (
+ALL_FILEOBJECT_CLASS: list[type[DirscanObj]] = [
     FileObj,
     DirObj,
     LinkObj,
@@ -536,7 +534,7 @@ ALL_FILEOBJECT_CLASS: Tuple[Type[DirscanObj], ...] = (
     CharDevObj,
     FifoObj,
     SocketObj,
-)
+]
 
 # Dict of all file object class, indexed by the stat mode key (.objmode)
 FILETYPES = {cls.objmode: cls for cls in ALL_FILEOBJECT_CLASS}
@@ -555,7 +553,7 @@ OBJTYPES = {cls.objtype: cls for cls in ALL_FILEOBJECT_CLASS}
 
 def create_from_fs(name: TPath,
                    path: TPath='',
-                   stat: Optional[os.stat_result]=None,
+                   stat: os.stat_result | None=None,
                    ) -> DirscanObj:
     '''
     Factory for creating a new :py:class:`DirscanObj`-like object read from the
@@ -577,7 +575,7 @@ def create_from_fs(name: TPath,
     if not stat:
         stat = os.stat(fullpath, follow_symlinks=False)
     mode = osstat.S_IFMT(stat.st_mode)
-    objcls: Optional[Type[DirscanObj]] = FILETYPES.get(mode)
+    objcls: type[DirscanObj] | None = FILETYPES.get(mode)
     if not objcls:
         raise DirscanException(f"{fullpath}: Uknown file type")
 
@@ -612,7 +610,7 @@ def create_from_dict(data: DirscanDict) -> DirscanObj:
     is the inverse of :py:meth:`DirscanObj.to_dict()`.
 
     Args:
-        data: Dict-like object representing the data contents of a
+        data: dict-like object representing the data contents of a
             :py:class:`DirscanObj`-like object.
 
     Returns:
@@ -622,12 +620,12 @@ def create_from_dict(data: DirscanDict) -> DirscanObj:
 
     # Get the file object class from the type
     objtype = data['objtype']
-    objcls: Optional[Type[DirscanObj]] = OBJTYPES.get(objtype)
+    objcls: type[DirscanObj] | None = OBJTYPES.get(objtype)
     if not objcls:
         raise DirscanException(f"Unknown object type '{objtype}'")
 
     # Class parameters
-    kwargs: Dict[str, Any] = {
+    kwargs: dict[str, Any] = {
         'name': data['name'],
         'path': data.get('path',''),
     }

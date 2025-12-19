@@ -10,18 +10,18 @@ __version__ = importlib.metadata.version("dirscan")
 
 from dirscan.__main__ import main
 from dirscan.dirscan import (
-    create_from_fs,
-    create_from_dict,
-    DirscanException,
-    DirscanObj,
-    FileObj,
-    LinkObj,
-    DirObj,
     BlockDevObj,
     CharDevObj,
-    SocketObj,
+    DirObj,
+    DirscanException,
+    DirscanObj,
     FifoObj,
+    FileObj,
+    LinkObj,
     NonExistingObj,
+    SocketObj,
+    create_from_dict,
+    create_from_fs,
 )
 from dirscan.log import set_debug
 from dirscan.scanfile import (
@@ -29,10 +29,10 @@ from dirscan.scanfile import (
     read_scanfile,
 )
 from dirscan.walkdirs import (
-    walkdirs,
-    scan_shadb,
     obj_compare1,
     obj_compare2,
+    scan_shadb,
+    walkdirs,
 )
 
 # Order matter to documentation

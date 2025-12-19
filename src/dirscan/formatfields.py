@@ -4,20 +4,19 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import (Any, Callable, Collection, Dict, List, Optional, Set,
-                    TextIO, Tuple, Union)
+from __future__ import annotations
 
-import sys
 import stat
 import string
+import sys
 import time
+from typing import Any, Callable, Collection, TextIO
 
 from dirscan.dirscan import DirscanObj, FileObj, LinkObj
 
 if sys.platform != 'win32':
-    # pylint: disable=import-error
-    from pwd import getpwuid
     from grp import getgrgid
+    from pwd import getpwuid
 else:
     # Make a fake windows implementation
     class _PwuidFake:
@@ -32,9 +31,9 @@ else:
         return _GrgidFake()
 
 # Typing definitions
-TSummary = Tuple[Union[bool, str], str]
-TField = Union[str, int, float, None]
-TFields = Dict[str, TField]
+TSummary = tuple[bool | str, str]
+TField = str | int | float | None
+TFields = dict[str, TField]
 
 # Print formats in scan mode
 #     A = --all,  H = --human,  L = --long
@@ -99,7 +98,7 @@ FILE_TYPES_DEFAULT_COMPARE = FILE_TYPES_ALL
 # LIST OF FORMAT FIELDS
 # =====================
 #
-FILE_FIELDS: Dict[str, Callable[[DirscanObj], TField]] = {
+FILE_FIELDS: dict[str, Callable[[DirscanObj], TField]] = {
 
     # (bare) filename
     'name': lambda o: o.name,
@@ -133,14 +132,14 @@ FILE_FIELDS: Dict[str, Callable[[DirscanObj], TField]] = {
 
     # Special data-payload of the file.
     # Files: the hashsum, links: the link destination
-    'data': lambda o: format_data(o),  # pylint: disable=unnecessary-lambda
+    'data': lambda o: format_data(o),
 
     # The device node which the file resides
     'dev': lambda o: o.dev,
 }
 
 
-SCAN_SUMMARY: Tuple[TSummary, ...] = (
+SCAN_SUMMARY: list[TSummary] = [
     # Condition,         Line to print
     (True,               "\nSummary of '{dir}':"),
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
@@ -153,10 +152,10 @@ SCAN_SUMMARY: Tuple[TSummary, ...] = (
                                 "{n_sockets} sockets)"),
     ('n_exclude',        "    {n_exclude}  excluded files or directories"),
     (True,               "In total {n_objects} file objects in {time_s}"),
-)
+]
 
 
-COMPARE_SUMMARY: Tuple[TSummary, ...] = (
+COMPARE_SUMMARY: list[TSummary] = [
     # Condition,         Line to print
     (True,               "\nSummary of compare between left '{left}' and right '{right}':"),
     ('n_equal',          "    {n_equal}  equal files or directories"),
@@ -171,13 +170,13 @@ COMPARE_SUMMARY: Tuple[TSummary, ...] = (
     ('n_errors',         "    {n_errors}  compare errors"),
     ('n_skipped',        "    {n_skipped}  skipped comparisons"),
     (True,               "In total {n_objects} file objects in {time_s}"),
-)
+]
 
 
-FINAL_SUMMARY: Tuple[TSummary, ...] = (
+FINAL_SUMMARY: list[TSummary] = [
     # Condition,         Line to print
     ('n_err',            "\n{prog}: **** {n_err} files or directories could not be read"),
-)
+]
 
 
 # Error contents
@@ -254,7 +253,7 @@ def format_bytes(size: int, print_full: bool=False, short: bool=False) -> str:
     return sizestr
 
 
-def format_data(obj: DirscanObj) -> Union[None, str]:
+def format_data(obj: DirscanObj) -> str | None:
     ''' Return the information for the special field 'data', which return
         various information, depending on type. Files return their sha256
         hashsum, links their symlink target.
@@ -277,15 +276,15 @@ def format_time(timestamp: float) -> str:
 
 
 def get_fields(objs: Collection[DirscanObj],
-               prefixes: List[str],
-               fieldnames: Set[str]
-               ) -> Tuple[List[Exception], TFields]:
+               prefixes: list[str],
+               fieldnames: set[str]
+               ) -> tuple[list[Exception], TFields]:
     ''' Get a dict of field values from the objects using the given
         fieldnames.
     '''
 
     fields: TFields = {}
-    errs: List[Exception] = []
+    errs: list[Exception] = []
 
     for field in fieldnames:
 
@@ -317,7 +316,7 @@ def get_fields(objs: Collection[DirscanObj],
     return (errs, fields)
 
 
-def get_fieldnames(formatstr: str) -> Set[str]:
+def get_fieldnames(formatstr: str) -> set[str]:
     ''' Get a set of {fields} used in formatstr '''
 
     fieldnames = set()
@@ -328,7 +327,7 @@ def get_fieldnames(formatstr: str) -> Set[str]:
 
 
 def write_fileinfo(formatstr: str, fields: TFields,
-                   quoter: Optional[Callable[[str], str]]=None,
+                   quoter: Callable[[str], str] | None=None,
                    file: TextIO=sys.stdout, end: str='\n') -> None:
     ''' Write the formatstr to the given file. The format fields are
         read from the fields dicts.
@@ -420,7 +419,7 @@ class FileHistogram:
     def __init__(self, directory: str):
         self.dir = directory
         self.size = 0
-        self.bins: Dict[str, int] = {}
+        self.bins: dict[str, int] = {}
 
     def add(self, item: str) -> None:
         ''' Increase count of variable item '''
@@ -457,10 +456,10 @@ class FileHistogram:
 class CompareHistogram:
     ''' Histogram for counting compare relationship '''
 
-    def __init__(self, left: str, right: Optional[str]):
+    def __init__(self, left: str, right: str | None):
         self.left = left
         self.right = right
-        self.bins: Dict[str, int] = {}
+        self.bins: dict[str, int] = {}
 
     def add(self, item: str) -> None:
         ''' Increase count of variable item '''
@@ -494,11 +493,11 @@ class CompareHistogram:
 class Statistics:
     ''' Class for collecting dirscan statistics '''
 
-    filehist: List[FileHistogram]
+    filehist: list[FileHistogram]
     start_time: int
     end_time: int
 
-    def __init__(self, left: str, right: Optional[str]):
+    def __init__(self, left: str, right: str | None):
         self.compare = CompareHistogram(left, right)
         if right is None:
             self.filehist = [FileHistogram(left)]

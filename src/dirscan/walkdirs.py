@@ -4,32 +4,31 @@
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
-from typing import Any, Container, Generator, List, Optional, Sequence, Tuple, Dict, Collection, Callable, Union
+from __future__ import annotations
 
 import itertools
 from pathlib import Path
-
-from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, create_from_fs
-from dirscan.progress import getprogress
-from dirscan.log import debug
+from typing import Any, Callable, Collection, Container, Generator, Sequence
 
 # Typings
-from dirscan.dirscan import TPath
+from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, TPath, create_from_fs
+from dirscan.log import debug
+from dirscan.progress import getprogress
 
-TCompare = Tuple[str, str]
-TShadb = Dict[bytes, List[Tuple[int, DirscanObj]]]
+TCompare = tuple[str, str]
+TShadb = dict[bytes, list[tuple[int, DirscanObj]]]
 
 
-def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
+def walkdirs(dirs: Collection[DirscanObj | TPath],
              *,
-             excludes: Optional[Collection[TPath]]=None,
-             exception_fn: Optional[Callable[[Exception], bool]]=None,
+             excludes: Collection[TPath] | None=None,
+             exception_fn: Callable[[Exception], bool] | None=None,
              reverse: bool=False,
              onefs: bool=False,
              traverse_into_oneside: bool=True,
              close_during: bool=True,
              sequential: bool=False,
-             ) -> Generator[Tuple[Path, Tuple[DirscanObj, ...]], None, None]:
+             ) -> Generator[tuple[Path, tuple[DirscanObj, ...]], None, None]:
     '''
     Generator function that recursively traverses the given directories and
     yields the found files as it traverses the tree(s). The directories will
@@ -124,7 +123,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
         base.append(obj)
 
     # Start the queue
-    queue: List[Tuple[Path, Tuple[DirscanObj, ...]]] = [(Path('.'), tuple(base))]
+    queue: list[tuple[Path, tuple[DirscanObj, ...]]] = [(Path('.'), tuple(base))]
 
     debug(2, "")
 
@@ -211,7 +210,7 @@ def walkdirs(dirs: Collection[Union[DirscanObj, TPath]],
 
 def scan_shadb(dirs: Collection[DirscanObj],
                *,
-               exception_fn: Optional[Callable[[Exception], bool]]=None,
+               exception_fn: Callable[[Exception], bool] | None=None,
                **kwargs: Any,
                ) -> TShadb:
     '''
@@ -269,12 +268,11 @@ def scan_shadb(dirs: Collection[DirscanObj],
     return shadb
 
 
-# pylint: disable=unused-argument
 def obj_compare1(objs: Sequence[DirscanObj],
                  ignores: Container[str]='',
                  no_compare: bool=False,
                  ignore_time: bool=True,
-                 shadb: Optional[TShadb]=None
+                 shadb: TShadb | None=None
                  ) -> TCompare:
     '''
     Object comparator for one-length objects. Since there is nothing to
@@ -322,7 +320,7 @@ def obj_compare2(objs: Sequence[DirscanObj],
                  ignores: Container[str]='',
                  no_compare: bool=False,
                  ignore_time: bool=True,
-                 shadb: Optional[TShadb]=None
+                 shadb: TShadb | None=None
                  ) -> TCompare:
     '''
     Object comparator for two-length objects.
