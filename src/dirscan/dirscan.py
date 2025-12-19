@@ -16,14 +16,7 @@ from typing import Any, Collection, Generator
 
 from typing_extensions import NotRequired, TypedDict  # for Python <3.11
 
-from dirscan.progress import getprogress
-
-# Select hash algorthm to use
-HASHALGORITHM = hashlib.sha256
-
-# Number of bytes to read per round in the hash reader
-HASHCHUNKSIZE = 16*4096
-CHUNKSIZE = 16*4096
+from dirscan.digest import COMPARE_FN, DIGEST_FN, HASHALGORITHM
 
 # Minimum difference in seconds to consider it a changed timestamp
 TIME_THRESHOLD = 1
@@ -199,7 +192,7 @@ class DirscanObj:
             yield 'GID differs'
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.fullpath})"
+        return f"{type(self).__name__}({self.fullpath.as_posix()})"
 
     def set_exclude(self, excludes: Collection[TPath],
                     base: DirscanObj,
@@ -290,20 +283,7 @@ class FileObj(DirscanObj):
 
         # Only query the fs if None
         if self._hashsum is None:
-            with (
-                # Global scoped progress indicator
-                getprogress().progress(
-                    text="  [{percent:3.1f}% done]", size=self.size) as progress,
-                open(self.fullpath, 'rb') as shafile,
-            ):
-                shahash = HASHALGORITHM()
-                while True:
-                    data = shafile.read(HASHCHUNKSIZE)
-                    progress.step(size=len(data))
-                    if not data:
-                        break
-                    shahash.update(data)
-                self._hashsum = shahash.digest()
+            self._hashsum = DIGEST_FN(self.fullpath, self.size)
 
         return self._hashsum
 
@@ -333,21 +313,8 @@ class FileObj(DirscanObj):
         else:
             # Compare the file contents. Type and size are equal prior to
             # entering this code
-            with (
-                # Global scoped progress indicator
-                getprogress().progress(
-                    text="  [{percent:3.1f)% done]", size=self.size) as progress,
-                open(self.fullpath, 'rb') as f1,
-                open(other.fullpath, 'rb') as f2,
-            ):
-                while True:
-                    d1 = f1.read(CHUNKSIZE)
-                    d2 = f2.read(CHUNKSIZE)
-                    progress.step(size=len(d1))
-                    if d1 != d2:
-                        yield 'contents differs'
-                    if not d1:
-                        break
+            if not COMPARE_FN(self.fullpath, other.fullpath, self.size):
+                yield 'contents differs'
 
     def to_dict(self) -> DirscanDict:
         data = super().to_dict()
@@ -665,7 +632,7 @@ def create_from_dict(data: DirscanDict) -> DirscanObj:
                                f"'o{data['mode']:o}'")
 
     # Make a fake stat element from the given meta-data
-    fakestat = os.stat_result((  # type: ignore
+    fakestat = os.stat_result((
         data.get('mode', 0) | objcls.objmode,  # st_mode
         0,  # st_ino
         0,  # st_dev

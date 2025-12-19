@@ -334,7 +334,7 @@ def write_fileinfo(formatstr: str, fields: TFields,
     '''
 
     if not quoter:
-        quoter = lambda a: a
+        quoter = lambda a: a  # noqa: E731
 
     line = Formatter(quoter).format(formatstr, **fields)
     if line:

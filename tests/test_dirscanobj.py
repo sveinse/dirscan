@@ -37,7 +37,7 @@ def test_dirscanobj():
     # Methods
     assert a.children() == ()
     assert tuple(a.compare(a)) == ()
-    assert f"{a}" == "DirscanObj(b,a)"
+    assert f"{a}" == "DirscanObj(b/a)"
 
     # Serializer won't work in base class
     with raises(AttributeError):
@@ -68,7 +68,7 @@ def test_fileobj():
     # Methods
     assert a.children() == ()
     assert tuple(a.compare(a)) == ()
-    assert f"{a}" == "FileObj(b,a)"
+    assert f"{a}" == "FileObj(b/a)"
 
     # Serializer won't work in base class
     assert a.to_dict() == {
@@ -116,7 +116,7 @@ def test_dirobj():
     # Methods
     assert a.children() == ()
     assert tuple(a.compare(a)) == ()
-    assert f"{a}" == "DirObj(b,a)"
+    assert f"{a}" == "DirObj(b/a)"
 
     # Serializer won't work in base class
     assert a.to_dict() == {

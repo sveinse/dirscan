@@ -238,7 +238,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
 
     # -- Setup the global progress indicator context
     with getprogress().progress(
-        fixed_prefix="Scanning {count} files:  ",
+        prefix="Scanning {count} files:  ",
         format="{text}",
     ) as progress:
 

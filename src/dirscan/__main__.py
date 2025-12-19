@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import io
 import sys
 from pathlib import PurePosixPath
 from typing import Callable, Collection, Sequence
@@ -179,8 +180,10 @@ def main(argv: Sequence[str] | None=None) -> int:
 
     # Ensure printability in powershell (that won't encode surrogates).
     # surrogatepass?
-    sys.stderr.reconfigure(errors='backslashreplace')
-    sys.stdout.reconfigure(errors='backslashreplace')
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(errors='backslashreplace')
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(errors='backslashreplace')
 
     # -- Verify file types
     if opts.duplicates and filetypes != 'f':
@@ -253,7 +256,7 @@ def main(argv: Sequence[str] | None=None) -> int:
     #
 
     # The filter must return True to show the line
-    show_filter: Callable[[Collection[DirscanObj]], bool] = lambda objs: True
+    show_filter: Callable[[Collection[DirscanObj]], bool] = lambda objs: True  # noqa: E731
 
     outfile = None
     try:
@@ -298,7 +301,7 @@ def main(argv: Sequence[str] | None=None) -> int:
             progressmgr.print("Pass 1...")
 
             with progressmgr.progress(
-                fixed_prefix=f"{pr_prefix} {{count}} files:  ",
+                prefix=f"{pr_prefix} {{count}} files:  ",
                 format="{text}",
             ) as progress:
 
@@ -328,7 +331,7 @@ def main(argv: Sequence[str] | None=None) -> int:
 
         # -- Setup progress printing context
         with progressmgr.progress(
-            fixed_prefix=f"{pr_prefix} {{count}} files:  " if obj_count < 0 else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
+            prefix=f"{pr_prefix} {{count}} files:  " if obj_count < 0 else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
             total_count=obj_count,
             format="{text}",
         ) as progress:
@@ -471,8 +474,8 @@ def main(argv: Sequence[str] | None=None) -> int:
         if outfile:
             outfile.close()
 
-        # Close the progress output
-        progress.close()
+        # Exit the progress manager context
+        progressmgr.__exit__(None, None, None)
 
     #
     # Statistics printing
