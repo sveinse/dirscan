@@ -3,8 +3,9 @@
 # Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
+import importlib.metadata
 
-__version__ = '0.11a1'
+__version__ = importlib.metadata.version("dirscan")
 
 
 from dirscan.__main__ import main
