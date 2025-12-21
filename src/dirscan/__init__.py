@@ -26,6 +26,7 @@ from dirscan.dirscan import (
 from dirscan.log import set_debug
 from dirscan.scanfile import (
     is_scanfile,
+    open_dir_or_scanfile,
     read_scanfile,
 )
 from dirscan.walkdirs import (
@@ -47,6 +48,7 @@ __all__ = [
 
     # Scanfile functions
     "is_scanfile",
+    "open_dir_or_scanfile",
     "read_scanfile",
 
     # Factories

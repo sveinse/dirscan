@@ -28,7 +28,7 @@ from dirscan.formatfields import (
 )
 from dirscan.log import debug, set_debug
 from dirscan.progress import PrintProgress, setprogress
-from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, is_scanfile, read_scanfile, text_quote
+from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile, text_quote
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
 from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
@@ -263,19 +263,11 @@ def main(argv: Sequence[str] | None=None) -> int:
         dirs: Collection[DirscanObj]
 
         # -- Check and read the scan files
-        if is_scanfile(left):
-            da: DirscanObj = read_scanfile(left, root=opts.leftprefix)
-        else:
-            da = create_from_fs(left)
-
         if right is None:
-            dirs = [da]
+            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix)]
         else:
-            if is_scanfile(right):
-                db: DirscanObj = read_scanfile(right, root=opts.rightprefix)
-            else:
-                db = create_from_fs(right)
-            dirs = [da, db]
+            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix),
+                    open_dir_or_scanfile(right, root=opts.rightprefix)]
 
         # -- Scan the database
         shadb = {}

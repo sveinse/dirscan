@@ -10,7 +10,7 @@ import os
 from pathlib import Path, PurePosixPath
 from typing import Any, Generator
 
-from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, create_from_dict
+from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, create_from_dict, create_from_fs
 from dirscan.formatfields import get_fieldnames, get_fields, write_fileinfo
 from dirscan.log import debug_level
 from dirscan.walkdirs import walkdirs
@@ -76,6 +76,25 @@ def int_positive(value: str, radix: int=10) -> int:
     if num < 0:
         raise ValueError("number must be positive")
     return num
+
+
+def open_dir_or_scanfile(filename: TPath, root: str | None=None) -> DirscanObj:
+    '''
+    Open a directory or scanfile return the root object :py:class:`DirObj`
+    instance
+
+    Args:
+        filename: Filename to read
+        root: The path to use as root from the scanfile. The value is ``.`` if
+            unset which will use the top object in the file as root. See
+            :py:meth:`read_scanfile()` for details. Unused if loading a directory.
+    Returns:
+        Top-level :py:class:`DirObj` object in the hierarchy loaded from the
+        file.
+    '''
+    if is_scanfile(filename):
+        return read_scanfile(filename, root=root)
+    return create_from_fs(filename)
 
 
 def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
