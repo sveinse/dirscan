@@ -299,6 +299,9 @@ class FileObj(DirscanObj):
         yield from super().compare(other)
         if self.size != other.size:
             yield 'size differs'
+        if self.size == 0:
+            # Both files are empty, no need to compare contents
+            pass
         elif self._hashsum == b'' and other._hashsum == b'':
             # Don't compare if neither has hashsum data
             pass

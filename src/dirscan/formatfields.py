@@ -272,7 +272,7 @@ def format_time(timestamp: float) -> str:
     tsint = int(timestamp)
     if timestamp < 3600:
         return f"{tsint//60:02d}:{tsint%60:02d} minutes"
-    return f"{tsint//3600:02d}:{(tsint%3600)//60:02f}:{tsint%60:02d} hours"
+    return f"{tsint//3600:02d}:{(tsint%3600)//60:02d}:{tsint%60:02d} hours"
 
 
 def get_fields(objs: Collection[DirscanObj],

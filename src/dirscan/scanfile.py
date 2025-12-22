@@ -7,13 +7,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path, PurePosixPath
-from typing import Any, Generator
+from pathlib import Path
+from typing import Generator
 
 from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, create_from_dict, create_from_fs
-from dirscan.formatfields import get_fieldnames, get_fields, write_fileinfo
-from dirscan.log import debug_level
-from dirscan.walkdirs import walkdirs
+from dirscan.log import debug, debug_level
 
 # Known scan file versions
 SCANFILE_VERSIONS = ('v1',)
@@ -67,6 +65,12 @@ def check_header(line: str, filename: TPath) -> None:
     ver = line[5:]
     if ver not in SCANFILE_VERSIONS:
         raise DirscanException(f"Invalid scanfile '{filename}', unsupported version '{ver}'")
+
+
+def int_convert(value: str, radix: int=10) -> int:
+    ''' Call int() and raise an ValueError if number is invalid '''
+
+    return int(value or '0', radix)
 
 
 def int_positive(value: str, radix: int=10) -> int:
@@ -163,11 +167,13 @@ def parse_file(filename: TPath, legacy: bool = False) -> TDirtree:
 
             except ValueError as err:
                 exc1 = err if debug_level() else None
+                debug(1, f"Offending line: {line.rstrip()}")
                 raise DirscanException(f"{filename}:{lineno}: Field error, "
                                        f"{err}") from exc1
 
             except DirscanException as err:
                 exc2 = err if debug_level() else None
+                debug(1, f"Offending line: {line.rstrip()}")
                 raise DirscanException(f"{filename}:{lineno}: Data error, "
                                        f"{err}") from exc2
 
@@ -192,7 +198,7 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         'mode': int_positive(args[2], 8),  # Octal input, is integer in legacy files
         'uid': int_positive(args[3]),
         'gid': int_positive(args[4]),
-        'mtime': float(int_positive(args[5], 16)),  # Hex input, is float in legacy files
+        'mtime': float(int_convert(args[5], 16)),  # Hex input, is float in legacy files
         'dev': 0,
     }
     objpath = args[7]

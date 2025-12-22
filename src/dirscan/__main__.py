@@ -12,9 +12,7 @@ from pathlib import PurePosixPath
 from typing import Callable, Collection, Sequence
 
 import dirscan.formatfields as fmtfields
-from dirscan import digest
-from dirscan import dirscan as _dirscan
-from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj, create_from_fs
+from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
 from dirscan.formatfields import (
     Statistics,
     TFields,
@@ -341,7 +339,7 @@ def main(argv: Sequence[str] | None=None) -> int:
                     exception_fn=error_handler,
                     close_during=False,
                     sequential=sequential,
-                ):
+            ):
 
                 # Progress printing
                 progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
