@@ -33,7 +33,6 @@ else:
 # Typing definitions
 TSummary = tuple[bool | str, str]
 TField = str | int | float | None
-TFields = dict[str, TField]
 
 # Print formats in scan mode
 #     A = --all,  H = --human,  L = --long
@@ -294,12 +293,12 @@ def format_shaid(sha: bytes | None, shaiddb: dict[bytes, str], shaid_used: set[s
 def get_fields(objs: Collection[DirscanObj],
                prefixes: list[str],
                fieldnames: set[str]
-               ) -> tuple[list[Exception], TFields]:
+               ) -> tuple[list[Exception], dict[str, TField]]:
     ''' Get a dict of field values from the objects using the given
         fieldnames.
     '''
 
-    fields: TFields = {}
+    fields: dict[str, TField] = {}
     errs: list[Exception] = []
 
     for field in fieldnames:
@@ -342,7 +341,7 @@ def get_fieldnames(formatstr: str) -> set[str]:
     return fieldnames
 
 
-def write_fileinfo(formatstr: str, fields: TFields,
+def write_fileinfo(formatstr: str, fields: dict[str, TField],
                    quoter: Callable[[str], str] | None=None,
                    file: TextIO=sys.stdout, end: str='\n') -> None:
     ''' Write the formatstr to the given file. The format fields are
@@ -358,7 +357,8 @@ def write_fileinfo(formatstr: str, fields: TFields,
 
 
 def write_summary(summary: Collection[TSummary],
-                  fields: TFields, file: TextIO=sys.stdout,
+                  fields: dict[str, TField],
+                  file: TextIO=sys.stdout,
                   end: str='\n') -> None:
     ''' Write the summary '''
 
@@ -449,7 +449,7 @@ class FileHistogram:
         ''' Add size variable '''
         self.size += size
 
-    def get_summary_fields(self) -> TFields:
+    def get_summary_fields(self) -> dict[str, TField]:
         ''' Return a dict with all histogram fields '''
         return {
             'dir': self.dir,
@@ -485,7 +485,7 @@ class CompareHistogram:
         ''' Return count value of item '''
         return self.bins.get(item, 0)
 
-    def get_summary_fields(self) -> TFields:
+    def get_summary_fields(self) -> dict[str, TField]:
         ''' Return a dict with all histogram fields '''
         return {
             'left': self.left,
@@ -534,7 +534,7 @@ class Statistics:
             if objtype == 'f':
                 filehist.add_size(obj.size)
 
-    def get_fields(self, prefixes: Collection[str]) -> TFields:
+    def get_fields(self, prefixes: Collection[str]) -> dict[str, TField]:
         ''' Get the summary fields '''
 
         # Get the main comparison fields

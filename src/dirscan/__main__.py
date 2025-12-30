@@ -15,7 +15,7 @@ import dirscan.formatfields as fmtfields
 from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
 from dirscan.formatfields import (
     Statistics,
-    TFields,
+    TField,
     TSummary,
     format_shaid,
     get_compare_types,
@@ -386,7 +386,7 @@ def main(argv: Sequence[str] | None=None) -> int:
                 stats.add_filestats(objs)
 
                 # Set the base fields
-                fields: TFields = {
+                fields: dict[str, TField] = {
                     'relpath': str(path),
                     'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
                     'change': change,

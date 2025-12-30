@@ -15,9 +15,6 @@ from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, TPath, create_f
 from dirscan.log import debug
 from dirscan.progress import getprogress
 
-TCompare = tuple[str, str]
-TShadb = dict[bytes, list[tuple[int, DirscanObj]]]
-
 
 def walkdirs(dirs: Collection[DirscanObj | TPath],
              *,
@@ -213,7 +210,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
                exception_fn: Callable[[Exception], bool] | None=None,
                include_single_entries: bool=True,
                **kwargs: Any,
-               ) -> TShadb:
+               ) -> dict[bytes, list[tuple[int, FileObj]]]:
     '''
     Traverse through the directory tree(s) and build a database of shasum
     entries. This can be used to find identical files duplicated multiple
@@ -239,7 +236,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
     '''
 
     # -- Build the sha database
-    shadb: TShadb = {}
+    shadb: dict[bytes, list[tuple[int, FileObj]]] = {}
     sizedb: dict[int, list[tuple[int, FileObj]]] = {}
 
     def add_sha(index: int, obj: FileObj) -> None:
@@ -306,8 +303,8 @@ def obj_compare1(objs: Sequence[DirscanObj],
                  ignores: Container[str]='',
                  no_compare: bool=False,
                  ignore_time: bool=True,
-                 shadb: TShadb | None=None
-                 ) -> TCompare:
+                 shadb: dict[bytes, list[tuple[int, FileObj]]] | None=None
+                 ) -> tuple[str, str]:
     '''
     Object comparator for one-length objects. Since there is nothing to
     compare against, it will simply check if the object is excluded. If
@@ -353,8 +350,8 @@ def obj_compare2(objs: Sequence[DirscanObj],
                  ignores: Container[str]='',
                  no_compare: bool=False,
                  ignore_time: bool=True,
-                 shadb: TShadb | None=None
-                 ) -> TCompare:
+                 shadb: dict[bytes, list[tuple[int, FileObj]]] | None=None
+                 ) -> tuple[str, str]:
     '''
     Object comparator for two-length objects.
 
