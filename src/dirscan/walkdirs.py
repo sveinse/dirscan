@@ -343,7 +343,7 @@ def obj_compare1(objs: Sequence[DirscanObj],
     # File DUPLICATED
     # ===============
     if shadb and isinstance(obj, FileObj):
-        if len(shadb.get(obj._hashsum, [])) > 1:
+        if len(shadb.get(obj.hashsum_cache, [])) > 1:
             return ('duplicated', 'Duplicated entry')
 
     return ('scan', 'scan')

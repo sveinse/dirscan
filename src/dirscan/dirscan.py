@@ -247,28 +247,29 @@ class FileObj(DirscanObj):
     objname = 'file'
     objmode = osstat.S_IFREG
 
-    __slots__ = ('_hashsum',)
+    __slots__ = ('hashsum_cache',)
 
     # Type definitions
-    _hashsum: bytes | None
+    hashsum_cache: bytes
+    """ Cached hashsum value. If falsey, the hashsum is not known. """
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
-                 hashsum: bytes | None=None):
+                 hashsum: bytes = b''):
         '''
         Args:
             name: Name of file object, without preceing path
             path: Path of the file object excluding the name of the object
             stat: The stat information to copy into the object
             hashsum: Optional cached hashsum to initalize with. If default
-                ``None``, the hashsum will be read from the file system.
+                ``b''``, the hashsum will be read from the file system when
+                the :py:attr:`hashsum` property is accessed.
         '''
         super().__init__(name, path=path, stat=stat)
 
         # Protocol:
-        #   None: Unknown value, will read from fs if self.hashsum is accessed
-        #   Falsey: Unknown value, will not read from fs
+        #   b'': Unknown value, will read from fs if self.hashsum is accessed
         #   <*>: Stored hashsum
-        self._hashsum = hashsum
+        self.hashsum_cache = hashsum
 
     @property
     def hashsum(self) -> bytes:
@@ -282,10 +283,10 @@ class FileObj(DirscanObj):
         # need-to have basis.
 
         # Only query the fs if None
-        if self._hashsum is None:
-            self._hashsum = DIGEST_FN(self.fullpath, self.size)
+        if not self.hashsum_cache:
+            self.hashsum_cache = DIGEST_FN(self.fullpath, self.size)
 
-        return self._hashsum
+        return self.hashsum_cache
 
     @property
     def hashsum_hex(self) -> str:
@@ -302,12 +303,10 @@ class FileObj(DirscanObj):
         if self.size == 0:
             # Both files are empty, no need to compare contents
             pass
-        elif self._hashsum == b'' and other._hashsum == b'':
+        elif self.hashsum_cache == b'' and other.hashsum_cache == b'':
             # Don't compare if neither has hashsum data
             pass
-        elif self._hashsum == b'' or other._hashsum == b'':
-            yield 'W:cannot compare'
-        elif self._hashsum or other._hashsum:
+        elif self.hashsum_cache or other.hashsum_cache:
             # Does either of them have _hashsum set? If yes, make use of
             # hashsum based compare. filecmp might be more efficient, but if we
             # read from listfiles, we have to use hashsums.
@@ -321,7 +320,7 @@ class FileObj(DirscanObj):
 
     def to_dict(self) -> DirscanDict:
         data = super().to_dict()
-        if self._hashsum is not None:
+        if self.hashsum_cache:
             data['hashsum'] = self.hashsum_hex
         return data
 

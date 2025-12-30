@@ -408,8 +408,8 @@ def main(argv: Sequence[str] | None=None) -> int:
                     for obj in objs:
                         if not isinstance(obj, FileObj):
                             continue
-                        sha = obj._hashsum  # Use sha if it has already been calculated
-                        if sha is None:
+                        sha = obj.hashsum_cache  # Don't force calculation here
+                        if not sha:
                             continue
 
                         visited = sha in shavisited
