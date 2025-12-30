@@ -275,6 +275,22 @@ def format_time(timestamp: float) -> str:
     return f"{tsint//3600:02d}:{(tsint%3600)//60:02d}:{tsint%60:02d} hours"
 
 
+def format_shaid(sha: bytes | None, shaiddb: dict[bytes, str], shaid_used: set[str]) -> str:
+    ''' Return a formatted sha256 string for display '''
+    if sha is None:
+        return ""
+    if sha in shaiddb:
+        return shaiddb[sha]
+    shahex = sha.hex()
+    for n in range(6, len(shahex) + 1):
+        short = shahex[:n]
+        if short not in shaid_used:
+           shaid_used.add(short)
+           shaiddb[sha] = short
+           return short
+    return shahex
+
+
 def get_fields(objs: Collection[DirscanObj],
                prefixes: list[str],
                fieldnames: set[str]

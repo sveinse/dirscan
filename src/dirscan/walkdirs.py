@@ -211,6 +211,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
 def scan_shadb(dirs: Collection[DirscanObj],
                *,
                exception_fn: Callable[[Exception], bool] | None=None,
+               include_single_entries: bool=True,
                **kwargs: Any,
                ) -> TShadb:
     '''
@@ -223,6 +224,10 @@ def scan_shadb(dirs: Collection[DirscanObj],
         exception_fn: Exception handler callback. It will be called if any
             exceptions occur during traversal, typically file system errors.
             See ``exception_fn`` argument of :py:func:`walkdirs()`.
+        include_single_entries: If ``True``, entries with only one occurrence
+            will also be included in the database. Default is ``True``, which
+            only includes all entries. Setting this to ``False`` can speed up
+            the scanning process if only duplicated entries are of interest.
         kwargs: Additional options passed to :py:func:`walkdirs()`
 
     Returns:
@@ -235,6 +240,15 @@ def scan_shadb(dirs: Collection[DirscanObj],
 
     # -- Build the sha database
     shadb: TShadb = {}
+    sizedb: dict[int, list[tuple[int, FileObj]]] = {}
+
+    def add_sha(index: int, obj: FileObj) -> None:
+        try:
+            # Get the hashsum and store it to the shadb list
+            shadb.setdefault(obj.hashsum, []).append((index, obj))
+        except IOError as err:
+            if not exception_fn or not exception_fn(err):
+                raise
 
     # -- Setup the global progress indicator context
     with getprogress().progress(
@@ -258,12 +272,32 @@ def scan_shadb(dirs: Collection[DirscanObj],
                     if not isinstance(obj, FileObj) or obj.excluded:
                         continue
 
-                    try:
-                        # Get the hashsum and store it to the shadb list
-                        shadb.setdefault(obj.hashsum, []).append((i, obj))
-                    except IOError as err:
-                        if not exception_fn or not exception_fn(err):
-                            raise
+                    # This is a speed optimization: If we're not including
+                    # single entries, first build a size database to filter
+                    # out unique sizes
+                    if not include_single_entries:
+                        sizedb.setdefault(obj.size, []).append((i, obj))
+                    else:
+                        add_sha(i, obj)
+
+    # In single entry mode, the shadb is complete and we're done
+    if include_single_entries:
+        return shadb
+
+    with getprogress().progress(
+        prefix="Rescanning {count} files:  ",
+        format="{text}",
+    ) as progress:
+
+        # If we're not including single entries, build the shadb from the
+        # sizedb now
+        for size, objlist in sizedb.items():
+            # Not interested in single entries (that's the speed optimization)
+            if len(objlist) < 2:
+                continue
+            for i, obj in objlist:
+                progress.update(text=str(obj.fullpath))
+                add_sha(i, obj)
 
     return shadb
 
@@ -309,8 +343,7 @@ def obj_compare1(objs: Sequence[DirscanObj],
     # File DUPLICATED
     # ===============
     if shadb and isinstance(obj, FileObj):
-        sha = obj.hashsum
-        if sha in shadb and len(shadb[sha]) > 1:
+        if len(shadb.get(obj._hashsum, [])) > 1:
             return ('duplicated', 'Duplicated entry')
 
     return ('scan', 'scan')

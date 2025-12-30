@@ -17,6 +17,7 @@ from dirscan.formatfields import (
     Statistics,
     TFields,
     TSummary,
+    format_shaid,
     get_compare_types,
     get_fieldnames,
     get_fields,
@@ -269,21 +270,21 @@ def main(argv: Sequence[str] | None=None) -> int:
 
         # -- Scan the database
         shadb = {}
-        shaid = {}
+        shaids: dict[bytes, str] = {}
+        shaids_used: set[str] = set()
         shavisited = set()
         if opts.duplicates or opts.shadiff:
+            progressmgr.print("Building SHA database...")
 
             # -- Build the sha database
             shadb = scan_shadb(
                 dirs,
+                include_single_entries=not opts.duplicates,
                 reverse=opts.reverse,
                 excludes=opts.exclude,
                 onefs=opts.onefs,
                 exception_fn=error_handler,
             )
-
-            # -- Assign each sha an ID
-            shaid = {sha: i for i, sha in enumerate(shadb, start=1)}
 
         # -- First pass
         obj_count = -1
@@ -398,7 +399,7 @@ def main(argv: Sequence[str] | None=None) -> int:
                 if opts.duplicates: # and right is None:
                     fields['dupinfo'] = ''
                     fields['dup'] = '   '
-                    fields['dupid'] = '   '
+                    fields['dupid'] = '      '
                     fields['dupcount'] = 0
 
                     # Technically not needed, due to sequential setting ensures it
@@ -407,7 +408,9 @@ def main(argv: Sequence[str] | None=None) -> int:
                     for obj in objs:
                         if not isinstance(obj, FileObj):
                             continue
-                        sha = obj.hashsum
+                        sha = obj._hashsum  # Use sha if it has already been calculated
+                        if sha is None:
+                            continue
 
                         visited = sha in shavisited
                         if not visited:
@@ -417,15 +420,16 @@ def main(argv: Sequence[str] | None=None) -> int:
                         if duponce and visited:
                             continue
 
-                        compares = [str(o[1].fullpath) for o in shadb[sha]]
-                        fields['dupcount'] = len(compares)
-                        if len(compares) > 1:
-                            fields['dupid'] = f'{shaid[sha]:3d}'
-                            lec = len(compares)
-                            j = '\n    '.join(compares)
+                        samesha = shadb.get(sha, [])
+                        len_samesha = len(samesha)
+                        fields['dupcount'] = len_samesha
+                        if len_samesha > 1:
+                            shaid = format_shaid(sha, shaids, shaids_used)
+                            fields['dupid'] = shaid
+                            j = '\n    '.join([str(o[1].fullpath) for o in samesha])
                             fields['dupinfo'] = (
-                                f'File duplicated {lec} times:  '
-                                f'(ID {shaid[sha]})\n    {j}\n')
+                                f'File duplicated {len_samesha} times:  '
+                                f'(ID {shaid})  {obj.size} bytes\n    {j}\n')
                             fields['dup'] = 'DUP'
 
                 # Update the fields from the file objects. This retries the values
