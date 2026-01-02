@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+from argparse import Namespace
 import io
 import sys
-from pathlib import PurePosixPath
-from typing import Callable, Collection, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
+from typing import Collection, Self, Sequence
 
 import dirscan.formatfields as fmtfields
 from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
@@ -36,6 +38,153 @@ UPDATE_DELAY = 300
 UPDATE_INTERVAL = 100
 
 
+@dataclass
+class DirscanContext:
+    """ Context for dirscan operations. """
+
+    printfmt: str = ''
+    """ Print format string. """
+    writefmt: str = ''
+    """ Write format string. """
+    compare_types: str = ''
+    """ Compare types specifier. """
+    filetypes: str = ''
+    """ File types specifier. """
+    field_prefix: list[str] = field(default_factory=list)
+    """ Prefixes for the fields. Used to separate left/right side fields. """
+    enable_summary: bool = False
+    """ Whether to enable summary printing. """
+    summary: list[TSummary] = field(default_factory=list)
+    """ Summary settings. """
+
+    # -- SHA database
+    shadb: dict[bytes, list[tuple[int, FileObj]]] = field(default_factory=dict)
+    """ SHA database for duplicate detection. """
+    shaids: dict[bytes, str] = field(default_factory=dict)
+    """ Mapping of SHA sums to short IDs. """
+    shaids_used: set[str] = field(default_factory=set)
+    """ Set of used short SHA IDs. """
+    shavisited: set[bytes] = field(default_factory=set)
+    """ Set of visited SHA sums. """
+
+    # -- Flags
+    duponce: bool = False
+    """ Whether to print duplicates only once. """
+    recurse: bool = False
+    """ Whether to recurse into subdirectories. """
+    sequential: bool = False
+    """ Whether to process directories sequentially instead of simultaneously. """
+    duplicates: bool = False
+    """ Whether in duplicate scanning mode. """
+
+    def setup_for_scanning(self, opts: Namespace) -> None:
+        """ Setup the context for scanning mode. """
+        self.printfmt = fmtfields.FMT_DEF
+        self.writefmt = ''
+        self.compare_types = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
+        self.filetypes = fmtfields.FILE_TYPES_DEFAULT_SCAN
+        self.field_prefix = ['']
+        self.summary = list(fmtfields.SCAN_SUMMARY)
+        self.enable_summary = opts.enable_summary
+        self.duplicates = opts.duplicates
+        self.sequential = True
+        self.recurse = True
+
+        if opts.outfile:
+            self.writefmt = SCANFILE_FORMAT
+            if not opts.verbose:
+                self.printfmt = ''
+        else:
+            if opts.quiet:
+                self.printfmt = ''
+            elif opts.all and opts.long:
+                self.printfmt = fmtfields.FMT_AHL if opts.human else fmtfields.FMT_AL
+            elif opts.all:
+                self.printfmt = fmtfields.FMT_AH if opts.human else fmtfields.FMT_A
+            elif opts.long:
+                self.printfmt = fmtfields.FMT_HL if opts.human else fmtfields.FMT_L
+            elif opts.verbose:
+                self.printfmt = '{path}'
+            elif opts.duplicates:
+                self.compare_types = 'd'
+                self.duponce = not bool(opts.format)
+                self.printfmt = '{dupinfo}'
+
+        if opts.duplicates:
+            self.filetypes = 'f'
+            # Sneaky way to add DUP to printings
+            self.printfmt = self.printfmt.replace('{path}', '{dup}  {dupid}  {path}')
+
+    def setup_for_comparing(self, opts: Namespace) -> None:
+        """ Setup the context for compare mode. """
+        self.printfmt = fmtfields.FMT_COMP_DEF
+        self.writefmt = ''
+        self.compare_types = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
+        self.filetypes = fmtfields.FILE_TYPES_DEFAULT_COMPARE
+        self.field_prefix = ['l_', 'r_']
+        self.summary = list(fmtfields.COMPARE_SUMMARY)
+        self.enable_summary = opts.enable_summary
+        self.duplicates = opts.duplicates
+        self.sequential = False
+        self.recurse = opts.recurse
+
+        if opts.quiet:
+            self.printfmt = ''
+
+        # The all or verbose option will show all compare types
+        if opts.all or opts.verbose:
+            self.compare_types = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
+
+        if opts.shadiff:
+            # Want to walk the entire tree on both sides to find any
+            # duplicates
+            self.recurse = True
+
+    def setup(self, scan_mode: bool, opts: Namespace) -> Self:
+        """ Setup the printing formats. """
+
+        # -- Initialize according to mode
+        if scan_mode:
+            self.setup_for_scanning(opts)
+        else:
+            self.setup_for_comparing(opts)
+
+        # -- User provided formats overrides any defaults
+        self.printfmt = opts.format or self.printfmt
+        self.compare_types = get_compare_types(opts.compare_types, self.compare_types)
+        self.filetypes = get_file_types(opts.filetypes, self.filetypes)
+
+        # Unless compare_types contains these compares, there isn't any need to
+        # make any detailed comparisons.
+        self.no_compare = not bool(set('cLRe').intersection(self.compare_types))
+
+        # -- Extra verbose
+        if opts.verbose > 1:
+            # Prefix fields
+            self.printfmt = '{change_t}  ' + self.printfmt
+
+        # -- Summary options
+        if opts.summary:
+            self.summary = [(True, s) for s in opts.summary]
+            self.enable_summary = True
+        if not self.enable_summary:
+            self.summary = []
+
+        # The final summary contains any notes if there are any errors
+        self.summary.extend(fmtfields.FINAL_SUMMARY)
+
+        # -- Get the fields names used in the printing formats.
+        self.fieldnames = set()
+        if self.printfmt:
+            self.fieldnames.update(get_fieldnames(self.printfmt))
+        if self.writefmt:
+            self.fieldnames.update(get_fieldnames(self.writefmt))
+
+        # FIXME: Evaluate valid format fields in summary, printfmt and writefmt
+
+        return self
+
+
 def main(argv: Sequence[str] | None=None) -> int:
     '''
     Entry-point for command-line and ``-mdirscan`` usage.
@@ -48,28 +197,16 @@ def main(argv: Sequence[str] | None=None) -> int:
         Error code of the operation, where 0 indicates success
     '''
 
-    # -- Typings
-    summary: list[TSummary]
-
     #
     # Input validation and option parsing
     # -----------------------------------
-    #
 
-    # -- Get arguments
+    # -- Get arguments, set command line arguments and parse arguments
     if argv is None:
         argv = sys.argv[1:]
-
-    # -- Set command line arguments and get the parser
     argp = argument_parser()
-
-    # -- Parsing
     opts = argp.parse_args(args=argv)
-    prog = argp.prog
-    left: str | None = opts.dir1
-    right: str | None = opts.dir2
     set_debug(opts.debug)
-    end = '\x00' if opts.print0 else '\n'
 
     # -- Requested more help?
     if opts.formathelp:
@@ -78,104 +215,43 @@ def main(argv: Sequence[str] | None=None) -> int:
         argp.exit(1)
 
     # -- Ensure we have the minimum required number of arguments
+    left: str | None = opts.dir1
+    right: str | None = opts.dir2
     if left is None:
         argp.error("Missing required LEFT_DIR argument")
 
     # -- Determine settings and print format
-    duponce = False
     if right is None or opts.duplicates:
         # -- Settings for scanning
-        printfmt = fmtfields.FMT_DEF
-        writefmt = ''
-        compare_types = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
-        filetypes = fmtfields.FILE_TYPES_DEFAULT_SCAN
-        field_prefix = ['']
-        summary = list(fmtfields.SCAN_SUMMARY)
+        scan_mode = True
         dir_comparator = obj_compare1
         pr_prefix = 'Scanned'
-        sequential = True
-
-        # Must recurse in scan mode
-        opts.recurse = True
-
-        if opts.outfile:
-            writefmt = SCANFILE_FORMAT
-            if not opts.verbose:
-                printfmt = ''
-        else:
-            if opts.quiet:
-                printfmt = ''
-            elif opts.all and opts.long:
-                printfmt = fmtfields.FMT_AHL if opts.human else fmtfields.FMT_AL
-            elif opts.all:
-                printfmt = fmtfields.FMT_AH if opts.human else fmtfields.FMT_A
-            elif opts.long:
-                printfmt = fmtfields.FMT_HL if opts.human else fmtfields.FMT_L
-            elif opts.verbose:
-                printfmt = '{path}'
-            elif opts.duplicates:
-                compare_types = 'd'
-                duponce = not bool(opts.format)
-                printfmt = '{dupinfo}'
-
-        if opts.duplicates:
-            filetypes = 'f'
-            # Sneaky way to add DUP to printings
-            printfmt = printfmt.replace('{path}', '{dup}  {dupid}  {path}')
-
-            if opts.shadiff:
-                argp.error("--sha doesn't work with --duplicates")
 
         if opts.shadiff:
             argp.error("--sha doesn't work when scanning")
 
     else:
         # -- Settings for comparing
-        printfmt = fmtfields.FMT_COMP_DEF
-        writefmt = ''
-        compare_types = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
-        filetypes = fmtfields.FILE_TYPES_DEFAULT_COMPARE
-        field_prefix = ['l_', 'r_']
-        summary = list(fmtfields.COMPARE_SUMMARY)
+        scan_mode = False
         dir_comparator = obj_compare2
         pr_prefix = 'Compared'
-        sequential = False
 
         if opts.outfile:
             argp.error("Writing to an outfile is not supported "
                        "when comparing directories")
-        if opts.quiet:
-            printfmt = ''
 
-        # The all or verbose option will show all compare types
-        if opts.all or opts.verbose:
-            compare_types = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
-
-        if opts.shadiff:
-            # Want to walk the entire tree on both sides to find any
-            # duplicates
-            opts.recurse = True
-
-    # -- Scanfile prefix settings
-    opts.leftprefix = opts.leftprefix or opts.prefix
-    opts.rightprefix = opts.rightprefix or opts.prefix
-
-    # -- User provided formats overrides any defaults
+    # -- Setup the context
     try:
-        printfmt = opts.format or printfmt
-        compare_types = get_compare_types(opts.compare_types, compare_types)
-        filetypes = get_file_types(opts.filetypes, filetypes)
+        ctx = DirscanContext().setup(scan_mode, opts)
     except ValueError as err:
         argp.error(str(err))
 
-    # Unless compare_types contains these compares, there isn't any need to
-    # make any detailed comparisons.
-    no_compare = not bool(set('cLRe').intersection(compare_types))
+    # -- Verify file types
+    if ctx.duplicates and ctx.filetypes != 'f':
+        argp.error("Cannot use other filetypes than 'f' in --duplicates mode")
 
-    # -- Extra verbose
-    if opts.verbose > 1:
-        # Prefix fields
-        printfmt = '{change_t}  ' + printfmt
+    # -- Printing settings
+    end = '\x00' if opts.print0 else '\n'
 
     # Ensure printability in powershell (that won't encode surrogates).
     # surrogatepass?
@@ -184,44 +260,18 @@ def main(argv: Sequence[str] | None=None) -> int:
     if isinstance(sys.stderr, io.TextIOWrapper):
         sys.stderr.reconfigure(errors='backslashreplace')
 
-    # -- Verify file types
-    if opts.duplicates and filetypes != 'f':
-        argp.error("Cannot use other filetypes than 'f' in --duplicates mode")
-
-    # -- Summary options
-    if opts.summary:
-        summary = [(True, s) for s in opts.summary]
-        opts.enable_summary = True
-    if not opts.enable_summary:
-        summary = []
-
-    # The final summary contains any notes if there are any errors
-    summary.extend(fmtfields.FINAL_SUMMARY)
-
-    # -- Get the fields names used in the printing formats.
-    try:
-        fieldnames = set()
-        if printfmt:
-            fieldnames.update(get_fieldnames(printfmt))
-        if writefmt:
-            fieldnames.update(get_fieldnames(writefmt))
-
-        # FIXME: Evaluate valid format fields in summary, printfmt and writefmt
-    except ValueError as err:
-        argp.error(f'Print format {err}')
-
     # -- Debug info --
     debug(1, "Command options:")
     debug(1, "  Left          : '{}'", left)
     debug(1, "  Right         : '{}'", right)
-    debug(1, "  Print format  : '{}'", printfmt)
-    debug(1, "  Write format  : '{}'", writefmt)
-    debug(1, "  Fields in use : {}", fieldnames)
-    debug(1, "  Compare types : '{}'", compare_types)
-    debug(1, "                : ({})", ", ".join(fmtfields.COMPARE_TYPES[c] for c in compare_types))
-    debug(1, "  File types    : '{}'", filetypes)
-    debug(1, "                : ({})", ", ".join(OBJTYPES[o].objname for o in filetypes))
-    for i, s in enumerate(summary, start=1):
+    debug(1, "  Print format  : '{}'", ctx.printfmt)
+    debug(1, "  Write format  : '{}'", ctx.writefmt)
+    debug(1, "  Fields in use : {}", ctx.fieldnames)
+    debug(1, "  Compare types : '{}'", ctx.compare_types)
+    debug(1, "                : ({})", ", ".join(fmtfields.COMPARE_TYPES[c] for c in ctx.compare_types))
+    debug(1, "  File types    : '{}'", ctx.filetypes)
+    debug(1, "                : ({})", ", ".join(OBJTYPES[o].objname for o in ctx.filetypes))
+    for i, s in enumerate(ctx.summary, start=1):
         debug(1, "  Summary {:2d}    : '{}'", i, s)
     debug(1, "  Opts          : {}", opts)
     debug(1, "")
@@ -243,7 +293,7 @@ def main(argv: Sequence[str] | None=None) -> int:
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
-            progressmgr.print(f"{prog}: {exception}")
+            progressmgr.print(f"{argp.prog}: {exception}")
 
         # True will swallow the exception. In debug mode
         # the error will be raised
@@ -252,10 +302,6 @@ def main(argv: Sequence[str] | None=None) -> int:
     #
     # Directory scanning
     # -------------------
-    #
-
-    # The filter must return True to show the line
-    show_filter: Callable[[Collection[DirscanObj]], bool] = lambda objs: True  # noqa: E731
 
     outfile = None
     try:
@@ -263,23 +309,19 @@ def main(argv: Sequence[str] | None=None) -> int:
 
         # -- Check and read the scan files
         if right is None:
-            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix)]
+            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix or opts.prefix)]
         else:
-            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix),
-                    open_dir_or_scanfile(right, root=opts.rightprefix)]
+            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix or opts.prefix),
+                    open_dir_or_scanfile(right, root=opts.rightprefix or opts.prefix)]
 
         # -- Scan the database
-        shadb = {}
-        shaids: dict[bytes, str] = {}
-        shaids_used: set[str] = set()
-        shavisited = set()
-        if opts.duplicates or opts.shadiff:
+        if ctx.duplicates or opts.shadiff:
             progressmgr.print("Building SHA database...")
 
             # -- Build the sha database
-            shadb = scan_shadb(
+            ctx.shadb = scan_shadb(
                 dirs,
-                include_single_entries=not opts.duplicates,
+                include_single_entries=not ctx.duplicates,
                 reverse=opts.reverse,
                 excludes=opts.exclude,
                 onefs=opts.onefs,
@@ -302,7 +344,7 @@ def main(argv: Sequence[str] | None=None) -> int:
                         reverse=opts.reverse,
                         excludes=opts.exclude,
                         onefs=opts.onefs,
-                        traverse_into_oneside=opts.recurse,
+                        traverse_into_oneside=ctx.recurse,
                         exception_fn=error_handler,
                         close_during=False,
                         sequential=True,
@@ -312,7 +354,7 @@ def main(argv: Sequence[str] | None=None) -> int:
                     progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
 
                 obj_count = progress.count
-                sequential = False
+                ctx.sequential = False
 
         # -- Open output file
         if opts.outfile:
@@ -336,10 +378,10 @@ def main(argv: Sequence[str] | None=None) -> int:
                     reverse=opts.reverse,
                     excludes=opts.exclude,
                     onefs=opts.onefs,
-                    traverse_into_oneside=opts.recurse,
+                    traverse_into_oneside=ctx.recurse,
                     exception_fn=error_handler,
                     close_during=False,
-                    sequential=sequential,
+                    sequential=ctx.sequential,
             ):
 
                 # Progress printing
@@ -347,112 +389,53 @@ def main(argv: Sequence[str] | None=None) -> int:
 
                 # Compare the objects
                 try:
-                    (change, text) = dir_comparator(
+                    change = dir_comparator(
                         objs,
                         ignores=opts.ignore,
-                        no_compare=no_compare,
+                        no_compare=ctx.no_compare,
                         ignore_time=not opts.compare_time,
-                        shadb=shadb,
+                        shadb=ctx.shadb,
                     )
 
                 except OSError as err:
                     # Errors here are due to comparisons that fail.
                     error_handler(err)
-                    change = 'error'
-                    text = 'Compare failed: ' + str(err)
+                    change = ('error', 'Compare failed: ' + str(err))
 
-                debug(3, "      Compare: {} {}", change, text)
+                debug(3, "      Compare: {} {}", change[0], change[1])
 
-                # Going to show this entry?
-                show = show_filter(objs)
-
-                # Show this filetype?
-                if not any(o.objtype in filetypes for o in objs):
-                    show = False
-
-                # Show this compare type?
-                if fmtfields.COMPARE_ARROWS[change][0] not in compare_types:
-                    show = False
+                # -- PROCESS THE COMPARE
 
                 # Save histogram info for the change type
-                stats.add_stats(change)
+                stats.add_stats(change[0])
 
-                # Skip this entry if its not going to be printed
+                # Determine whether to show the entry
+                show = show_entry(objs, change, ctx)
                 if not show:
-                    debug(3, "     hidden")
+                    debug(3, "      hidden")
                     continue
 
                 # Save file histogram info
                 stats.add_filestats(objs)
 
-                # Set the base fields
-                fields: dict[str, TField] = {
-                    'relpath': str(path),
-                    'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
-                    'change': change,
-                    'change_t': fmtfields.COMPARE_ARROWS[change][0],
-                    'arrow' : fmtfields.COMPARE_ARROWS[change][1],
-                    'text'  : text.capitalize(),
-                }
-
-                # Write list of duplicates to the extra field
-                if opts.duplicates: # and right is None:
-                    fields['dupinfo'] = ''
-                    fields['dup'] = '   '
-                    fields['dupid'] = '      '
-                    fields['dupcount'] = 0
-
-                    # Technically not needed, due to sequential setting ensures it
-                    # will only contain one directory. Probably smart to keep this
-                    # as a safeguard. Same applies to the FileObj test.
-                    for obj in objs:
-                        if not isinstance(obj, FileObj):
-                            continue
-                        sha = obj.hashsum_cache  # Don't force calculation here
-                        if not sha:
-                            continue
-
-                        visited = sha in shavisited
-                        if not visited:
-                            shavisited.add(sha)
-
-                        # Skip if the duplicated entry has already been printed
-                        if duponce and visited:
-                            continue
-
-                        samesha = shadb.get(sha, [])
-                        len_samesha = len(samesha)
-                        fields['dupcount'] = len_samesha
-                        if len_samesha > 1:
-                            shaid = format_shaid(sha, shaids, shaids_used)
-                            fields['dupid'] = shaid
-                            j = '\n    '.join([str(o[1].fullpath) for o in samesha])
-                            fields['dupinfo'] = (
-                                f'File duplicated {len_samesha} times:  '
-                                f'(ID {shaid})  {obj.size} bytes\n    {j}\n')
-                            fields['dup'] = 'DUP'
-
-                # Update the fields from the file objects. This retries the values
-                # for the fields which are in actual use. This saves a lot of
-                # resources instead of fetching everything
-                (errors, filefields) = get_fields(objs, field_prefix, fieldnames)
-                fields.update(filefields)
+                # Generate the fields for printing and log any errors from it
+                fields, errors = generate_fields(path, objs, change, ctx)
                 for error in errors:
                     error_handler(error)
 
                 # Print to stdout
-                if printfmt:
-                    write_fileinfo(printfmt, fields, quoter=text_quote,
+                if ctx.printfmt:
+                    write_fileinfo(ctx.printfmt, fields, quoter=text_quote,
                                    file=sys.stdout, end=end)
 
                 # Write to file -- don't write if we couldn't get all fields
-                if outfile and writefmt and not errors:
-                    write_fileinfo(writefmt, fields, quoter=file_quote,
+                if outfile and ctx.writefmt and not errors:
+                    write_fileinfo(ctx.writefmt, fields, quoter=file_quote,
                                    file=outfile)
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors
-        progressmgr.print(prog + ': ' + str(err))
+        progressmgr.print(argp.prog + ': ' + str(err))
 
         # Show the full traceback in debug mode
         if opts.debug:
@@ -474,22 +457,94 @@ def main(argv: Sequence[str] | None=None) -> int:
     #
     # Statistics printing
     # -------------------
-    #
 
     # Set the summary fields
-    fields = {
-        'prog': prog,
+    summary_fields: dict[str, TField] = {
+        'prog': argp.prog,
+        **stats.get_fields(ctx.field_prefix),
     }
-    fields.update(stats.get_fields(field_prefix))
 
     # Print the summary
-    write_summary(summary, fields, file=sys.stderr)
+    write_summary(ctx.summary, summary_fields, file=sys.stderr)
 
     # Return error code if we have encountered any errors scanning
-    if fields.get('n_err'):
-        return 1
+    return 1 if summary_fields.get('n_err') else 0
 
-    return 0
+
+def show_entry(objs: tuple[DirscanObj, ...], change: tuple[str, str], ctx: DirscanContext) -> bool:
+    """ Determine whether to show the entry. """
+
+    # Show this filetype?
+    if not any(o.objtype in ctx.filetypes for o in objs):
+        return False
+
+    # Show this compare type?
+    if fmtfields.COMPARE_ARROWS[change[0]][0] not in ctx.compare_types:
+        return False
+
+    return True
+
+
+def generate_fields(path: Path, objs: tuple[DirscanObj, ...],
+                    change: tuple[str, str], ctx: DirscanContext) -> tuple[dict[str, TField], list[Exception]]:
+    """ Assemble the fields for printing from comparison results. """
+
+    # Set the base fields
+    fields: dict[str, TField] = {
+        'relpath': str(path),
+        'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
+        'change': change[0],
+        'change_t': fmtfields.COMPARE_ARROWS[change[0]][0],
+        'arrow' : fmtfields.COMPARE_ARROWS[change[0]][1],
+        'text'  : change[1].capitalize(),
+    }
+
+    # Write list of duplicates to the extra field
+    if ctx.duplicates:
+        fields.update({
+            'dupinfo': '',
+            'dup': '   ',
+            'dupid': '      ',
+            'dupcount': 0,
+        })
+
+        # Technically not needed, due to sequential setting ensures it
+        # will only contain one directory. Probably smart to keep this
+        # as a safeguard. Same applies to the FileObj test.
+        for obj in objs:
+            if not isinstance(obj, FileObj):
+                continue
+            sha = obj.hashsum_cache  # Don't force calculation here
+            if not sha:
+                continue
+
+            visited = sha in ctx.shavisited
+            if not visited:
+                ctx.shavisited.add(sha)
+
+            # Skip if the duplicated entry has already been printed
+            if ctx.duponce and visited:
+                continue
+
+            samesha = ctx.shadb.get(sha, [])
+            len_samesha = len(samesha)
+            fields['dupcount'] = len_samesha
+            if len_samesha > 1:
+                shaid = format_shaid(sha, ctx.shaids, ctx.shaids_used)
+                fields['dupid'] = shaid
+                j = '\n    '.join([str(o[1].fullpath) for o in samesha])
+                fields['dupinfo'] = (
+                    f'File duplicated {len_samesha} times:  '
+                    f'(ID {shaid})  {obj.size} bytes\n    {j}\n')
+                fields['dup'] = 'DUP'
+
+    # Update the fields from the file objects. This retries the values
+    # for the fields which are in actual use. This saves a lot of
+    # resources instead of fetching everything
+    (errors, filefields) = get_fields(objs, ctx.field_prefix, ctx.fieldnames)
+    fields.update(filefields)
+
+    return fields, errors
 
 
 if __name__ == '__main__':
