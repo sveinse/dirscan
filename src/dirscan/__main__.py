@@ -289,11 +289,13 @@ def main(argv: Sequence[str] | None=None) -> int:
     stats = Statistics(left, right)
 
     # -- Error handler
-    def error_handler(exception: Exception) -> bool:
+    def error_handler(exception: Exception, path: DirscanObj | TPath) -> bool:
         ''' Callback for handling scanning errors during parsing '''
         stats.add_stats('err')
         if not opts.quieterr:
-            progressmgr.print(f"{argp.prog}: {exception}")
+            if isinstance(path, DirscanObj):
+                path = path.fullpath
+            progressmgr.print(f"{path}: {exception.__class__.__qualname__}: {exception}")
 
         # True will swallow the exception. In debug mode
         # the error will be raised
@@ -399,7 +401,8 @@ def main(argv: Sequence[str] | None=None) -> int:
 
                 except OSError as err:
                     # Errors here are due to comparisons that fail.
-                    error_handler(err)
+                    if not error_handler(err, path):
+                        raise
                     change = ('error', 'Compare failed: ' + str(err))
 
                 debug(3, "      Compare: {} {}", change[0], change[1])
@@ -421,7 +424,8 @@ def main(argv: Sequence[str] | None=None) -> int:
                 # Generate the fields for printing and log any errors from it
                 fields, errors = generate_fields(path, objs, change, ctx)
                 for error in errors:
-                    error_handler(error)
+                    if not error_handler(error, path):
+                        raise error
 
                 # Print to stdout
                 if ctx.printfmt:

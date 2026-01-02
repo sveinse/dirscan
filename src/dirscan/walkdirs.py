@@ -19,7 +19,7 @@ from dirscan.progress import getprogress
 def walkdirs(dirs: Collection[DirscanObj | TPath],
              *,
              excludes: Collection[TPath] | None=None,
-             exception_fn: Callable[[Exception], bool] | None=None,
+             exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None=None,
              reverse: bool=False,
              onefs: bool=False,
              traverse_into_oneside: bool=True,
@@ -47,7 +47,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
      ``exception_fn``
         Exception handler callback. It will be called if any scanning exceptions
         occur during traversal, typically file system access errors. The
-        callback is called with ``exception_fn(exception)`` and expects a
+        callback is called with ``exception_fn(exception, path)`` and expects a
         ``bool`` return value. If the function is not set or returns a falsy
         value, the exception will be raised and traversal stops.
 
@@ -141,7 +141,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
             # Parsing the object failed
             except OSError as err:
                 # Call the user exception callback, raise if not
-                if not exception_fn or not exception_fn(err):
+                if not exception_fn or not exception_fn(err, obj):
                     raise
 
         # How many objects are present?
@@ -178,7 +178,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
             # Getting the children failed
             except OSError as err:
                 # Call the user exception callback, raise if not
-                if not exception_fn or not exception_fn(err):
+                if not exception_fn or not exception_fn(err, obj):
                     raise
 
             finally:
@@ -207,7 +207,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
 
 def scan_shadb(dirs: Collection[DirscanObj],
                *,
-               exception_fn: Callable[[Exception], bool] | None=None,
+               exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None=None,
                include_single_entries: bool=True,
                **kwargs: Any,
                ) -> dict[bytes, list[tuple[int, FileObj]]]:
@@ -244,7 +244,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
             # Get the hashsum and store it to the shadb list
             shadb.setdefault(obj.hashsum, []).append((index, obj))
         except IOError as err:
-            if not exception_fn or not exception_fn(err):
+            if not exception_fn or not exception_fn(err, obj):
                 raise
 
     # -- Setup the global progress indicator context
