@@ -1,6 +1,5 @@
 import dirscan as ds
 from dirscan.__main__ import scan_shadb
-from dirscan.formatfields import COMPARE_TYPES_ALL
 
 
 def scan(dirs, compare=ds.obj_compare2):

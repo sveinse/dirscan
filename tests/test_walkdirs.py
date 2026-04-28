@@ -1,15 +1,10 @@
-from dataclasses import dataclass
 import os
 import sys
-from typing import Any
 import pytest
 from pytest import raises
 from pathlib import Path
-from pprint import pprint
 
 import dirscan as ds
-
-# pylint: disable-all
 
 
 def test_walkdirs_no_access_to_topdir(wd):
@@ -22,11 +17,12 @@ def test_walkdirs_no_access_to_topdir(wd):
     wd.chmod('a', 0o000)
 
     # Direct call
-    with raises(PermissionError) as exc:
-        for _ in ds.walkdirs(('a',)): pass
+    with raises(PermissionError):
+        for _ in ds.walkdirs(('a',)):
+            pass
 
     # Cmd line
-    with raises(PermissionError) as exc:
+    with raises(PermissionError):
         ds.main(["--debug", "a"])
 
 
@@ -36,11 +32,12 @@ def test_walkdirs_top_is_not_a_dir(wd):
     wd.wrdata('a', None)
 
     # Direct call
-    with raises(NotADirectoryError) as exc:
-        for _ in ds.walkdirs(('a',)): pass
+    with raises(NotADirectoryError):
+        for _ in ds.walkdirs(('a',)):
+            pass
 
     # Cmd line
-    with raises(NotADirectoryError) as exc:
+    with raises(NotADirectoryError):
         ds.main(["--debug", "a"])
 
 
@@ -48,11 +45,12 @@ def test_walkdirs_top_is_not_existing(wd):
     ''' Test scanning a path that doesn't exist '''
 
     # Direct call
-    with raises(FileNotFoundError) as exc:
-        for _ in ds.walkdirs(('noexist',)): pass
+    with raises(FileNotFoundError):
+        for _ in ds.walkdirs(('noexist',)):
+            pass
 
     # Cmd line
-    with raises(FileNotFoundError) as exc:
+    with raises(FileNotFoundError):
         ds.main(["--debug", "noexist"])
 
 
@@ -68,8 +66,9 @@ def test_walkdirs_empty_dirlist(wd):
     assert result == expect
 
     # None list
-    with raises(TypeError) as exc:
-        for _ in ds.walkdirs(None): pass
+    with raises(TypeError):
+        for _ in ds.walkdirs(None):
+            pass
 
 
 # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
@@ -306,7 +305,7 @@ def test_walkdirs_exclude(wd):
     #        set
     for p, (obj,) in walk:
         if p == Path('b'):
-            assert obj.excluded == True
+            assert obj.excluded
 
 
 def test_walkdirs_dirofdir(wd):

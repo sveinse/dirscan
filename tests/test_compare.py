@@ -10,11 +10,11 @@ def test_compare1_two_dirs(wd):
     a = ds.create_from_fs('a')
 
     with raises(AssertionError):
-        cmp = ds.obj_compare1(tuple())
+        ds.obj_compare1(tuple())
     with raises(AssertionError):
-        cmp = ds.obj_compare1((a,a))
+        ds.obj_compare1((a,a))
     with raises(AssertionError):
-        cmp = ds.obj_compare1((a,a,a))
+        ds.obj_compare1((a,a,a))
 
 
 def test_compare1_scan(wd):
@@ -48,11 +48,11 @@ def test_compare2_two_dirs(wd):
     a = ds.create_from_fs('a')
 
     with raises(AssertionError):
-        cmp = ds.obj_compare2(tuple())
+        ds.obj_compare2(tuple())
     with raises(AssertionError):
-        cmp = ds.obj_compare2((a,))
+        ds.obj_compare2((a,))
     with raises(AssertionError):
-        cmp = ds.obj_compare2((a,a,a))
+        ds.obj_compare2((a,a,a))
 
 
 def test_compare2_exclude(wd):

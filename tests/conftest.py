@@ -3,8 +3,6 @@ import subprocess
 from dataclasses import dataclass
 import pytest
 
-# pylint: disable-all
-
 
 @dataclass
 class Tempdir:

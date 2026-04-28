@@ -15,6 +15,7 @@ from typing import Collection, Self, Sequence
 
 import dirscan.formatfields as fmtfields
 from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
+from dirscan.digest import TPath
 from dirscan.formatfields import (
     Statistics,
     TField,
@@ -315,14 +316,14 @@ def main(argv: Sequence[str] | None=None) -> int:
         # -- Check and read the scan files
         if right is None:
             dirs = [open_dir_or_scanfile(left,
-                                         root=opts.leftprefix or opts.prefix,
+                                         subdir=opts.leftsubdir or opts.subdir,
                                          prefix=opts.prefix)]
         else:
             dirs = [open_dir_or_scanfile(left,
-                                         root=opts.leftprefix or opts.prefix,
+                                         subdir=opts.leftsubdir or opts.subdir,
                                          prefix=opts.prefix),
                     open_dir_or_scanfile(right,
-                                         root=opts.rightprefix or opts.prefix,
+                                         subdir=opts.rightsubdir or opts.subdir,
                                          prefix=opts.prefix)]
 
         # -- Scan the database
