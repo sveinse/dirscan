@@ -139,7 +139,7 @@ instance instead.
     is set. See the command-line option `--recurse`.
 
   - `exception_fn` -
-    Exception handler callback. It has format `exception_fn(exception)`
+    Exception handler callback. It has format `exception_fn(exception, path)`
     returning `Bool`. It will be called if any scanning exceptions occur
     during traversal. If `exception_fn()` returns `False` or is not set, an
     ordinary exception will be raised.
