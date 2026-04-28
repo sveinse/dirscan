@@ -7,6 +7,14 @@ cleanvenv=
 py3=1
 runall=
 
+bin=bin
+py2=python
+py3=python3
+if [[ "$(uname -o)" = "Msys" ]]; then
+    bin=Scripts
+    py2=py -2
+    py3=py -3
+fi
 
 # -- Helpers
 log () {
@@ -22,7 +30,7 @@ quit () {
 usage () {
     cat <<EOF
 $ME -- Dirscan tester
-(C) 2018 Svein Seldal <sveinse@seldal.com>
+(C) 2018 Svein Seldal
 
   Run dirscan tests
 
@@ -95,9 +103,9 @@ main() {
         if [[ ! -d "$venv" ]]; then
             log "Setting up py3 virtual environment in $venv"
             (set -ex;
-            python3 -m venv $venv
+            $py3 -m venv $venv
             cd $HERE/..
-            $venv/bin/pip install -e .
+            $venv/$bin/pip install -e .
             ) || exit 1
         fi
     else
@@ -106,13 +114,13 @@ main() {
         if [[ ! -d "$venv" ]]; then
             log "Setting up py2 virtual environment in $venv"
             (set -ex;
-            virtualenv $venv
+            $py2 -m virtualenv $venv
             cd $HERE/..
-            $venv/bin/pip install -e .
+            $venv/$bin/pip install -e .
             ) || exit 1
         fi
     fi
-    ds="$venv/bin/dirscan"
+    ds="$venv/$bin/dirscan"
 
 
     # -- Read all test files

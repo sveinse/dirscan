@@ -3,21 +3,19 @@ build/
 dist/
 *.egg-info/
 *.egg
-*.py[cod]
 __pycache__/
-*.so
+*.scan
+*.bin
+*.whl
 *~
-venv*/
-
-# due to using tox and pytest
+.venv*/
+__*
+!__*__.py
 .tox
 .cache
-
-# Misc
-tags
-
-tests/test*/
-tests/venv*/
-
+htmlcov
+.coverage
+.pytest_cache
+.mypy_cache
+uv.lock
 .vscode/
-__experimental/

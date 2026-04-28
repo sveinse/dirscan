@@ -1,0 +1,5 @@
+Reference
+=========
+
+.. automodule:: dirscan
+    :members:
