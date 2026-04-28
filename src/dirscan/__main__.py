@@ -1,6 +1,6 @@
 ''' Dirscan - command line interface '''
 #
-# Copyright (C) 2010-2025 Svein Seldal
+# Copyright (C) 2010-2026 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -12,9 +12,7 @@ from pathlib import PurePosixPath
 from typing import Callable, Collection, Sequence
 
 import dirscan.formatfields as fmtfields
-from dirscan import digest
-from dirscan import dirscan as _dirscan
-from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj, create_from_fs
+from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
 from dirscan.formatfields import (
     Statistics,
     TFields,
@@ -28,7 +26,10 @@ from dirscan.formatfields import (
 )
 from dirscan.log import debug, set_debug
 from dirscan.progress import PrintProgress, setprogress
-from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile, text_quote
+from dirscan.scanfile import (
+    SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile,
+    text_quote
+)
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
 from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
@@ -157,9 +158,9 @@ def main(argv: Sequence[str] | None=None) -> int:
             # duplicates
             opts.recurse = True
 
-    # -- Scanfile prefix settings
-    opts.leftprefix = opts.leftprefix or opts.prefix
-    opts.rightprefix = opts.rightprefix or opts.prefix
+    # -- Scanfile subdir settings
+    opts.leftsubdir = opts.leftsubdir or opts.subdir
+    opts.rightsubdir = opts.rightsubdir or opts.subdir
 
     # -- User provided formats overrides any defaults
     try:
@@ -264,10 +265,10 @@ def main(argv: Sequence[str] | None=None) -> int:
 
         # -- Check and read the scan files
         if right is None:
-            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix)]
+            dirs = [open_dir_or_scanfile(left, subdir=opts.leftsubdir, prefix=opts.prefix)]
         else:
-            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix),
-                    open_dir_or_scanfile(right, root=opts.rightprefix)]
+            dirs = [open_dir_or_scanfile(left, subdir=opts.leftsubdir, prefix=opts.prefix),
+                    open_dir_or_scanfile(right, subdir=opts.rightsubdir, prefix=opts.prefix)]
 
         # -- Scan the database
         shadb = {}

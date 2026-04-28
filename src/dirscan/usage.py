@@ -1,6 +1,6 @@
 ''' Dirscan - command-line arguments and help descriptions '''
 #
-# Copyright (C) 2010-2025 Svein Seldal
+# Copyright (C) 2010-2026 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -28,7 +28,7 @@ Using a LEFT_DIR RIGHT_DIR argument will compare directories, showing the
 differences between LEFT_DIR and RIGHT_DIR. Either arguments can be
 directories or scan files.
 
-Copyright (C) 2010-2025 Svein Seldal
+Copyright (C) 2010-2026 Svein Seldal
 This application is licensed under MIT license (see
 https://github.com/sveinse/dirscan for details)
 
@@ -298,15 +298,21 @@ def argument_parser() -> argparse.ArgumentParser:
         ''')
     argp.add_argument('--prefix', metavar='PATH', dest='prefix', default=None,
                       help='''
-        When reading from scanfiles on either sides, use the given prefix PATH
+        Use the given prefix PATH as the base for the relative paths when reading
+        from scanfiles on either sides. This is useful when the scan file
+        is representing a physical directory.
+        ''')
+    argp.add_argument('--subdir', metavar='PATH', dest='subdir', default=None,
+                      help='''
+        When reading from scanfiles on either sides, use the given subdir PATH
         to read a subsection of the scan file(s).
         ''')
-    argp.add_argument('--left-prefix', metavar='PATH', dest='leftprefix',
+    argp.add_argument('--left-subdir', metavar='PATH', dest='leftsubdir',
                       default=None, help='''
-        When reading from a scanfile on the left side, use the given prefix PATH
+        When reading from a scanfile on the left side, use the given subdir PATH
         to read a subsection of the scan file.
         ''')
-    argp.add_argument('--right-prefix', metavar='PATH', dest='rightprefix',
+    argp.add_argument('--right-subdir', metavar='PATH', dest='rightsubdir',
                       default=None, help='''
         When reading from a scanfiles on the right side, use the given
         prefix PATH to read a subsection of the scan file.
