@@ -82,34 +82,38 @@ def int_positive(value: str, radix: int=10) -> int:
     return num
 
 
-def open_dir_or_scanfile(filename: TPath, root: str | None=None) -> DirscanObj:
+def open_dir_or_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath | None=None) -> DirscanObj:
     '''
     Open a directory or scanfile return the root object :py:class:`DirObj`
     instance
 
     Args:
         filename: Filename to read
-        root: The path to use as root from the scanfile. The value is ``.`` if
-            unset which will use the top object in the file as root. See
+        subdir: The subdir path to use as start from the scanfile. The value is
+            ``.`` if unset which will use the top object in the file as root. See
             :py:meth:`read_scanfile()` for details. Unused if loading a directory.
+        prefix: Optional prefix to use for pathnames in the scanfile. If omitted,
+            the scanfile filename is used as prefix. This is useful when loading
+            a scanfile and want to make it relative to a file system path. Not
+            used when loading a directory.
     Returns:
         Top-level :py:class:`DirObj` object in the hierarchy loaded from the
         file.
     '''
     if is_scanfile(filename):
-        return read_scanfile(filename, root=root)
+        return read_scanfile(filename, subdir=subdir, prefix=prefix)
     return create_from_fs(filename)
 
 
-def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
+def read_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath | None=None) -> DirObj:
     '''
     Read filename scan file and return a :py:class:`DirObj` instance containing
     the file tree root
 
     Args:
         filename: Filename to read
-        root: The path to use as root from the scanfile. The value is ``.`` if
-            unset which will use the top object in the file as root. Setting
+        subdir: The path to use as root from the scanfile. The value is ``.``
+            if unset which will use the top object in the file as root. Setting
             another value will use the sub-entry as root. This can be
             used to load a subset of the scanfile.
 
@@ -119,7 +123,7 @@ def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
     '''
 
     # First pass, parse the file
-    dirtree = parse_file(filename, legacy=False)
+    dirtree = parse_file(filename, legacy=False, prefix=prefix)
 
     # Second pass, inserting all the children into the list of parents,
     # building the entire tree structure
@@ -134,17 +138,18 @@ def read_scanfile(filename: TPath, root: str | None=None) -> DirObj:
 
     # Populate the tree root
     try:
-        root = root or '.'  # Set a default value
+        root = subdir or '.'  # Set a default value
         return dirtree['./' + root if root[0] != '.' else root][0]
 
     except KeyError:
-        raise DirscanException(f"No such directory '{root}' "
+        raise DirscanException(f"No such directory '{subdir}' "
                                f"found in scanfile '{filename}'") from None
 
 
-def parse_file(filename: TPath, legacy: bool = False) -> TDirtree:
+def parse_file(filename: TPath, legacy: bool = False, prefix: TPath|None = None) -> TDirtree:
+    """Parse the scanfile and return a dict of the file objects."""
 
-    base_fname = Path(filename).name
+    base_fname = str(prefix) if prefix is not None else Path(filename).name
     dirtree: TDirtree = {}
 
     # First pass reading entire file into memory

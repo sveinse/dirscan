@@ -29,7 +29,10 @@ from dirscan.formatfields import (
 )
 from dirscan.log import debug, set_debug
 from dirscan.progress import PrintProgress, setprogress
-from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile, text_quote
+from dirscan.scanfile import (
+    SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile,
+    text_quote
+)
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
 from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
@@ -311,10 +314,16 @@ def main(argv: Sequence[str] | None=None) -> int:
 
         # -- Check and read the scan files
         if right is None:
-            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix or opts.prefix)]
+            dirs = [open_dir_or_scanfile(left,
+                                         root=opts.leftprefix or opts.prefix,
+                                         prefix=opts.prefix)]
         else:
-            dirs = [open_dir_or_scanfile(left, root=opts.leftprefix or opts.prefix),
-                    open_dir_or_scanfile(right, root=opts.rightprefix or opts.prefix)]
+            dirs = [open_dir_or_scanfile(left,
+                                         root=opts.leftprefix or opts.prefix,
+                                         prefix=opts.prefix),
+                    open_dir_or_scanfile(right,
+                                         root=opts.rightprefix or opts.prefix,
+                                         prefix=opts.prefix)]
 
         # -- Scan the database
         if ctx.duplicates or opts.shadiff:
