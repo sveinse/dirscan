@@ -1,6 +1,6 @@
 """Convert old scanfile format to new format."""
 #
-# Copyright (C) 2010-2026 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 #

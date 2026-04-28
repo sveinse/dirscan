@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Dirscan'
-copyright = '2026, Svein Seldal'
+copyright = '2025, Svein Seldal'
 author = 'Svein Seldal'
 
 # -- General configuration ---------------------------------------------------

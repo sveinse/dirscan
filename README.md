@@ -14,7 +14,7 @@ Project home:
 
           https://github.com/sveinse/dirscan
 
-Copyright 2010-2026, Svein Seldal
+Copyright 2010-2025, Svein Seldal
 
 
 ## Installation

@@ -1,6 +1,6 @@
 ''' Dirscan - command-line arguments and help descriptions '''
 #
-# Copyright (C) 2010-2026 Svein Seldal
+# Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
 # URL: https://github.com/sveinse/dirscan
 
@@ -28,7 +28,7 @@ Using a LEFT_DIR RIGHT_DIR argument will compare directories, showing the
 differences between LEFT_DIR and RIGHT_DIR. Either arguments can be
 directories or scan files.
 
-Copyright (C) 2010-2026 Svein Seldal
+Copyright (C) 2010-2025 Svein Seldal
 This application is licensed under MIT license (see
 https://github.com/sveinse/dirscan for details)
 
