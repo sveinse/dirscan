@@ -11,7 +11,8 @@ import io
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Collection, Self, Sequence
+from typing import Collection, Sequence
+from typing_extensions import Self  # Due to Python 3.10 compatibility, remove when Python 3.11+ is minimum
 
 import dirscan.formatfields as fmtfields
 from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
