@@ -302,7 +302,7 @@ class FileObj(DirscanObj):
             yield 'size differs'
         if self.size == 0:
             # Both files are empty, no need to compare contents
-            pass
+            return
         elif self.hashsum_cache == b'' and other.hashsum_cache == b'':
             # Don't compare if neither has hashsum data
             pass
@@ -312,11 +312,11 @@ class FileObj(DirscanObj):
             # read from listfiles, we have to use hashsums.
             if self.hashsum != other.hashsum:
                 yield 'contents differs'
-        else:
-            # Compare the file contents. Type and size are equal prior to
-            # entering this code
-            if not COMPARE_FN(self.fullpath, other.fullpath, self.size):
-                yield 'contents differs'
+            return
+        # Compare the file contents. Type and size are equal prior to
+        # entering this code
+        if not COMPARE_FN(self.fullpath, other.fullpath, self.size):
+            yield 'contents differs'
 
     def to_dict(self) -> DirscanDict:
         data = super().to_dict()

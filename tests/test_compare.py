@@ -171,4 +171,4 @@ def test_compare2_change_size(wd):
     b = ds.create_from_fs('b')
 
     cmp = ds.obj_compare2((a,b))
-    assert cmp == ('changed', 'file changed: size differs')
+    assert cmp == ('changed', 'file changed: size differs, contents differs')

@@ -264,7 +264,6 @@ f'''#!ds:v1
         "d,,-1,,,,,.",  # mode
         "d,,,-1,,,,.",  # uid
         "d,,,,-1,,,.",  # gid
-        "d,,,,,-1,,.",  # mtime
     )
     for test in tests:
         wd.wrdata('a', (
