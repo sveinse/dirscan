@@ -1,10 +1,10 @@
 [build-system]
-requires = ["uv_build>=0.9.5,<0.10.0"]
+requires = ["uv_build>=0.11.7,<0.12.0"]
 build-backend = "uv_build"
 
 [project]
 name = "dirscan"
-version = "0.11a2"
+version = "1.0"
 description = "Directory traversal utility with advanced filtering capabilities"
 authors = [
     {name = "Svein Seldal", email = "sveinse@seldal.com"},
@@ -16,11 +16,12 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Topic :: Utilities",
-    "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
     "typing-extensions",
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 dev = [
@@ -80,12 +81,16 @@ strict = true
 ignore_missing_imports = true
 show_column_numbers = true
 show_error_codes = true
-exclude = "(tests/|venv/)"
+exclude = "(^tests/)"
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
 
 [tool.ruff]
 line-length = 120
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = [
     "F401",  # Ignore unused imports in __init__.py files
 ]

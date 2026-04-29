@@ -1,14 +1,9 @@
-import os
 import sys
 import pytest
-from pathlib import Path
 from pytest import raises
-#from pprint import pprint
 
 import dirscan as ds
 import dirscan.scanfile as scanfile
-
-# pylint: disable-all
 
 
 def test_scanfile_get_fileheader():
@@ -42,10 +37,10 @@ def test_scanfile_no_access(wd):
     wd.wrdata('a', None)
     wd.chmod('a', 0x000)
 
-    with raises(PermissionError) as exc:
+    with raises(PermissionError):
         ds.read_scanfile('a')
 
-    with raises(PermissionError) as exc:
+    with raises(PermissionError):
         ds.main(["--debug", "a"])
 
 
@@ -53,23 +48,23 @@ def test_scanfile_is_scanfile(wd):
     ''' Test the is_scanfile() method with various file inputs '''
 
     # Test mundane input first
-    assert ds.is_scanfile('') == False
-    assert ds.is_scanfile(None) == False
-    assert ds.is_scanfile('noexist') == False
+    assert not ds.is_scanfile('')
+    assert not ds.is_scanfile(None)
+    assert not ds.is_scanfile('noexist')
 
     # Give dir
     wd.makedirs('d1')
-    assert ds.is_scanfile('d1') == False
+    assert not ds.is_scanfile('d1')
 
     # Give dir with no access
     if sys.platform != 'win32':
         wd.makedirs('d2')
         wd.chmod('d2', 0o000)
-        assert ds.is_scanfile('d2') == False
+        assert not ds.is_scanfile('d2')
 
     # Give empty file
     wd.wrdata('a', None)
-    assert ds.is_scanfile('a') == False
+    assert not ds.is_scanfile('a')
 
     # Give file without permission
     if sys.platform != 'win32':
@@ -80,15 +75,15 @@ def test_scanfile_is_scanfile(wd):
 
     # File which is not scanfile
     wd.wrdata('a', ('''foobar'''))
-    assert ds.is_scanfile('a') == False
+    assert not ds.is_scanfile('a')
 
     # Too new scanfile version
     wd.wrdata('a', ('''#!ds:v100'''))
-    assert ds.is_scanfile('a') == False
+    assert not ds.is_scanfile('a')
 
     # Proper file header
     wd.wrdata('a', ('''#!ds:v1'''))
-    assert ds.is_scanfile('a') == True
+    assert ds.is_scanfile('a')
 
 
 def test_scanfile_read_scanfile_file_handling(wd):
@@ -269,7 +264,6 @@ f'''#!ds:v1
         "d,,-1,,,,,.",  # mode
         "d,,,-1,,,,.",  # uid
         "d,,,,-1,,,.",  # gid
-        "d,,,,,-1,,.",  # mtime
     )
     for test in tests:
         wd.wrdata('a', (

@@ -11,10 +11,12 @@ import io
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Collection, Self, Sequence
+from typing import Collection, Sequence
+from typing_extensions import Self  # Due to Python 3.10 compatibility, remove when Python 3.11+ is minimum
 
 import dirscan.formatfields as fmtfields
 from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
+from dirscan.digest import TPath
 from dirscan.formatfields import (
     Statistics,
     TField,
@@ -315,14 +317,14 @@ def main(argv: Sequence[str] | None=None) -> int:
         # -- Check and read the scan files
         if right is None:
             dirs = [open_dir_or_scanfile(left,
-                                         root=opts.leftprefix or opts.prefix,
+                                         subdir=opts.leftsubdir or opts.subdir,
                                          prefix=opts.prefix)]
         else:
             dirs = [open_dir_or_scanfile(left,
-                                         root=opts.leftprefix or opts.prefix,
+                                         subdir=opts.leftsubdir or opts.subdir,
                                          prefix=opts.prefix),
                     open_dir_or_scanfile(right,
-                                         root=opts.rightprefix or opts.prefix,
+                                         subdir=opts.rightsubdir or opts.subdir,
                                          prefix=opts.prefix)]
 
         # -- Scan the database

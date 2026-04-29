@@ -4,8 +4,6 @@ from pytest import raises
 
 import dirscan as ds
 
-# pylint: disable-all
-
 def toslash(text):
     if sys.platform == 'win32':
         return '\n' + text.replace('\\', '/')

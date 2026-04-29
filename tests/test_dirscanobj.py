@@ -1,6 +1,4 @@
 import os
-import sys
-import pytest
 import datetime
 import stat as osstat
 from pathlib import Path
@@ -8,8 +6,6 @@ from pytest import raises
 from pprint import pprint
 
 import dirscan as ds
-
-# pylint: disable-all
 
 # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
 FAKESTAT = os.stat_result((0o123456, 0, 0, 0, 'uid', 'gid', 'size', 11, 42, 0))
@@ -152,17 +148,17 @@ def test_fileobj_hashsum():
 
     # TODO: Test hashsum input
 
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=None)
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'')
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'something')
+    _ = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=None)
+    _ = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'')
+    _ = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'something')
 
 
 def test_dirobj_children():
 
     # TODO: Test children input
 
-    a = ds.DirObj('a', path='b', stat=FAKESTAT, children=None)
-    a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
+    _ = ds.DirObj('a', path='b', stat=FAKESTAT, children=None)
+    _ = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
 
 
 def test_obj_compare():

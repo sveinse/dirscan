@@ -1,20 +1,20 @@
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 import pytest
-
-# pylint: disable-all
 
 
 @dataclass
 class Tempdir:
-    path: str
+    path: Path
 
     @staticmethod
     def wrdata(f, d):
         with open(f, 'w', encoding='utf-8') as fd:
             if d:
                 fd.write(d)
+            fd.flush()
 
     @staticmethod
     def chmod(*args, **kwargs):
@@ -26,9 +26,9 @@ class Tempdir:
 
 
 @pytest.fixture
-def wd(tmpdir):
+def wd(tmp_path: Path):
     dir = os.getcwd()
-    os.chdir(tmpdir)
-    yield Tempdir(tmpdir)
+    os.chdir(tmp_path)
+    yield Tempdir(tmp_path)
     os.chdir(dir)
-    subprocess.call(["chmod", "-R", "700", tmpdir])
+    subprocess.call(["chmod", "-R", "700", tmp_path])
