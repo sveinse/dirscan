@@ -228,34 +228,21 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         relpath = './' + relpath
 
     # Set file object path and name
+    #    . (top-level):            path='',     name='.'
+    #    .git (first level):       path='',     name='.git'
+    #    .git/info (second level): path='.git', name='info'
     path, name = os.path.split(relpath)
-    fpath, fname = path, name
-
-    # First top-level entry has path='', name='.'.
-    if path == '' and name == '.':
-        # In the top-level entry the scan filename as path, while keeping
-        # the name empty
-        fpath = base_fname
-        fname = ''
-
-    # First level entries has path='.', name=*
-    elif path == '.':
-        fpath = base_fname
-
-    else:
-        # Prefix path with the base filename
-        fpath = base_fname + '/' + path[2:]
 
     if not name:
         raise DirscanException(f"empty filename '{objpath}'")
 
     # Get the parent dict
-    parent = dirtree.get(str(path))
+    parent = dirtree.get(str(path) or '.')  # The or handles the first level entries
     if not parent and path:
         raise DirscanException(f"'{objpath}' is an orphan")
 
-    data['name'] = fname
-    data['path'] = parent[2] if parent else fpath
+    data['name'] = name
+    data['path'] = parent[2] if parent else path
 
     # Create new file object
     fileobj = create_from_dict(data)
@@ -266,7 +253,7 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
             raise DirscanException(f"'{objpath}' already exists in file")
         # (parent, children, path)
         dirtree[str(relpath)] = (
-            fileobj, {}, fpath + '/' + fname if fname else fpath)
+            fileobj, {}, path + '/' + name if path else name)
 
     if parent:
         # Add the object into the parent's children list
