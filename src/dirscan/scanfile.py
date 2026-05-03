@@ -242,7 +242,7 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         raise DirscanException(f"'{objpath}' is an orphan")
 
     data['name'] = name
-    data['path'] = parent[2] if parent else path
+    data['path'] = parent[2] if parent else base_fname
 
     # Create new file object
     fileobj = create_from_dict(data)

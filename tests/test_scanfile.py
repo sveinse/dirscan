@@ -153,8 +153,8 @@ d,,,,,,,.
 '''))
     d = ds.read_scanfile('a')
     assert isinstance(d, ds.DirObj)
-    assert d.name == ''
     assert d.path == 'a'
+    assert d.name == '.'
     assert d.size == 0
     assert d.mode == 0
     assert d.uid == 0
@@ -289,9 +289,9 @@ d,,,,,,,b
     a = ds.read_scanfile('a')
     b = a.children()
     assert a.path == 'a'
-    assert a.name == ''
+    assert a.name == '.'
     assert len(b) == 1
-    assert b[0].path == 'a'
+    assert b[0].path == '.'
     assert b[0].name == 'b'
 
     # Test subdir of subdir without ./ prefix
@@ -305,12 +305,12 @@ d,,,,,,,b/c
     b = a.children()
     c = b[0].children()
     assert a.path == 'a'
-    assert a.name == ''
+    assert a.name == '.'
     assert len(b) == 1
-    assert b[0].path == 'a'
+    assert b[0].path == '.'
     assert b[0].name == 'b'
     assert len(c) == 1
-    assert c[0].path == 'a/b'
+    assert c[0].path == './b'
     assert c[0].name == 'c'
 
     # Test subdir with ./ prefix
@@ -322,9 +322,9 @@ d,,,,,,,./b
     a = ds.read_scanfile('a')
     b = a.children()
     assert a.path == 'a'
-    assert a.name == ''
+    assert a.name == '.'
     assert len(b) == 1
-    assert b[0].path == 'a'
+    assert b[0].path == '.'
     assert b[0].name == 'b'
 
     # Test subdir of subdir with ./ prefix
@@ -338,12 +338,12 @@ d,,,,,,,./b/c
     b = a.children()
     c = b[0].children()
     assert a.path == 'a'
-    assert a.name == ''
+    assert a.name == '.'
     assert len(b) == 1
-    assert b[0].path == 'a'
+    assert b[0].path == '.'
     assert b[0].name == 'b'
     assert len(c) == 1
-    assert c[0].path == 'a/b'
+    assert c[0].path == './b'
     assert c[0].name == 'c'
 
     # Test successful subroot
@@ -355,10 +355,10 @@ d,,,,,,,b/c
 '''))
     b = ds.read_scanfile('a', 'b')
     c = b.children()
-    assert b.path == 'a'
+    assert b.path == '.'
     assert b.name == 'b'
     assert len(c) == 1
-    assert c[0].path == 'a/b'
+    assert c[0].path == './b'
     assert c[0].name == 'c'
 
 
