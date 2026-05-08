@@ -268,6 +268,8 @@ def scan_shadb(dirs: Collection[DirscanObj],
                 for obj in objs:
                     if not isinstance(obj, FileObj) or obj.excluded:
                         continue
+                    if not obj.size:
+                        continue
 
                     # This is a speed optimization: If we're not including
                     # single entries, first build a size database to filter

@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "dirscan"
-version = "1.0"
+version = "1.1a1"
 description = "Directory traversal utility with advanced filtering capabilities"
 authors = [
     {name = "Svein Seldal", email = "sveinse@seldal.com"},
