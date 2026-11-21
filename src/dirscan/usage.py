@@ -10,7 +10,6 @@ import argparse
 
 from dirscan import __version__
 
-
 DIRSCAN_DESCRIPTION = '''
 Tool for scanning and comparing directories.
 

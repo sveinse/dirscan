@@ -1,9 +1,10 @@
 import sys
+
 import pytest
 from pytest import raises
 
 import dirscan as ds
-import dirscan.scanfile as scanfile
+from dirscan import scanfile
 
 
 def test_scanfile_get_fileheader():

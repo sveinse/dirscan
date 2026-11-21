@@ -1,9 +1,10 @@
-import os
 import datetime
+import os
 import stat as osstat
 from pathlib import Path
-from pytest import raises
 from pprint import pprint
+
+from pytest import raises
 
 import dirscan as ds
 

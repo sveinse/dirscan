@@ -1,5 +1,6 @@
 """Tool to list duplicated files in a directory or scanfile."""
 import argparse
+
 import dirscan
 
 parser = argparse.ArgumentParser(description="""

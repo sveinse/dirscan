@@ -1,5 +1,6 @@
-import dirscan as ds
 from pytest import raises
+
+import dirscan as ds
 
 
 def test_compare1_two_dirs(wd):
@@ -10,7 +11,7 @@ def test_compare1_two_dirs(wd):
     a = ds.create_from_fs('a')
 
     with raises(AssertionError):
-        ds.obj_compare1(tuple())
+        ds.obj_compare1(())
     with raises(AssertionError):
         ds.obj_compare1((a,a))
     with raises(AssertionError):
@@ -48,7 +49,7 @@ def test_compare2_two_dirs(wd):
     a = ds.create_from_fs('a')
 
     with raises(AssertionError):
-        ds.obj_compare2(tuple())
+        ds.obj_compare2(())
     with raises(AssertionError):
         ds.obj_compare2((a,))
     with raises(AssertionError):

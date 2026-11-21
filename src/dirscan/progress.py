@@ -11,9 +11,11 @@ import os
 import sys
 import threading
 import time
+import types
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, TextIO, TypeVar, cast
+from typing import Any, Self, TextIO, TypeVar, cast
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -40,11 +42,11 @@ class PrintProgressItem:
     timestamp: datetime = field(default_factory=datetime.now)
     _progress: PrintProgress | None = field(repr=False, default=None)
 
-    def __enter__(self) -> PrintProgressItem:
+    def __enter__(self) -> Self:
         """Support for usage as a context manager"""
         return self
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: types.TracebackType | None) -> None:
         """Cleanups after the context manager"""
         if self._progress:
             self._progress.remove(self)
@@ -107,7 +109,7 @@ class PrintProgress:
         self._lock = threading.Lock()
         self._force_update = False
 
-    def __enter__(self) -> PrintProgress:
+    def __enter__(self) -> Self:
         """Support for usage as a context manager"""
         self._executor = concurrent.futures.ThreadPoolExecutor().__enter__()
         self._keep_running = True
@@ -115,7 +117,7 @@ class PrintProgress:
             self._thread = self._executor.submit(self._progress_main)
         return self
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: types.TracebackType | None) -> None:
         """Cleanups after the context manager"""
         self._keep_running = False
         if self._executor:

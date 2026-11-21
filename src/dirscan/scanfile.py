@@ -7,8 +7,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, create_from_dict, create_from_fs
 from dirscan.log import debug, debug_level

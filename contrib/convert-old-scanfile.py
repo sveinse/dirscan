@@ -9,8 +9,7 @@
 
 import argparse
 
-from dirscan.scanfile import file_quote, file_unquote, check_header
-
+from dirscan.scanfile import check_header, file_quote, file_unquote
 
 parser = argparse.ArgumentParser(
     description="Convert old scanfile format to new format."

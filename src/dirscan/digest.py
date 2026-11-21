@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import concurrent.futures
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from dirscan.progress import getprogress
 
