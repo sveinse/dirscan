@@ -1,5 +1,13 @@
 # Changelog
 
+## Next
+
+* Add support for specifying multiple scan directories instead of left and
+  right.
+    * Autodetect what mode to run based on number of arguments or type
+    * Added --scan and --compare commands to explicitly set the mode
+* Support scan files without a common base directory
+
 ## v0.11
 
 * Added new features:

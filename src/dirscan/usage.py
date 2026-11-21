@@ -175,6 +175,10 @@ def argument_parser() -> argparse.ArgumentParser:
                       default=False, help='''
         Print all file info
         ''')
+    argp.add_argument("-c", "--compare", action="store_true", dest="compare",
+                      default=False, help="""
+        Enable comparison mode
+        """)
     argp.add_argument('-d', '--dup', '--duplicates', action='store_true',
                       dest='duplicates', default=False, help='''
         Find and show duplicate files.
@@ -301,6 +305,9 @@ def argument_parser() -> argparse.ArgumentParser:
         from scanfiles on either sides. This is useful when the scan file
         is representing a physical directory.
         ''')
+    argp.add_argument("--scan", action="store_true", help="""
+        Force scan mode
+        """)
     argp.add_argument('--subdir', metavar='PATH', dest='subdir', default=None,
                       help='''
         When reading from scanfiles on either sides, use the given subdir PATH
@@ -313,20 +320,16 @@ def argument_parser() -> argparse.ArgumentParser:
         ''')
     argp.add_argument('--right-subdir', metavar='PATH', dest='rightsubdir',
                       default=None, help='''
-        When reading from a scanfiles on the right side, use the given
-        prefix PATH to read a subsection of the scan file.
+        When reading from a scanfile on the right side, use the given
+        subdir PATH to read a subsection of the scan file.
         ''')
     argp.add_argument('--version', action='version',
                       version='%(prog)s ' + __version__)
 
     # Main arguments
-    argp.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',
-                      help='''
-        Directory to scan/traverse, or LEFT side of comparison
-        ''')
-    argp.add_argument('dir2', metavar='RIGHT_DIR', default=None, nargs='?',
-                      help='''
-        RIGHT side of comparison if preset
-        ''')
+    argp.add_argument("dir_or_scanfiles", metavar="DIR_OR_SCANFILE",
+                      nargs="+", help="""
+        Directory to scan or scanfile to read
+        """)
 
     return argp

@@ -10,7 +10,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 
-from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, create_from_dict, create_from_fs
+from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, VirtualDirObj, create_from_dict, create_from_fs
 from dirscan.log import debug, debug_level
 
 # Known scan file versions
@@ -239,7 +239,11 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
     # Get the parent dict
     parent = dirtree.get(str(path) or '.')  # The or handles the first level entries
     if not parent and path:
-        raise DirscanException(f"'{objpath}' is an orphan")
+        if path != ".":
+            raise DirscanException(f"'{objpath}' is an orphan ({path!r}, {name!r}, {relpath!r})")
+        # Orphaned top-level directory, create a virtual root
+        parent = (VirtualDirObj.create(), {}, ".")
+        dirtree["."] = parent  
 
     data['name'] = name
     data['path'] = parent[2] if parent else base_fname
