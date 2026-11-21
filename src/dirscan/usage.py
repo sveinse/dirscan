@@ -13,9 +13,14 @@ from dirscan import __version__
 DIRSCAN_DESCRIPTION = '''
 Tool for scanning and comparing directories.
 
-A single LEFT_DIR argument will traverse the given directory or scan file and
-print the contents, similar to ls or find, and can provide a customizable
-summary of the found files.
+The tool can operate in scan mode or compare mode. Scan modes are used to
+traverse directories, while compare modes are used to analyze differences
+between two directories or scan files.
+
+Scan mode is selected by providing one or more directory paths or scan files as
+arguments, or by using the `--scan` option to force scan mode. It will traverse
+the specified directories or scan files and collect information about the files
+contained within them.
 
 The -o options will save the directory traversal into a scan file, which can
 be used for later comparisons against other directories or scan files. The
@@ -23,9 +28,13 @@ scan file stores file metadata for the directory tree, and it stores a sha256
 hashsum for the files. This makes it reliable to use a scan file to check for
 changes to a directory.
 
-Using a LEFT_DIR RIGHT_DIR argument will compare directories, showing the
-differences between LEFT_DIR and RIGHT_DIR. Either arguments can be
-directories or scan files.
+To compare two directories or scan files, use the compare mode. It will auto
+select compare mode automatically if one or both of the arguments are scan
+files, or when the `--compare` option is used to force compare mode.
+
+Compare mode is used to compare two directories or scan files. It will analyze
+the differences between the left and right arguments and provide a detailed
+report of the changes, including new, modified, or deleted files.
 
 Copyright (C) 2010-2025 Svein Seldal
 This application is licensed under MIT license (see

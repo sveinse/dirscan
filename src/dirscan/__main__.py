@@ -191,7 +191,7 @@ def determine_scan_mode(opts: Namespace) -> bool:
     """ Determine if we are in scan mode (True) or compare mode (False). """
     if opts.scan:
         if opts.compare:
-            argp.error("--scan and --compare options are mutually exclusive")
+            raise ValueError("--scan and --compare options are mutually exclusive")
         debug(1, "Scan mode from --scan option")
         return True
     if opts.compare:
