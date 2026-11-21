@@ -11,11 +11,9 @@ import datetime
 import fnmatch
 import os
 import stat as osstat
-from collections.abc import Collection, Generator
+from collections.abc import Generator, Iterable
 from pathlib import Path
-from typing import Any, NotRequired
-
-from typing_extensions import TypedDict
+from typing import Any, NotRequired, Self, TypedDict
 
 from dirscan.digest import COMPARE_FN, DIGEST_FN, HASHALGORITHM
 
@@ -41,7 +39,7 @@ class DirscanDict(TypedDict):
     mtime: float
     hashsum: NotRequired[str]
     link: NotRequired[str]
-    children: NotRequired[Collection[DirscanDict]]
+    children: NotRequired[Iterable[DirscanDict]]
 
 
 class DirscanException(Exception):
@@ -204,7 +202,7 @@ class DirscanObj:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.fullpath.as_posix()})"
 
-    def set_exclude(self, excludes: Collection[TPath],
+    def set_exclude(self, excludes: Iterable[TPath],
                     base: DirscanObj,
                     onefs: bool=False,
                     ) -> None:
@@ -390,7 +388,7 @@ class DirObj(DirscanObj):
     _children: tuple[DirscanObj, ...] | None
 
     def __init__(self, name: str, *, path: TPath='', stat: os.stat_result,
-                 children: Collection[DirscanObj] | None=None):
+                 children: Iterable[DirscanObj] | None=None):
         '''
         Args:
             name: Name of file object
@@ -428,7 +426,7 @@ class DirObj(DirscanObj):
             self._children = tuple(create_from_fsdir(self.fullpath))
         return self._children
 
-    def set_children(self, children: Collection[DirscanObj]) -> None:
+    def set_children(self, children: Iterable[DirscanObj]) -> None:
         ''' Set the children of this object
 
         Args:
@@ -441,6 +439,23 @@ class DirObj(DirscanObj):
         data['children'] = tuple(c.to_dict() for c in self._children or {})
         return data
 
+
+class VirtualDirObj(DirObj):
+    ''' Virtual directory object.
+        No info is stored from the virtual directory in this object.
+        Derived from :py:class:`DirObj` and it inherits attributes
+        and methods.
+    '''
+    objtype = 'v'
+    objname = 'virtual directory'
+
+    @classmethod
+    def create(cls, children: Iterable[DirscanObj] | None=None) -> Self:
+        obj = cls(name="", path="", stat=os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
+        if children:
+            obj._children = tuple(children)
+        return obj
+ 
 
 class BlockDevObj(DirscanObj):
     ''' Block device object.

@@ -9,14 +9,14 @@ from __future__ import annotations
 import io
 import sys
 from argparse import Namespace
-from collections.abc import Collection, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Self
 
 import dirscan.formatfields as fmtfields
 from dirscan.digest import TPath
-from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
+from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj, VirtualDirObj
 from dirscan.formatfields import (
     Statistics,
     TField,
@@ -31,7 +31,7 @@ from dirscan.formatfields import (
 )
 from dirscan.log import debug, set_debug
 from dirscan.progress import PrintProgress, setprogress
-from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile, text_quote
+from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, is_scanfile, open_dir_or_scanfile, text_quote
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
 from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
@@ -187,7 +187,33 @@ class DirscanContext:
         return self
 
 
-def main(argv: Sequence[str] | None=None) -> int:
+def determine_scan_mode(opts: Namespace) -> bool:
+    """ Determine if we are in scan mode (True) or compare mode (False). """
+    if opts.scan:
+        if opts.compare:
+            raise ValueError("--scan and --compare options are mutually exclusive")
+        debug(1, "Scan mode from --scan option")
+        return True
+    if opts.compare:
+        if len(opts.dir_or_scanfiles) == 1:
+            raise ValueError("Cannot compare with only one directory or scanfile")
+        if len(opts.dir_or_scanfiles) > 2:
+            raise ValueError("Cannot compare with more than two directories or scanfiles")
+        debug(1, "Compare mode from --compare option")
+        return False
+    if opts.outfile:
+        debug(1, "Scan mode determined based on --output option")
+        return True
+    if len(opts.dir_or_scanfiles) == 2:
+        any_scanfiles = any(is_scanfile(f) for f in opts.dir_or_scanfiles)
+        if any_scanfiles:
+            debug(1, "Compare mode determined based on presence of scanfile")
+            return False
+    debug(1, "Defaulting to scan mode")
+    return True
+
+
+def main(argv: Iterable[str] | None=None) -> int:
     '''
     Entry-point for command-line and ``-mdirscan`` usage.
 
@@ -216,25 +242,27 @@ def main(argv: Sequence[str] | None=None) -> int:
         print(DIRSCAN_FORMAT_HELP)
         argp.exit(1)
 
-    # -- Ensure we have the minimum required number of arguments
-    left: str | None = opts.dir1
-    right: str | None = opts.dir2
-    if left is None:
-        argp.error("Missing required LEFT_DIR argument")
+    if not opts.dir_or_scanfiles:
+        argp.error("No directories or scanfiles specified")
+
+    # -- Determine scan mode
+    try:
+        scan_mode = determine_scan_mode(opts)
+    except ValueError as err:
+        argp.error(str(err))
 
     # -- Determine settings and print format
-    if right is None or opts.duplicates:
+    if scan_mode:
         # -- Settings for scanning
-        scan_mode = True
         dir_comparator = obj_compare1
         pr_prefix = 'Scanned'
 
         if opts.shadiff:
             argp.error("--sha doesn't work when scanning")
-
+        if opts.leftsubdir or opts.rightsubdir:
+            argp.error("--left-subdir or --right-subdir is not supported when scanning")
     else:
         # -- Settings for comparing
-        scan_mode = False
         dir_comparator = obj_compare2
         pr_prefix = 'Compared'
 
@@ -264,8 +292,8 @@ def main(argv: Sequence[str] | None=None) -> int:
 
     # -- Debug info --
     debug(1, "Command options:")
-    debug(1, "  Left          : '{}'", left)
-    debug(1, "  Right         : '{}'", right)
+    for scan in opts.dir_or_scanfiles:
+        debug(1, "  Scan          : '{}'", scan)
     debug(1, "  Print format  : '{}'", ctx.printfmt)
     debug(1, "  Write format  : '{}'", ctx.writefmt)
     debug(1, "  Fields in use : {}", ctx.fieldnames)
@@ -288,7 +316,7 @@ def main(argv: Sequence[str] | None=None) -> int:
     setprogress(progressmgr)
 
     # -- Prepare the histograms to collect statistics
-    stats = Statistics(left, right)
+    stats = Statistics(opts.dir_or_scanfiles)
 
     # -- Error handler
     def error_handler(exception: Exception, path: DirscanObj | TPath) -> bool:
@@ -309,20 +337,21 @@ def main(argv: Sequence[str] | None=None) -> int:
 
     outfile = None
     try:
-        dirs: Collection[DirscanObj]
+        # -- Prepare the list of subdirectories for each scan file
+        subdirs = [opts.subdir] * len(opts.dir_or_scanfiles)
+        subdirs[0] = opts.leftsubdir or opts.subdir
+        if len(opts.dir_or_scanfiles) > 1:
+            subdirs[1] = opts.rightsubdir or opts.subdir
 
         # -- Check and read the scan files
-        if right is None:
-            dirs = [open_dir_or_scanfile(left,
-                                         subdir=opts.leftsubdir or opts.subdir,
-                                         prefix=opts.prefix)]
-        else:
-            dirs = [open_dir_or_scanfile(left,
-                                         subdir=opts.leftsubdir or opts.subdir,
-                                         prefix=opts.prefix),
-                    open_dir_or_scanfile(right,
-                                         subdir=opts.rightsubdir or opts.subdir,
-                                         prefix=opts.prefix)]
+        dirs = [open_dir_or_scanfile(scanfile,
+                                     subdir=subdir,
+                                     prefix=opts.prefix)
+                for scanfile, subdir in zip(opts.dir_or_scanfiles, subdirs)]
+
+        # -- Combine multiple scans into a single list of directories
+        if scan_mode and len(dirs) > 1:
+            dirs = [VirtualDirObj.create(dirs)]
 
         # -- Scan the database
         if ctx.duplicates or opts.shadiff:

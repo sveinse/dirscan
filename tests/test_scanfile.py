@@ -376,6 +376,13 @@ d,,,,,,,.
         ds.read_scanfile('a')
     assert "Data error, '.' already exists in file" in str(exc.value)
 
+    # Test allowed orphan (should not raise an exception)
+    wd.wrdata('a', (
+'''#!ds:v1
+d,,,,,,,foo
+'''))
+    ds.read_scanfile('a')
+
     # Test orphan
     wd.wrdata('a', (
 '''#!ds:v1

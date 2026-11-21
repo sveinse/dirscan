@@ -13,9 +13,14 @@ from dirscan import __version__
 DIRSCAN_DESCRIPTION = '''
 Tool for scanning and comparing directories.
 
-A single LEFT_DIR argument will traverse the given directory or scan file and
-print the contents, similar to ls or find, and can provide a customizable
-summary of the found files.
+The tool can operate in scan mode or compare mode. Scan modes are used to
+traverse directories, while compare modes are used to analyze differences
+between two directories or scan files.
+
+Scan mode is selected by providing one or more directory paths or scan files as
+arguments, or by using the `--scan` option to force scan mode. It will traverse
+the specified directories or scan files and collect information about the files
+contained within them.
 
 The -o options will save the directory traversal into a scan file, which can
 be used for later comparisons against other directories or scan files. The
@@ -23,9 +28,13 @@ scan file stores file metadata for the directory tree, and it stores a sha256
 hashsum for the files. This makes it reliable to use a scan file to check for
 changes to a directory.
 
-Using a LEFT_DIR RIGHT_DIR argument will compare directories, showing the
-differences between LEFT_DIR and RIGHT_DIR. Either arguments can be
-directories or scan files.
+To compare two directories or scan files, use the compare mode. It will auto
+select compare mode automatically if one or both of the arguments are scan
+files, or when the `--compare` option is used to force compare mode.
+
+Compare mode is used to compare two directories or scan files. It will analyze
+the differences between the left and right arguments and provide a detailed
+report of the changes, including new, modified, or deleted files.
 
 Copyright (C) 2010-2025 Svein Seldal
 This application is licensed under MIT license (see
@@ -175,6 +184,10 @@ def argument_parser() -> argparse.ArgumentParser:
                       default=False, help='''
         Print all file info
         ''')
+    argp.add_argument("-c", "--compare", action="store_true", dest="compare",
+                      default=False, help="""
+        Enable comparison mode
+        """)
     argp.add_argument('-d', '--dup', '--duplicates', action='store_true',
                       dest='duplicates', default=False, help='''
         Find and show duplicate files.
@@ -301,6 +314,9 @@ def argument_parser() -> argparse.ArgumentParser:
         from scanfiles on either sides. This is useful when the scan file
         is representing a physical directory.
         ''')
+    argp.add_argument("--scan", action="store_true", help="""
+        Force scan mode
+        """)
     argp.add_argument('--subdir', metavar='PATH', dest='subdir', default=None,
                       help='''
         When reading from scanfiles on either sides, use the given subdir PATH
@@ -313,20 +329,16 @@ def argument_parser() -> argparse.ArgumentParser:
         ''')
     argp.add_argument('--right-subdir', metavar='PATH', dest='rightsubdir',
                       default=None, help='''
-        When reading from a scanfiles on the right side, use the given
-        prefix PATH to read a subsection of the scan file.
+        When reading from a scanfile on the right side, use the given
+        subdir PATH to read a subsection of the scan file.
         ''')
     argp.add_argument('--version', action='version',
                       version='%(prog)s ' + __version__)
 
     # Main arguments
-    argp.add_argument('dir1', metavar='LEFT_DIR', default=None, nargs='?',
-                      help='''
-        Directory to scan/traverse, or LEFT side of comparison
-        ''')
-    argp.add_argument('dir2', metavar='RIGHT_DIR', default=None, nargs='?',
-                      help='''
-        RIGHT side of comparison if preset
-        ''')
+    argp.add_argument("dir_or_scanfiles", metavar="DIR_OR_SCANFILE",
+                      nargs="*", help="""
+        Directory to scan or scanfile to read
+        """)
 
     return argp

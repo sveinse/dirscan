@@ -10,7 +10,7 @@ import stat
 import string
 import sys
 import time
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Iterable
 from typing import Any, TextIO
 
 from dirscan.dirscan import DirscanObj, FileObj, LinkObj
@@ -291,7 +291,7 @@ def format_shaid(sha: bytes | None, shaiddb: dict[bytes, str], shaid_used: set[s
     return shahex
 
 
-def get_fields(objs: Collection[DirscanObj],
+def get_fields(objs: Iterable[DirscanObj],
                prefixes: list[str],
                fieldnames: set[str]
                ) -> tuple[list[Exception], dict[str, TField]]:
@@ -357,7 +357,7 @@ def write_fileinfo(formatstr: str, fields: dict[str, TField],
         file.write(line + end)
 
 
-def write_summary(summary: Collection[TSummary],
+def write_summary(summary: Iterable[TSummary],
                   fields: dict[str, TField],
                   file: TextIO=sys.stdout,
                   end: str='\n') -> None:
@@ -473,7 +473,7 @@ class FileHistogram:
 class CompareHistogram:
     ''' Histogram for counting compare relationship '''
 
-    def __init__(self, left: str, right: str | None):
+    def __init__(self, left: str, right: str | None = None):
         self.left = left
         self.right = right
         self.bins: dict[str, int] = {}
@@ -514,19 +514,16 @@ class Statistics:
     start_time: int
     end_time: int
 
-    def __init__(self, left: str, right: str | None):
-        self.compare = CompareHistogram(left, right)
-        if right is None:
-            self.filehist = [FileHistogram(left)]
-        else:
-            self.filehist = [FileHistogram(left), FileHistogram(right)]
+    def __init__(self, dir_or_scanfiles: list[str]):
+        self.compare = CompareHistogram(*dir_or_scanfiles[0:min(2, len(dir_or_scanfiles))])
+        self.filehist = [FileHistogram(scan) for scan in dir_or_scanfiles]
         self.set_start_time()
 
     def add_stats(self, change: str) -> None:
         ''' Collect compare statistics '''
         self.compare.add(change)
 
-    def add_filestats(self, objs: Collection[DirscanObj]) -> None:
+    def add_filestats(self, objs: Iterable[DirscanObj]) -> None:
         ''' Collect file statistics from objs list '''
 
         for (obj, filehist) in zip(objs, self.filehist):
@@ -535,7 +532,7 @@ class Statistics:
             if objtype == 'f':
                 filehist.add_size(obj.size)
 
-    def get_fields(self, prefixes: Collection[str]) -> dict[str, TField]:
+    def get_fields(self, prefixes: Iterable[str]) -> dict[str, TField]:
         ''' Get the summary fields '''
 
         # Get the main comparison fields
