@@ -1,4 +1,5 @@
-''' Dirscan - recursively scanning and comparing one or more directories '''
+"""Dirscan - recursively scanning and comparing one or more directories"""
+
 #
 # Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)

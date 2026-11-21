@@ -1,4 +1,4 @@
-''' Dirscan - command-line arguments and help descriptions '''
+"""Dirscan - command-line arguments and help descriptions"""
 #
 # Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
@@ -10,7 +10,7 @@ import argparse
 
 from dirscan import __version__
 
-DIRSCAN_DESCRIPTION = '''
+DIRSCAN_DESCRIPTION = """
 Tool for scanning and comparing directories.
 
 The tool can operate in scan mode or compare mode. Scan modes are used to
@@ -40,10 +40,10 @@ Copyright (C) 2010-2025 Svein Seldal
 This application is licensed under MIT license (see
 https://github.com/sveinse/dirscan for details)
 
-'''
+"""
 
 
-DIRSCAN_FORMAT_HELP = '''
+DIRSCAN_FORMAT_HELP = """
 FORMAT template:
   The --format, -F, option enables printing custom lines for each of the
   scanned files. The argument is a string using Python str.format() syntax.
@@ -154,13 +154,14 @@ FILTER_TYPES description:
 
   If the FILTER_TYPES are prefixed with '^', the types will be inverted, where
   the listed types will not be included.
-'''
+"""
 
 
+# fmt: off
 def argument_parser() -> argparse.ArgumentParser:
-    ''' Return argument parser object for dirscan, and setting all command-line
-        options
-    '''
+    """Return argument parser object for dirscan, and setting all command-line
+    options
+    """
 
     argp = argparse.ArgumentParser(
         description=DIRSCAN_DESCRIPTION,
@@ -169,35 +170,41 @@ def argument_parser() -> argparse.ArgumentParser:
         prog="dirscan",
     )
 
-    argp.add_argument('--help', action='help')
+    argp.add_argument("--help", action="help")
 
-    argp.add_argument('-0', '--print0', action='store_true', dest='print0',
-                      default=False, help='''
+    argp.add_argument("-0", "--print0", action="store_true", dest="print0", default=False,
+        help="""
         Print each line using the NUL char instead of the newline char
-        ''')
-    argp.add_argument('-2', '--twopass', action='store_true', dest='twopass',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-2", "--twopass", action="store_true", dest="twopass", default=False,
+        help="""
         Use two-pass scanning to find missing files. This is useful when
         comparing directories with a large number of files.
-        ''')
-    argp.add_argument('-a', '--all', action='store_true', dest='all',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-a", "--all", action="store_true", dest="all", default=False,
+        help="""
         Print all file info
-        ''')
-    argp.add_argument("-c", "--compare", action="store_true", dest="compare",
-                      default=False, help="""
+        """,
+    )
+    argp.add_argument("-c", "--compare", action="store_true", dest="compare", default=False,
+        help="""
         Enable comparison mode
-        """)
-    argp.add_argument('-d', '--dup', '--duplicates', action='store_true',
-                      dest='duplicates', default=False, help='''
+        """,
+    )
+    argp.add_argument("-d", "--dup", "--duplicates", action="store_true", dest="duplicates", default=False,
+        help="""
         Find and show duplicate files.
-        ''')
-    argp.add_argument('-D', '--debug', action='count', dest='debug',
-                      default=0, help='''
+        """,
+    )
+    argp.add_argument("-D", "--debug", action="count", dest="debug", default=0,
+        help="""
         Enable debug output
-        ''')
-    argp.add_argument('-f', '--filter', metavar='FILTER_TYPES', action='store',
-                      dest='compare_types', default='', help='''
+        """,
+    )
+    argp.add_argument("-f", "--filter", metavar="FILTER_TYPES", action="store", dest="compare_types", default="",
+        help="""
         When comparing, show only the following compare relationship:
             e=equal,
             c=changed,
@@ -214,69 +221,83 @@ def argument_parser() -> argparse.ArgumentParser:
             d=duplicated,
             i=ignored.
         Prefix with '^' inverts selection. See FILTER_TYPES under --format-help.
-        ''')
-    argp.add_argument('-F', '--format', metavar='FORMAT', dest='format',
-                      default=None, help='''
+        """,
+    )
+    argp.add_argument("-F", "--format", metavar="FORMAT", dest="format", default=None,
+        help="""
         Per line file info template. See --format-help for detailed syntax
-        ''')
-    argp.add_argument('-h', '--human', action='store_true', dest='human',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-h", "--human", action="store_true", dest="human", default=False,
+        help="""
         Display human readable sizes
-        ''')
-    argp.add_argument('-H', '--sha', '--shadiff', action='store_true',
-                      dest='shadiff', default=None, help='''
+        """,
+    )
+    argp.add_argument("-H", "--sha", "--shadiff", action="store_true", dest="shadiff", default=None,
+        help="""
         Turn on comparing using the calculated sha hashsum of the files. This
         enables showing files that have been renamed.
-        ''')
-    argp.add_argument('-i', '--ignore', metavar='IGNORES', action='store',
-                      dest='ignore', default='', help='''
+        """,
+    )
+    argp.add_argument("-i", "--ignore", metavar="IGNORES", action="store", dest="ignore", default="",
+        help="""
         Ignore compare differences in:
             u=uid,
             g=gid,
             p=permissions,
             t=time.
-        ''')
-    argp.add_argument('-l', '--long', action='store_true', dest='long',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-l", "--long", action="store_true", dest="long", default=False,
+        help="""
         Dump file in extended format
-        ''')
-    argp.add_argument('-o', '--output', metavar='FILE', action='store',
-                      dest='outfile', help='''
+        """,
+    )
+    argp.add_argument("-o", "--output", metavar="FILE", action="store", dest="outfile",
+        help="""
         Store scan output in FILE
-        ''')
-    argp.add_argument('-p', '--progress', action='store_true', dest='progress',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-p", "--progress", action="store_true", dest="progress", default=False,
+        help="""
         Show progress while scanning
-        ''')
-    argp.add_argument('-q', '--quiet', action='store_true', dest='quiet',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-q", "--quiet", action="store_true", dest="quiet", default=False,
+        help="""
         Quiet operation
-        ''')
-    argp.add_argument('-Q', '--suppress-errors', action='store_true',
-                      dest='quieterr', default=False, help='''
+        """,
+    )
+    argp.add_argument("-Q", "--suppress-errors", action="store_true", dest="quieterr", default=False,
+        help="""
         Suppress error messages
-        ''')
-    argp.add_argument('-R', '--reverse', action='store_true', dest='reverse',
-                      default=False, help='''
+        """,
+    )
+    argp.add_argument("-R", "--reverse", action="store_true", dest="reverse", default=False,
+        help="""
         Traverse directories in reverse order
-        ''')
-    argp.add_argument('-r', '--recurse', action='store_true',
-                      dest='recurse', default=False, help='''
+        """,
+    )
+    argp.add_argument("-r", "--recurse", action="store_true", dest="recurse", default=False,
+        help="""
         Traverse directories recursively that exists on only one side of
         comparison. Normally dirscan skips entering directories that only exists
         on one side.
-        ''')
-    argp.add_argument('-s', '--summary', action='store_true',
-                      dest='enable_summary', default=False, help='''
+        """,
+    )
+    argp.add_argument("-s", "--summary", action="store_true", dest="enable_summary", default=False,
+        help="""
         Print scan statistics summary.
-        ''')
-    argp.add_argument('-S', '--summary-format', metavar='SUMMARY_FORMAT',
-                      action='append', dest='summary', default=None, help='''
+        """,
+    )
+    argp.add_argument("-S", "--summary-format", metavar="SUMMARY_FORMAT", action="append", dest="summary", default=None,
+        help="""
         Print scan statistics summary and provide custom template. See
         --format-help for more info about syntax
-        ''')
-    argp.add_argument('-t', '--types', metavar='TYPES', action='store',
-                      dest='filetypes', default='', help='''
+        """,
+    )
+    argp.add_argument("-t", "--types", metavar="TYPES", action="store", dest="filetypes", default="",
+        help="""
         Show only file types.
             f=files,
             d=dirs,
@@ -286,59 +307,73 @@ def argument_parser() -> argparse.ArgumentParser:
             p=pipes,
             s=sockets.
         Prefix with '^' inverts selection.
-        ''')
-    argp.add_argument('-T', '--compare-time', action='store_true',
-                      dest='compare_time', default=False, help='''
+        """,
+    )
+    argp.add_argument("-T", "--compare-time", action="store_true", dest="compare_time", default=False,
+        help="""
         Compare timestamp on files which are otherwise equal. By default
         difference in file timestamp are ignored.
-        ''')
-    argp.add_argument('-v', '--verbose', action='count', dest='verbose',
-                      default=0, help='''
+        """,
+    )
+    argp.add_argument("-v", "--verbose", action="count", dest="verbose", default=0,
+        help="""
         Verbose printing during writing to scan output file
-        ''')
-    argp.add_argument('-x', '--one-file-system', action='store_true',
-                      dest='onefs', default=False, help='''
+        """,
+    )
+    argp.add_argument("-x", "--one-file-system", action="store_true", dest="onefs", default=False,
+        help="""
         Don't cross filesystem boundaries
-        ''')
-    argp.add_argument('-X', '--exclude', metavar='PATH', action='append',
-                      dest='exclude', default=[], help='''
+        """,
+    )
+    argp.add_argument("-X", "--exclude", metavar="PATH", action="append", dest="exclude", default=[],
+        help="""
         Exclude PATH from scan. PATH is relative to DIR
-        ''')
-    argp.add_argument('--format-help', action='store_true', dest='formathelp',
-                      default=None, help='''
+        """,
+    )
+    argp.add_argument("--format-help", action="store_true", dest="formathelp", default=None,
+        help="""
         Show help for --format and --summary-format
-        ''')
-    argp.add_argument('--prefix', metavar='PATH', dest='prefix', default=None,
-                      help='''
+        """,
+    )
+    argp.add_argument("--prefix", metavar="PATH", dest="prefix", default=None,
+        help="""
         Use the given prefix PATH as the base for the relative paths when reading
         from scanfiles on either sides. This is useful when the scan file
         is representing a physical directory.
-        ''')
-    argp.add_argument("--scan", action="store_true", help="""
+        """,
+    )
+    argp.add_argument("--scan", action="store_true",
+        help="""
         Force scan mode
-        """)
-    argp.add_argument('--subdir', metavar='PATH', dest='subdir', default=None,
-                      help='''
+        """,
+    )
+    argp.add_argument("--subdir", metavar="PATH", dest="subdir", default=None,
+        help="""
         When reading from scanfiles on either sides, use the given subdir PATH
         to read a subsection of the scan file(s).
-        ''')
-    argp.add_argument('--left-subdir', metavar='PATH', dest='leftsubdir',
-                      default=None, help='''
+        """,
+    )
+    argp.add_argument("--left-subdir", metavar="PATH", dest="leftsubdir", default=None,
+        help="""
         When reading from a scanfile on the left side, use the given subdir PATH
         to read a subsection of the scan file.
-        ''')
-    argp.add_argument('--right-subdir', metavar='PATH', dest='rightsubdir',
-                      default=None, help='''
+        """,
+    )
+    argp.add_argument("--right-subdir", metavar="PATH", dest="rightsubdir", default=None,
+        help="""
         When reading from a scanfile on the right side, use the given
         subdir PATH to read a subsection of the scan file.
-        ''')
-    argp.add_argument('--version', action='version',
-                      version='%(prog)s ' + __version__)
+        """,
+    )
+    argp.add_argument("--version", action="version", version="%(prog)s " + __version__)
 
     # Main arguments
-    argp.add_argument("dir_or_scanfiles", metavar="DIR_OR_SCANFILE",
-                      nargs="*", help="""
+    argp.add_argument("dir_or_scanfiles", metavar="DIR_OR_SCANFILE", nargs="*",
+        help="""
         Directory to scan or scanfile to read
-        """)
+        """,
+    )
 
     return argp
+
+# fmt: on

@@ -1,4 +1,4 @@
-''' Dirscan - command line interface '''
+"""Dirscan - command line interface"""
 #
 # Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
@@ -31,7 +31,14 @@ from dirscan.formatfields import (
 )
 from dirscan.log import debug, set_debug
 from dirscan.progress import PrintProgress, setprogress
-from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, is_scanfile, open_dir_or_scanfile, text_quote
+from dirscan.scanfile import (
+    SCANFILE_FORMAT,
+    file_quote,
+    get_fileheader,
+    is_scanfile,
+    open_dir_or_scanfile,
+    text_quote,
+)
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
 from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
@@ -42,15 +49,15 @@ UPDATE_INTERVAL = 100
 
 @dataclass
 class DirscanContext:
-    """ Context for dirscan operations. """
+    """Context for dirscan operations."""
 
-    printfmt: str = ''
+    printfmt: str = ""
     """ Print format string. """
-    writefmt: str = ''
+    writefmt: str = ""
     """ Write format string. """
-    compare_types: str = ''
+    compare_types: str = ""
     """ Compare types specifier. """
-    filetypes: str = ''
+    filetypes: str = ""
     """ File types specifier. """
     field_prefix: list[str] = field(default_factory=list)
     """ Prefixes for the fields. Used to separate left/right side fields. """
@@ -80,12 +87,12 @@ class DirscanContext:
     """ Whether in duplicate scanning mode. """
 
     def setup_for_scanning(self, opts: Namespace) -> None:
-        """ Setup the context for scanning mode. """
+        """Setup the context for scanning mode."""
         self.printfmt = fmtfields.FMT_DEF
-        self.writefmt = ''
+        self.writefmt = ""
         self.compare_types = fmtfields.COMPARE_TYPES_DEFAULT_SCAN
         self.filetypes = fmtfields.FILE_TYPES_DEFAULT_SCAN
-        self.field_prefix = ['']
+        self.field_prefix = [""]
         self.summary = list(fmtfields.SCAN_SUMMARY)
         self.enable_summary = opts.enable_summary
         self.duplicates = opts.duplicates
@@ -95,10 +102,10 @@ class DirscanContext:
         if opts.outfile:
             self.writefmt = SCANFILE_FORMAT
             if not opts.verbose:
-                self.printfmt = ''
+                self.printfmt = ""
         else:
             if opts.quiet:
-                self.printfmt = ''
+                self.printfmt = ""
             elif opts.all and opts.long:
                 self.printfmt = fmtfields.FMT_AHL if opts.human else fmtfields.FMT_AL
             elif opts.all:
@@ -106,24 +113,24 @@ class DirscanContext:
             elif opts.long:
                 self.printfmt = fmtfields.FMT_HL if opts.human else fmtfields.FMT_L
             elif opts.verbose:
-                self.printfmt = '{path}'
+                self.printfmt = "{path}"
             elif opts.duplicates:
-                self.compare_types = 'd'
+                self.compare_types = "d"
                 self.duponce = not bool(opts.format)
-                self.printfmt = '{dupinfo}'
+                self.printfmt = "{dupinfo}"
 
         if opts.duplicates:
-            self.filetypes = 'f'
+            self.filetypes = "f"
             # Sneaky way to add DUP to printings
-            self.printfmt = self.printfmt.replace('{path}', '{dup}  {dupid}  {path}')
+            self.printfmt = self.printfmt.replace("{path}", "{dup}  {dupid}  {path}")
 
     def setup_for_comparing(self, opts: Namespace) -> None:
-        """ Setup the context for compare mode. """
+        """Setup the context for compare mode."""
         self.printfmt = fmtfields.FMT_COMP_DEF
-        self.writefmt = ''
+        self.writefmt = ""
         self.compare_types = fmtfields.COMPARE_TYPES_DEFAULT_COMPARE
         self.filetypes = fmtfields.FILE_TYPES_DEFAULT_COMPARE
-        self.field_prefix = ['l_', 'r_']
+        self.field_prefix = ["l_", "r_"]
         self.summary = list(fmtfields.COMPARE_SUMMARY)
         self.enable_summary = opts.enable_summary
         self.duplicates = opts.duplicates
@@ -131,11 +138,11 @@ class DirscanContext:
         self.recurse = opts.recurse
 
         if opts.quiet:
-            self.printfmt = ''
+            self.printfmt = ""
 
         # The all or verbose option will show all compare types
         if opts.all or opts.verbose:
-            self.compare_types = ''.join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
+            self.compare_types = "".join(x[0] for x in fmtfields.COMPARE_ARROWS.values())
 
         if opts.shadiff:
             # Want to walk the entire tree on both sides to find any
@@ -143,7 +150,7 @@ class DirscanContext:
             self.recurse = True
 
     def setup(self, scan_mode: bool, opts: Namespace) -> Self:
-        """ Setup the printing formats. """
+        """Setup the printing formats."""
 
         # -- Initialize according to mode
         if scan_mode:
@@ -158,12 +165,12 @@ class DirscanContext:
 
         # Unless compare_types contains these compares, there isn't any need to
         # make any detailed comparisons.
-        self.no_compare = not bool(set('cLRe').intersection(self.compare_types))
+        self.no_compare = not bool(set("cLRe").intersection(self.compare_types))
 
         # -- Extra verbose
         if opts.verbose > 1:
             # Prefix fields
-            self.printfmt = '{change_t}  ' + self.printfmt
+            self.printfmt = "{change_t}  " + self.printfmt
 
         # -- Summary options
         if opts.summary:
@@ -188,7 +195,7 @@ class DirscanContext:
 
 
 def determine_scan_mode(opts: Namespace) -> bool:
-    """ Determine if we are in scan mode (True) or compare mode (False). """
+    """Determine if we are in scan mode (True) or compare mode (False)."""
     if opts.scan:
         if opts.compare:
             raise ValueError("--scan and --compare options are mutually exclusive")
@@ -213,8 +220,8 @@ def determine_scan_mode(opts: Namespace) -> bool:
     return True
 
 
-def main(argv: Iterable[str] | None=None) -> int:
-    '''
+def main(argv: Iterable[str] | None = None) -> int:
+    """
     Entry-point for command-line and ``-mdirscan`` usage.
 
     Args:
@@ -223,7 +230,7 @@ def main(argv: Iterable[str] | None=None) -> int:
 
     Returns:
         Error code of the operation, where 0 indicates success
-    '''
+    """
 
     #
     # Input validation and option parsing
@@ -255,7 +262,7 @@ def main(argv: Iterable[str] | None=None) -> int:
     if scan_mode:
         # -- Settings for scanning
         dir_comparator = obj_compare1
-        pr_prefix = 'Scanned'
+        pr_prefix = "Scanned"
 
         if opts.shadiff:
             argp.error("--sha doesn't work when scanning")
@@ -264,11 +271,10 @@ def main(argv: Iterable[str] | None=None) -> int:
     else:
         # -- Settings for comparing
         dir_comparator = obj_compare2
-        pr_prefix = 'Compared'
+        pr_prefix = "Compared"
 
         if opts.outfile:
-            argp.error("Writing to an outfile is not supported "
-                       "when comparing directories")
+            argp.error("Writing to an outfile is not supported when comparing directories")
 
     # -- Setup the context
     try:
@@ -277,18 +283,18 @@ def main(argv: Iterable[str] | None=None) -> int:
         argp.error(str(err))
 
     # -- Verify file types
-    if ctx.duplicates and ctx.filetypes != 'f':
+    if ctx.duplicates and ctx.filetypes != "f":
         argp.error("Cannot use other filetypes than 'f' in --duplicates mode")
 
     # -- Printing settings
-    end = '\x00' if opts.print0 else '\n'
+    end = "\x00" if opts.print0 else "\n"
 
     # Ensure printability in powershell (that won't encode surrogates).
     # surrogatepass?
     if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(errors='backslashreplace')
+        sys.stdout.reconfigure(errors="backslashreplace")
     if isinstance(sys.stderr, io.TextIOWrapper):
-        sys.stderr.reconfigure(errors='backslashreplace')
+        sys.stderr.reconfigure(errors="backslashreplace")
 
     # -- Debug info --
     debug(1, "Command options:")
@@ -298,7 +304,11 @@ def main(argv: Iterable[str] | None=None) -> int:
     debug(1, "  Write format  : '{}'", ctx.writefmt)
     debug(1, "  Fields in use : {}", ctx.fieldnames)
     debug(1, "  Compare types : '{}'", ctx.compare_types)
-    debug(1, "                : ({})", ", ".join(fmtfields.COMPARE_TYPES[c] for c in ctx.compare_types))
+    debug(
+        1,
+        "                : ({})",
+        ", ".join(fmtfields.COMPARE_TYPES[c] for c in ctx.compare_types),
+    )
     debug(1, "  File types    : '{}'", ctx.filetypes)
     debug(1, "                : ({})", ", ".join(OBJTYPES[o].objname for o in ctx.filetypes))
     for i, s in enumerate(ctx.summary, start=1):
@@ -308,10 +318,12 @@ def main(argv: Iterable[str] | None=None) -> int:
 
     # -- Handler for printing progress to stderr
     #    Set the global scope to allow inner functions to report progress
-    progressmgr = PrintProgress(file=sys.stderr,
-                                update_interval=UPDATE_INTERVAL,
-                                update_delay=UPDATE_DELAY,
-                                show_progress=opts.progress)
+    progressmgr = PrintProgress(
+        file=sys.stderr,
+        update_interval=UPDATE_INTERVAL,
+        update_delay=UPDATE_DELAY,
+        show_progress=opts.progress,
+    )
     progressmgr.__enter__()
     setprogress(progressmgr)
 
@@ -320,8 +332,8 @@ def main(argv: Iterable[str] | None=None) -> int:
 
     # -- Error handler
     def error_handler(exception: Exception, path: DirscanObj | TPath) -> bool:
-        ''' Callback for handling scanning errors during parsing '''
-        stats.add_stats('err')
+        """Callback for handling scanning errors during parsing"""
+        stats.add_stats("err")
         if not opts.quieterr:
             if isinstance(path, DirscanObj):
                 path = path.fullpath
@@ -344,10 +356,10 @@ def main(argv: Iterable[str] | None=None) -> int:
             subdirs[1] = opts.rightsubdir or opts.subdir
 
         # -- Check and read the scan files
-        dirs = [open_dir_or_scanfile(scanfile,
-                                     subdir=subdir,
-                                     prefix=opts.prefix)
-                for scanfile, subdir in zip(opts.dir_or_scanfiles, subdirs)]
+        dirs = [
+            open_dir_or_scanfile(scanfile, subdir=subdir, prefix=opts.prefix)
+            for scanfile, subdir in zip(opts.dir_or_scanfiles, subdirs)
+        ]
 
         # -- Combine multiple scans into a single list of directories
         if scan_mode and len(dirs) > 1:
@@ -376,19 +388,17 @@ def main(argv: Iterable[str] | None=None) -> int:
                 prefix=f"{pr_prefix} {{count}} files:  ",
                 format="{text}",
             ) as progress:
-
                 # -- Do the first pass to count the number of objects
-                for (path, objs) in walkdirs(
-                        dirs,
-                        reverse=opts.reverse,
-                        excludes=opts.exclude,
-                        onefs=opts.onefs,
-                        traverse_into_oneside=ctx.recurse,
-                        exception_fn=error_handler,
-                        close_during=False,
-                        sequential=True,
-                    ):
-
+                for path, objs in walkdirs(
+                    dirs,
+                    reverse=opts.reverse,
+                    excludes=opts.exclude,
+                    onefs=opts.onefs,
+                    traverse_into_oneside=ctx.recurse,
+                    exception_fn=error_handler,
+                    close_during=False,
+                    sequential=True,
+                ):
                     # Progress printing
                     progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
 
@@ -397,32 +407,36 @@ def main(argv: Iterable[str] | None=None) -> int:
 
         # -- Open output file
         if opts.outfile:
-            outfile = open(opts.outfile, 'w', encoding='utf-8',  # noqa: SIM115
-                           errors='surrogateescape')
+            outfile = open(  # noqa: SIM115
+                opts.outfile,
+                "w",
+                encoding="utf-8",
+                errors="surrogateescape",
+            )
             outfile.write(get_fileheader())
 
         # -- Setup progress printing context
         with progressmgr.progress(
-            prefix=f"{pr_prefix} {{count}} files:  " if obj_count < 0 else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
+            prefix=f"{pr_prefix} {{count}} files:  "
+            if obj_count < 0
+            else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
             total_count=obj_count,
             format="{text}",
         ) as progress:
-
             if opts.twopass:
                 progressmgr.print("Pass 2...")
 
             # -- TRAVERSE THE DIR(S)
-            for (path, objs) in walkdirs(
-                    dirs,
-                    reverse=opts.reverse,
-                    excludes=opts.exclude,
-                    onefs=opts.onefs,
-                    traverse_into_oneside=ctx.recurse,
-                    exception_fn=error_handler,
-                    close_during=False,
-                    sequential=ctx.sequential,
+            for path, objs in walkdirs(
+                dirs,
+                reverse=opts.reverse,
+                excludes=opts.exclude,
+                onefs=opts.onefs,
+                traverse_into_oneside=ctx.recurse,
+                exception_fn=error_handler,
+                close_during=False,
+                sequential=ctx.sequential,
             ):
-
                 # Progress printing
                 progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
 
@@ -440,7 +454,7 @@ def main(argv: Iterable[str] | None=None) -> int:
                     # Errors here are due to comparisons that fail.
                     if not error_handler(err, path):
                         raise
-                    change = ('error', 'Compare failed: ' + str(err))
+                    change = ("error", "Compare failed: " + str(err))
 
                 debug(3, "      Compare: {} {}", change[0], change[1])
 
@@ -466,17 +480,17 @@ def main(argv: Iterable[str] | None=None) -> int:
 
                 # Print to stdout
                 if ctx.printfmt:
-                    write_fileinfo(ctx.printfmt, fields, quoter=text_quote,
-                                   file=sys.stdout, end=end)
+                    write_fileinfo(
+                        ctx.printfmt, fields, quoter=text_quote, file=sys.stdout, end=end
+                    )
 
                 # Write to file -- don't write if we couldn't get all fields
                 if outfile and ctx.writefmt and not errors:
-                    write_fileinfo(ctx.writefmt, fields, quoter=file_quote,
-                                   file=outfile)
+                    write_fileinfo(ctx.writefmt, fields, quoter=file_quote, file=outfile)
 
     except (DirscanException, OSError) as err:
         # Handle user-specific errors
-        progressmgr.print(argp.prog + ': ' + str(err))
+        progressmgr.print(argp.prog + ": " + str(err))
 
         # Show the full traceback in debug mode
         if opts.debug:
@@ -501,7 +515,7 @@ def main(argv: Iterable[str] | None=None) -> int:
 
     # Set the summary fields
     summary_fields: dict[str, TField] = {
-        'prog': argp.prog,
+        "prog": argp.prog,
         **stats.get_fields(ctx.field_prefix),
     }
 
@@ -509,11 +523,11 @@ def main(argv: Iterable[str] | None=None) -> int:
     write_summary(ctx.summary, summary_fields, file=sys.stderr)
 
     # Return error code if we have encountered any errors scanning
-    return 1 if summary_fields.get('n_err') else 0
+    return 1 if summary_fields.get("n_err") else 0
 
 
 def show_entry(objs: tuple[DirscanObj, ...], change: tuple[str, str], ctx: DirscanContext) -> bool:
-    """ Determine whether to show the entry. """
+    """Determine whether to show the entry."""
 
     # Show this filetype?
     if not any(o.objtype in ctx.filetypes for o in objs):
@@ -523,28 +537,31 @@ def show_entry(objs: tuple[DirscanObj, ...], change: tuple[str, str], ctx: Dirsc
     return fmtfields.COMPARE_ARROWS[change[0]][0] in ctx.compare_types
 
 
-def generate_fields(path: Path, objs: tuple[DirscanObj, ...],
-                    change: tuple[str, str], ctx: DirscanContext) -> tuple[dict[str, TField], list[Exception]]:
-    """ Assemble the fields for printing from comparison results. """
+def generate_fields(
+    path: Path, objs: tuple[DirscanObj, ...], change: tuple[str, str], ctx: DirscanContext
+) -> tuple[dict[str, TField], list[Exception]]:
+    """Assemble the fields for printing from comparison results."""
 
     # Set the base fields
     fields: dict[str, TField] = {
-        'relpath': str(path),
-        'relpath_p': str(PurePosixPath(path)),  # Posix formatted path
-        'change': change[0],
-        'change_t': fmtfields.COMPARE_ARROWS[change[0]][0],
-        'arrow' : fmtfields.COMPARE_ARROWS[change[0]][1],
-        'text'  : change[1].capitalize(),
+        "relpath": str(path),
+        "relpath_p": str(PurePosixPath(path)),  # Posix formatted path
+        "change": change[0],
+        "change_t": fmtfields.COMPARE_ARROWS[change[0]][0],
+        "arrow": fmtfields.COMPARE_ARROWS[change[0]][1],
+        "text": change[1].capitalize(),
     }
 
     # Write list of duplicates to the extra field
     if ctx.duplicates:
-        fields.update({
-            'dupinfo': '',
-            'dup': '   ',
-            'dupid': '      ',
-            'dupcount': 0,
-        })
+        fields.update(
+            {
+                "dupinfo": "",
+                "dup": "   ",
+                "dupid": "      ",
+                "dupcount": 0,
+            }
+        )
 
         # Technically not needed, due to sequential setting ensures it
         # will only contain one directory. Probably smart to keep this
@@ -566,15 +583,15 @@ def generate_fields(path: Path, objs: tuple[DirscanObj, ...],
 
             samesha = ctx.shadb.get(sha, [])
             len_samesha = len(samesha)
-            fields['dupcount'] = len_samesha
+            fields["dupcount"] = len_samesha
             if len_samesha > 1:
                 shaid = format_shaid(sha, ctx.shaids, ctx.shaids_used)
-                fields['dupid'] = shaid
-                j = '\n    '.join([str(o[1].fullpath) for o in samesha])
-                fields['dupinfo'] = (
-                    f'File duplicated {len_samesha} times:  '
-                    f'(ID {shaid})  {obj.size} bytes\n    {j}\n')
-                fields['dup'] = 'DUP'
+                fields["dupid"] = shaid
+                j = "\n    ".join([str(o[1].fullpath) for o in samesha])
+                fields["dupinfo"] = (
+                    f"File duplicated {len_samesha} times:  (ID {shaid})  {obj.size} bytes\n    {j}\n"
+                )
+                fields["dup"] = "DUP"
 
     # Update the fields from the file objects. This retries the values
     # for the fields which are in actual use. This saves a lot of
@@ -585,5 +602,5 @@ def generate_fields(path: Path, objs: tuple[DirscanObj, ...],
     return fields, errors
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -11,9 +11,7 @@ import argparse
 
 from dirscan.scanfile import check_header, file_quote, file_unquote
 
-parser = argparse.ArgumentParser(
-    description="Convert old scanfile format to new format."
-)
+parser = argparse.ArgumentParser(description="Convert old scanfile format to new format.")
 parser.add_argument("input_file", type=str, help="Path to the old scanfile")
 parser.add_argument("output_file", type=str, help="Path to the new scanfile")
 
@@ -23,10 +21,9 @@ filename = opts.input_file
 
 # First pass reading entire file into memory
 with (
-    open(filename, 'r', encoding='utf-8', errors='surrogateescape') as infile,
-    open(opts.output_file, 'w', encoding='utf-8', errors='surrogateescape') as outfile,
+    open(filename, "r", encoding="utf-8", errors="surrogateescape") as infile,
+    open(opts.output_file, "w", encoding="utf-8", errors="surrogateescape") as outfile,
 ):
-
     # Check the scanfile header
     firstline = infile.readline()
     check_header(firstline, filename)
@@ -37,15 +34,16 @@ with (
         lineno += 1
 
         # Ignore empty line and lines with comments
-        if not line.rstrip() or line[0] == '#':
+        if not line.rstrip() or line[0] == "#":
             outfile.write(line)
             continue
 
         # Parse the line record
-        args = [file_unquote(e) for e in line.rstrip().split(',', maxsplit=8)]
+        args = [file_unquote(e) for e in line.rstrip().split(",", maxsplit=8)]
         if len(args) != 8:
-            raise ValueError("{filename}:{lineno}: Missing or excess file fields "
-                             f"(got {len(args)}, want 8)")
+            raise ValueError(
+                f"{{filename}}:{{lineno}}: Missing or excess file fields (got {len(args)}, want 8)"
+            )
 
         try:
             # File mode. Ocal in new format, decimal in old format

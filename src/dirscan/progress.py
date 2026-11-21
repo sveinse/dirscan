@@ -22,8 +22,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 def mimic(target: F) -> Callable[[Callable[..., Any]], F]:
     """A decorator factory that returns a 'cast' to the target's signature."""
+
     def decorator(real_func: Callable[..., Any]) -> F:
         return cast(F, real_func)
+
     return decorator
 
 
@@ -46,7 +48,12 @@ class PrintProgressItem:
         """Support for usage as a context manager"""
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: types.TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
         """Cleanups after the context manager"""
         if self._progress:
             self._progress.remove(self)
@@ -117,7 +124,12 @@ class PrintProgress:
             self._thread = self._executor.submit(self._progress_main)
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: types.TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
         """Cleanups after the context manager"""
         self._keep_running = False
         if self._executor:
@@ -149,11 +161,14 @@ class PrintProgress:
         except (OSError, ValueError):
             terminal_width = 0
 
-        text = fit_text([
-            p.get_text()  # Returns tuple (prefix, text)
-            for p in self.progressors
-            if (self.timestamp - p.starttime) > self.updatedelay
-        ], terminal_width)
+        text = fit_text(
+            [
+                p.get_text()  # Returns tuple (prefix, text)
+                for p in self.progressors
+                if (self.timestamp - p.starttime) > self.updatedelay
+            ],
+            terminal_width,
+        )
 
         with self._lock:
             print("\r" + text, end="\x1b[K\r", file=self.file)

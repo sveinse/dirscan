@@ -1,4 +1,4 @@
-''' Dirscan - functions for reading and writing scanfiles '''
+"""Dirscan - functions for reading and writing scanfiles"""
 #
 # Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
@@ -23,7 +23,7 @@ from dirscan.dirscan import (
 from dirscan.log import debug, debug_level
 
 # Known scan file versions
-SCANFILE_VERSIONS = ('v1',)
+SCANFILE_VERSIONS = ("v1",)
 
 # Line fields of the scanfile
 SCANFILE_FORMAT = "{type},{size},{mode:o},{uid},{gid},{mtime_x},{data:qs},{relpath_p:qs}"
@@ -33,14 +33,14 @@ TDirtree = dict[str, tuple[DirObj, dict[str, DirscanObj], str]]
 
 
 def is_scanfile(filename: TPath) -> bool:
-    '''
+    """
     Check if the given file is a scanfile
 
     Args:
         filename: Filename to check
     Returns:
         ``True`` if the given file is a scan file.
-    '''
+    """
 
     if not filename:
         return False
@@ -48,7 +48,7 @@ def is_scanfile(filename: TPath) -> bool:
     if not fname.is_file():
         return False
     try:
-        with open(fname, 'r', encoding='utf-8', errors='surrogateescape') as infile:
+        with open(fname, "r", encoding="utf-8", errors="surrogateescape") as infile:
             check_header(infile.readline(), fname)
     except DirscanException:
         return False
@@ -57,18 +57,18 @@ def is_scanfile(filename: TPath) -> bool:
 
 
 def get_fileheader() -> str:
-    ''' Return the file header of the scan-file '''
-    return '#!ds:v1\n'
+    """Return the file header of the scan-file"""
+    return "#!ds:v1\n"
 
 
 def check_header(line: str, filename: TPath) -> None:
-    ''' Check if line from filename is a correct dirscan scanfile header '''
+    """Check if line from filename is a correct dirscan scanfile header"""
 
     if not line:
         raise DirscanException(f"Invalid scanfile '{filename}', missing header")
     line = line.rstrip()
 
-    if not line.startswith('#!ds:v'):
+    if not line.startswith("#!ds:v"):
         raise DirscanException(f"Invalid scanfile '{filename}', malformed header")
 
     ver = line[5:]
@@ -76,23 +76,25 @@ def check_header(line: str, filename: TPath) -> None:
         raise DirscanException(f"Invalid scanfile '{filename}', unsupported version '{ver}'")
 
 
-def int_convert(value: str, radix: int=10) -> int:
-    ''' Call int() and raise an ValueError if number is invalid '''
+def int_convert(value: str, radix: int = 10) -> int:
+    """Call int() and raise an ValueError if number is invalid"""
 
-    return int(value or '0', radix)
+    return int(value or "0", radix)
 
 
-def int_positive(value: str, radix: int=10) -> int:
-    ''' Call int() and raise an ValueError if number is negative '''
+def int_positive(value: str, radix: int = 10) -> int:
+    """Call int() and raise an ValueError if number is negative"""
 
-    num = int(value or '0', radix)
+    num = int(value or "0", radix)
     if num < 0:
         raise ValueError("number must be positive")
     return num
 
 
-def open_dir_or_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath | None=None) -> DirscanObj:
-    '''
+def open_dir_or_scanfile(
+    filename: TPath, subdir: str | None = None, prefix: TPath | None = None
+) -> DirscanObj:
+    """
     Open a directory or scanfile return the root object :py:class:`DirObj`
     instance
 
@@ -108,14 +110,16 @@ def open_dir_or_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath
     Returns:
         Top-level :py:class:`DirObj` object in the hierarchy loaded from the
         file.
-    '''
+    """
     if is_scanfile(filename):
         return read_scanfile(filename, subdir=subdir, prefix=prefix)
     return create_from_fs(filename)
 
 
-def read_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath | None=None) -> DirObj:
-    '''
+def read_scanfile(
+    filename: TPath, subdir: str | None = None, prefix: TPath | None = None
+) -> DirObj:
+    """
     Read filename scan file and return a :py:class:`DirObj` instance containing
     the file tree root
 
@@ -129,7 +133,7 @@ def read_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath | None
     Returns:
         Top-level :py:class:`DirObj` object in the hierarchy loaded from the
         file.
-    '''
+    """
 
     # First pass, parse the file
     dirtree = parse_file(filename, legacy=False, prefix=prefix)
@@ -137,33 +141,31 @@ def read_scanfile(filename: TPath, subdir: str | None=None, prefix: TPath | None
     # Second pass, inserting all the children into the list of parents,
     # building the entire tree structure
     for dparent, children, _ in dirtree.values():
-
         # Insert the children into the parent object
         dparent.set_children(children.values())
 
     if not dirtree:
-        raise DirscanException(f"Scanfile '{filename}' contains no data "
-                               "or no top-level directory")
+        raise DirscanException(f"Scanfile '{filename}' contains no data or no top-level directory")
 
     # Populate the tree root
     try:
-        root = subdir or '.'  # Set a default value
-        return dirtree['./' + root if root[0] != '.' else root][0]
+        root = subdir or "."  # Set a default value
+        return dirtree["./" + root if root[0] != "." else root][0]
 
     except KeyError:
-        raise DirscanException(f"No such directory '{subdir}' "
-                               f"found in scanfile '{filename}'") from None
+        raise DirscanException(
+            f"No such directory '{subdir}' found in scanfile '{filename}'"
+        ) from None
 
 
-def parse_file(filename: TPath, legacy: bool = False, prefix: TPath|None = None) -> TDirtree:
+def parse_file(filename: TPath, legacy: bool = False, prefix: TPath | None = None) -> TDirtree:
     """Parse the scanfile and return a dict of the file objects."""
 
     base_fname = str(prefix) if prefix is not None else Path(filename).name
     dirtree: TDirtree = {}
 
     # First pass reading entire file into memory
-    with open(filename, 'r', encoding='utf-8', errors='surrogateescape') as infile:
-
+    with open(filename, "r", encoding="utf-8", errors="surrogateescape") as infile:
         # Check the scanfile header
         check_header(infile.readline(), filename)
 
@@ -172,7 +174,7 @@ def parse_file(filename: TPath, legacy: bool = False, prefix: TPath|None = None)
             lineno += 1
 
             # Ignore empty line and lines with comments
-            if not line.rstrip() or line[0] == '#':
+            if not line.rstrip() or line[0] == "#":
                 continue
 
             try:
@@ -182,49 +184,46 @@ def parse_file(filename: TPath, legacy: bool = False, prefix: TPath|None = None)
             except ValueError as err:
                 exc1 = err if debug_level() else None
                 debug(1, f"Offending line: {line.rstrip()}")
-                raise DirscanException(f"{filename}:{lineno}: Field error, "
-                                       f"{err}") from exc1
+                raise DirscanException(f"{filename}:{lineno}: Field error, {err}") from exc1
 
             except DirscanException as err:
                 exc2 = err if debug_level() else None
                 debug(1, f"Offending line: {line.rstrip()}")
-                raise DirscanException(f"{filename}:{lineno}: Data error, "
-                                       f"{err}") from exc2
+                raise DirscanException(f"{filename}:{lineno}: Data error, {err}") from exc2
 
         return dirtree
 
 
 def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
-    ''' Parse line and inject into dirtree dict '''
+    """Parse line and inject into dirtree dict"""
 
     # Parse the line record
-    args = [file_unquote(e) for e in line.rstrip().split(',', maxsplit=8)]
+    args = [file_unquote(e) for e in line.rstrip().split(",", maxsplit=8)]
     if len(args) != 8:
-        raise DirscanException("Missing or excess file fields "
-                               f"(got {len(args)}, want 8)")
+        raise DirscanException(f"Missing or excess file fields (got {len(args)}, want 8)")
 
     # Must be kept in sync with self.FORMAT
     data: DirscanDict = {
-        'objtype':  args[0],
-        'name': '',  # Will be updated below
-        'path': '',  # Will be updated below
-        'size': int_positive(args[1]),
-        'mode': int_positive(args[2], 8),  # Octal input, is integer in legacy files
-        'uid': int_positive(args[3]),
-        'gid': int_positive(args[4]),
-        'mtime': float(int_convert(args[5], 16)),  # Hex input, is float in legacy files
-        'dev': 0,
+        "objtype": args[0],
+        "name": "",  # Will be updated below
+        "path": "",  # Will be updated below
+        "size": int_positive(args[1]),
+        "mode": int_positive(args[2], 8),  # Octal input, is integer in legacy files
+        "uid": int_positive(args[3]),
+        "gid": int_positive(args[4]),
+        "mtime": float(int_convert(args[5], 16)),  # Hex input, is float in legacy files
+        "dev": 0,
     }
     objpath = args[7]
 
     # Parse the 'data' field - args[6]
-    objtype = data['objtype']
-    if objtype == 'f':  # Files
-        data['hashsum'] = args[6] or ''
-    elif objtype == 'l':  # Link
-        data['link'] = args[6] or ''
-    elif objtype == 'd':  # Directory
-        data['children'] = ()
+    objtype = data["objtype"]
+    if objtype == "f":  # Files
+        data["hashsum"] = args[6] or ""
+    elif objtype == "l":  # Link
+        data["link"] = args[6] or ""
+    elif objtype == "d":  # Directory
+        data["children"] = ()
 
     if not objtype:
         raise DirscanException("'type' field (#1) cannot be omitted")
@@ -232,9 +231,9 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         raise DirscanException("'path' field (#7) cannot be omitted")
 
     relpath = objpath
-    if relpath[0] != '.':
+    if relpath[0] != ".":
         # Don't use Path for this, as the './' is important
-        relpath = './' + relpath
+        relpath = "./" + relpath
 
     # Set file object path and name
     #    . (top-level):            path='',     name='.'
@@ -246,16 +245,16 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         raise DirscanException(f"empty filename '{objpath}'")
 
     # Get the parent dict
-    parent = dirtree.get(str(path) or '.')  # The or handles the first level entries
+    parent = dirtree.get(str(path) or ".")  # The or handles the first level entries
     if not parent and path:
         if path != ".":
             raise DirscanException(f"'{objpath}' is an orphan ({path!r}, {name!r}, {relpath!r})")
         # Orphaned top-level directory, create a virtual root
         parent = (VirtualDirObj.create(), {}, ".")
-        dirtree["."] = parent  
+        dirtree["."] = parent
 
-    data['name'] = name
-    data['path'] = parent[2] if parent else base_fname
+    data["name"] = name
+    data["path"] = parent[2] if parent else base_fname
 
     # Create new file object
     fileobj = create_from_dict(data)
@@ -265,8 +264,7 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
         if relpath in dirtree:
             raise DirscanException(f"'{objpath}' already exists in file")
         # (parent, children, path)
-        dirtree[str(relpath)] = (
-            fileobj, {}, path + '/' + name if path else name)
+        dirtree[str(relpath)] = (fileobj, {}, path + "/" + name if path else name)
 
     if parent:
         # Add the object into the parent's children list
@@ -278,60 +276,63 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
 # SIMPLE QUOTER USED IN SCAN FILES
 # ================================
 
-def quote(text: str, extended: bool=False) -> str:
-    ''' Quote the text '''
+
+def quote(text: str, extended: bool = False) -> str:
+    """Quote the text"""
 
     def _quote(text: str) -> Generator[str, None, None]:
         ext = extended
         for c in text:
             v = ord(c)
-            if v < 32 or v == 127:   # n -> \xnn
+            if v < 32 or v == 127:  # n -> \xnn
                 yield f"\\x{v:02x}"
-            elif c == '\\':          # \ -> \\
-                yield '\\\\'
-            elif ext and c == ',':   # , -> \\-
-                yield '\\-'          # To not interfere when reading file
-            elif ext and c == ' ':   # ' ' -> '\\ '
-                yield '\\ '          # To remain quotable with shell pasting
+            elif c == "\\":  # \ -> \\
+                yield "\\\\"
+            elif ext and c == ",":  # , -> \\-
+                yield "\\-"  # To not interfere when reading file
+            elif ext and c == " ":  # ' ' -> '\\ '
+                yield "\\ "  # To remain quotable with shell pasting
             else:
                 yield c
 
     text = "".join(_quote(text))
     try:
         # Need this to encode surrogates \udcfa -> \\xfa
-        btext = text.encode(errors='surrogateescape')
+        btext = text.encode(errors="surrogateescape")
     except UnicodeEncodeError:
         # But fails on other surrogates, so \udc6d -> \\udc6d
-        btext = text.encode(errors='backslashreplace')
-    text = btext.decode(errors='backslashreplace')
+        btext = text.encode(errors="backslashreplace")
+    text = btext.decode(errors="backslashreplace")
     return text
 
 
-def unquote(text: str, extended: bool=False) -> str:
-    ''' Unquote the text '''
+def unquote(text: str, extended: bool = False) -> str:
+    """Unquote the text"""
 
     def _unqoute(text: str) -> Generator[str, None, None]:
 
         # Escape code translations
         escapes = {
-            '\\': '\\',
-            'n': '\n',
-            'r': '\r',
-            't': '\t',
+            "\\": "\\",
+            "n": "\n",
+            "r": "\r",
+            "t": "\t",
             "'": "'",
             '"': '"',
         }
         if extended:
-            escapes.update({
-                '-': ',',
-                ' ': ' ',
-            })
+            escapes.update(
+                {
+                    "-": ",",
+                    " ": " ",
+                }
+            )
 
         it = iter(text)
         while True:
             try:
                 c = next(it)
-                if c != '\\':
+                if c != "\\":
                     yield c
                     continue
             except StopIteration:
@@ -343,13 +344,13 @@ def unquote(text: str, extended: bool=False) -> str:
                 if out is not None:
                     yield out
                     continue
-                if c not in 'xuU':
+                if c not in "xuU":
                     raise DirscanException(f"Unknown escape char '{c}'")
-                capture = {'x': 2, 'u': 4, 'U': 8}[c]
+                capture = {"x": 2, "u": 4, "U": 8}[c]
                 cap = "".join(next(it) for i in range(capture))
                 val = int(cap, 16)
                 if val > 127 and val < 256:
-                    val |= 0xdc00  # Handle surrogates
+                    val |= 0xDC00  # Handle surrogates
                 yield chr(val)
             except StopIteration:
                 raise DirscanException(f"Incomplete escape string '{text}'") from None
@@ -358,20 +359,20 @@ def unquote(text: str, extended: bool=False) -> str:
 
 
 def text_quote(text: str) -> str:
-    ''' Quote the text for printing '''
+    """Quote the text for printing"""
     return quote(text, False)
 
 
 def file_quote(text: str) -> str:
-    ''' Simple text quoter for the scan files '''
+    """Simple text quoter for the scan files"""
     return quote(text, True)
 
 
 def text_unquote(text: str) -> str:
-    ''' Simple text un-quoter for the scan files '''
+    """Simple text un-quoter for the scan files"""
     return unquote(text, False)
 
 
 def file_unquote(text: str) -> str:
-    ''' Simple text un-quoter for the scan files '''
+    """Simple text un-quoter for the scan files"""
     return unquote(text, True)

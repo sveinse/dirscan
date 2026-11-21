@@ -1,4 +1,4 @@
-''' Dirscan - directory comparison functions '''
+"""Dirscan - directory comparison functions"""
 #
 # Copyright (C) 2010-2025 Svein Seldal
 # This code is licensed under MIT license (see LICENSE for details)
@@ -16,17 +16,18 @@ from dirscan.log import debug
 from dirscan.progress import getprogress
 
 
-def walkdirs(dirs: Collection[DirscanObj | TPath],
-             *,
-             excludes: Collection[TPath] | None=None,
-             exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None=None,
-             reverse: bool=False,
-             onefs: bool=False,
-             traverse_into_oneside: bool=True,
-             close_during: bool=True,
-             sequential: bool=False,
-             ) -> Generator[tuple[Path, tuple[DirscanObj, ...]], None, None]:
-    '''
+def walkdirs(
+    dirs: Collection[DirscanObj | TPath],
+    *,
+    excludes: Collection[TPath] | None = None,
+    exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None = None,
+    reverse: bool = False,
+    onefs: bool = False,
+    traverse_into_oneside: bool = True,
+    close_during: bool = True,
+    sequential: bool = False,
+) -> Generator[tuple[Path, tuple[DirscanObj, ...]], None, None]:
+    """
     Generator function that recursively traverses the given directories and
     yields the found files as it traverses the tree(s). The directories will
     be traversed in parallel, which can be utilized to in-line compare the
@@ -84,15 +85,20 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
       the base class :py:class:`DirscanObj`, such as :py:class:`FileObj` and
       :py:class:`DirObj`. If a file is only present in one of the dirs but
       not the others, the object will be :py:class:`NonExistingObj`.
-    '''
+    """
 
     if sequential:
         for obj in dirs:
-            yield from walkdirs((obj,), reverse=reverse, excludes=excludes,
-                                onefs=onefs, traverse_into_oneside=traverse_into_oneside,
-                                exception_fn=exception_fn,
-                                close_during=close_during,
-                                sequential=False)
+            yield from walkdirs(
+                (obj,),
+                reverse=reverse,
+                excludes=excludes,
+                onefs=onefs,
+                traverse_into_oneside=traverse_into_oneside,
+                exception_fn=exception_fn,
+                close_during=close_during,
+                sequential=False,
+            )
         return
 
     # Ensure the exclusion list is a list
@@ -108,10 +114,9 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
     # start from
     base = []
     for obj in dirs:
-
         # If we're not handed a FileObj-instance
         if not isinstance(obj, DirscanObj):
-            obj = create_from_fs('', obj)
+            obj = create_from_fs("", obj)
 
         # The object must be a object that supports children
         if not obj.support_children():
@@ -120,13 +125,12 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
         base.append(obj)
 
     # Start the queue
-    queue: list[tuple[Path, tuple[DirscanObj, ...]]] = [(Path('.'), tuple(base))]
+    queue: list[tuple[Path, tuple[DirscanObj, ...]]] = [(Path("."), tuple(base))]
 
     debug(2, "")
 
     # Traverse the queue
     while queue:
-
         # Get the next set of objects
         path, objs = queue.pop(-1)
 
@@ -145,8 +149,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
                     raise
 
         # How many objects are present?
-        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded
-                      for obj in objs)
+        present = sum(not isinstance(obj, NonExistingObj) and not obj.excluded for obj in objs)
 
         # Send back object list to caller
         yield (path, objs)
@@ -187,9 +190,7 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
 
         # Merge all found objects into a single list of unique, sorted,
         # children names and iterate over it
-        for name in sorted(set(itertools.chain.from_iterable(childobjs)),
-                           reverse=not reverse):
-
+        for name in sorted(set(itertools.chain.from_iterable(childobjs)), reverse=not reverse):
             # Get the child if it exists for each of the dirs being traversed
             child = tuple(
                 children.get(name) or NonExistingObj(name, path=parent.fullpath)
@@ -205,13 +206,14 @@ def walkdirs(dirs: Collection[DirscanObj | TPath],
                 obj.close()
 
 
-def scan_shadb(dirs: Collection[DirscanObj],
-               *,
-               exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None=None,
-               include_single_entries: bool=True,
-               **kwargs: Any,
-               ) -> dict[bytes, list[tuple[int, FileObj]]]:
-    '''
+def scan_shadb(
+    dirs: Collection[DirscanObj],
+    *,
+    exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None = None,
+    include_single_entries: bool = True,
+    **kwargs: Any,
+) -> dict[bytes, list[tuple[int, FileObj]]]:
+    """
     Traverse through the directory tree(s) and build a database of shasum
     entries. This can be used to find identical files duplicated multiple
     times or verify unique entries.
@@ -233,7 +235,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
         entry. Each element of the list consists of ``(index, obj)``, where
         index corresponds to which tree the match was found, indexed by the
         ``dirs`` argument. ``obj`` is a :py:class:`FileObj` object.
-    '''
+    """
 
     # -- Build the sha database
     shadb: dict[bytes, list[tuple[int, FileObj]]] = {}
@@ -252,14 +254,10 @@ def scan_shadb(dirs: Collection[DirscanObj],
         prefix="Scanning {count} files:  ",
         format="{text}",
     ) as progress:
-
         for i, sdir in enumerate(dirs):
-            for (_, objs) in walkdirs(
-                    [sdir],
-                    exception_fn=exception_fn,
-                    close_during=False,
-                    **kwargs):
-
+            for _, objs in walkdirs(
+                [sdir], exception_fn=exception_fn, close_during=False, **kwargs
+            ):
                 # Progress printing
                 progress.update(text=str(objs[0].fullpath))
 
@@ -287,7 +285,6 @@ def scan_shadb(dirs: Collection[DirscanObj],
         prefix="Rescanning {count} files:  ",
         format="{text}",
     ) as progress:
-
         # If we're not including single entries, build the shadb from the
         # sizedb now
         for objlist in sizedb.values():
@@ -301,13 +298,14 @@ def scan_shadb(dirs: Collection[DirscanObj],
     return shadb
 
 
-def obj_compare1(objs: Sequence[DirscanObj],
-                 ignores: Container[str]='',
-                 no_compare: bool=False,
-                 ignore_time: bool=True,
-                 shadb: dict[bytes, list[tuple[int, FileObj]]] | None=None
-                 ) -> tuple[str, str]:
-    '''
+def obj_compare1(
+    objs: Sequence[DirscanObj],
+    ignores: Container[str] = "",
+    no_compare: bool = False,
+    ignore_time: bool = True,
+    shadb: dict[bytes, list[tuple[int, FileObj]]] | None = None,
+) -> tuple[str, str]:
+    """
     Object comparator for one-length objects. Since there is nothing to
     compare against, it will simply check if the object is excluded. If
     ``shadb`` is included, it will check for duplicated entries.
@@ -325,7 +323,7 @@ def obj_compare1(objs: Sequence[DirscanObj],
         Tuple containing ``(change, description)`` for the comparison results
         between the objects. ``change``  describes the type of change and
         ``description`` gives a more detailed explaination of the change.
-    '''
+    """
     assert len(objs) == 1
     obj = objs[0]
 
@@ -337,23 +335,24 @@ def obj_compare1(objs: Sequence[DirscanObj],
     # File EXCLUDED
     # =============
     if obj.excluded:
-        return ('excluded', 'excluded')
+        return ("excluded", "excluded")
 
     # File DUPLICATED
     # ===============
-    if (shadb and isinstance(obj, FileObj) and len(shadb.get(obj.hashsum_cache, [])) > 1):
-        return ('duplicated', 'Duplicated entry')
+    if shadb and isinstance(obj, FileObj) and len(shadb.get(obj.hashsum_cache, [])) > 1:
+        return ("duplicated", "Duplicated entry")
 
-    return ('scan', 'scan')
+    return ("scan", "scan")
 
 
-def obj_compare2(objs: Sequence[DirscanObj],
-                 ignores: Container[str]='',
-                 no_compare: bool=False,
-                 ignore_time: bool=True,
-                 shadb: dict[bytes, list[tuple[int, FileObj]]] | None=None
-                 ) -> tuple[str, str]:
-    '''
+def obj_compare2(
+    objs: Sequence[DirscanObj],
+    ignores: Container[str] = "",
+    no_compare: bool = False,
+    ignore_time: bool = True,
+    shadb: dict[bytes, list[tuple[int, FileObj]]] | None = None,
+) -> tuple[str, str]:
+    """
     Object comparator for two-length objects.
 
     Args:
@@ -374,7 +373,7 @@ def obj_compare2(objs: Sequence[DirscanObj],
         Tuple containing ``(change, description)`` for the comparison results
         between the objects. ``change``  describes the type of change and
         ``description`` gives a more detailed explaination of the change.
-    '''
+    """
     assert len(objs) == 2
     left, right = objs
 
@@ -395,15 +394,15 @@ def obj_compare2(objs: Sequence[DirscanObj],
     # =============
     if all(o.excluded for o in objs):
         if isinstance(left, NonExistingObj):
-            return ('excluded', 'Right excluded')
+            return ("excluded", "Right excluded")
         if isinstance(right, NonExistingObj):
-            return ('excluded', 'Left excluded')
-        return ('excluded', 'excluded')
+            return ("excluded", "Left excluded")
+        return ("excluded", "excluded")
 
     if left.excluded and isinstance(right, NonExistingObj):
-        return ('excluded', 'excluded, only in left')
+        return ("excluded", "excluded, only in left")
     if right.excluded and isinstance(left, NonExistingObj):
-        return ('excluded', 'excluded, only in right')
+        return ("excluded", "excluded, only in right")
 
     # File present RIGHT only
     # =======================
@@ -421,8 +420,8 @@ def obj_compare2(objs: Sequence[DirscanObj],
                         other = obj
                 if other:
                     text = f"renamed, in left {other.fullpath}"
-                    return ('right_renamed', text)
-        return ('right_only', text)
+                    return ("right_renamed", text)
+        return ("right_only", text)
 
     # File present LEFT only
     # ======================
@@ -440,15 +439,14 @@ def obj_compare2(objs: Sequence[DirscanObj],
                         other = obj
                 if other:
                     text = f"renamed, in right {other.fullpath}"
-                    return ('left_renamed', text)
-        return ('left_only', text)
+                    return ("left_renamed", text)
+        return ("left_only", text)
 
     # File type DIFFERENT
     # ===================
     if len({type(o) for o in objs}) > 1:
-        text = (f"Different type, "
-                f"{left.objname} in left and {right.objname} in right")
-        return ('different_type', text)
+        text = f"Different type, {left.objname} in left and {right.objname} in right"
+        return ("different_type", text)
 
     # File type EQUAL
     # ===============
@@ -456,7 +454,7 @@ def obj_compare2(objs: Sequence[DirscanObj],
     # Unless we're not intersted in these comparetypes, then we don't have
     # to spend time on making the compare (which can be time consuming)
     if no_compare:
-        return ('skipped', 'compare skipped')
+        return ("skipped", "compare skipped")
 
     # compare returns a list of differences. If None, they are equal
     # This might fail, so be prepared to catch any errors
@@ -464,32 +462,33 @@ def obj_compare2(objs: Sequence[DirscanObj],
     if differences:
         # Make a new list and filter out the ignored differences
         filtered_changes = []
-        change_type = 'changed'
+        change_type = "changed"
         for change in differences:
-            if 'newer' in change:
+            if "newer" in change:
                 if len(differences) == 1 and ignore_time:
                     continue
-                if 't' in ignores:
+                if "t" in ignores:
                     continue
-                change = 'left is newer'
-                change_type = 'left_newer'
-            elif 'older' in change:
+                change = "left is newer"
+                change_type = "left_newer"
+            elif "older" in change:
                 if len(differences) == 1 and ignore_time:
                     continue
-                if 't' in ignores:
+                if "t" in ignores:
                     continue
-                change = 'right is newer'
-                change_type = 'right_newer'
-            elif (('u' in ignores and 'UID differs' in change) or
-                 ('g' in ignores and 'GID differs' in change) or
-                 ('p' in ignores and 'permissions differs' in change)):
+                change = "right is newer"
+                change_type = "right_newer"
+            elif (
+                ("u" in ignores and "UID differs" in change)
+                or ("g" in ignores and "GID differs" in change)
+                or ("p" in ignores and "permissions differs" in change)
+            ):
                 continue
             filtered_changes.append(change)
 
         # else from the following test indicates file changed, but all changes
         # have been masked with ignore settings
         if filtered_changes:
-
             # File contents CHANGED
             # =====================
 
@@ -503,4 +502,4 @@ def obj_compare2(objs: Sequence[DirscanObj],
 
     # File contents EQUAL
     # ===================
-    return ('equal', 'equal')
+    return ("equal", "equal")
