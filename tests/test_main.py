@@ -1,8 +1,10 @@
 import sys
+
 import pytest
 from pytest import raises
 
 import dirscan as ds
+
 
 def toslash(text):
     if sys.platform == 'win32':

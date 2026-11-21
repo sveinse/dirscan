@@ -6,17 +6,17 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
 import io
 import sys
+from argparse import Namespace
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Collection, Sequence
-from typing_extensions import Self  # Due to Python 3.10 compatibility, remove when Python 3.11+ is minimum
+from typing import Self
 
 import dirscan.formatfields as fmtfields
-from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
 from dirscan.digest import TPath
+from dirscan.dirscan import OBJTYPES, DirscanException, DirscanObj, FileObj
 from dirscan.formatfields import (
     Statistics,
     TField,
@@ -31,10 +31,7 @@ from dirscan.formatfields import (
 )
 from dirscan.log import debug, set_debug
 from dirscan.progress import PrintProgress, setprogress
-from dirscan.scanfile import (
-    SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile,
-    text_quote
-)
+from dirscan.scanfile import SCANFILE_FORMAT, file_quote, get_fileheader, open_dir_or_scanfile, text_quote
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
 from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
 
@@ -371,7 +368,7 @@ def main(argv: Sequence[str] | None=None) -> int:
 
         # -- Open output file
         if opts.outfile:
-            outfile = open(opts.outfile, 'w', encoding='utf-8',
+            outfile = open(opts.outfile, 'w', encoding='utf-8',  # noqa: SIM115
                            errors='surrogateescape')
             outfile.write(get_fileheader())
 
@@ -494,10 +491,7 @@ def show_entry(objs: tuple[DirscanObj, ...], change: tuple[str, str], ctx: Dirsc
         return False
 
     # Show this compare type?
-    if fmtfields.COMPARE_ARROWS[change[0]][0] not in ctx.compare_types:
-        return False
-
-    return True
+    return fmtfields.COMPARE_ARROWS[change[0]][0] in ctx.compare_types
 
 
 def generate_fields(path: Path, objs: tuple[DirscanObj, ...],

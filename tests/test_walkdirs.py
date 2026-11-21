@@ -1,8 +1,9 @@
 import os
 import sys
+from pathlib import Path
+
 import pytest
 from pytest import raises
-from pathlib import Path
 
 import dirscan as ds
 

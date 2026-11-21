@@ -11,10 +11,11 @@ import datetime
 import fnmatch
 import os
 import stat as osstat
+from collections.abc import Collection, Generator
 from pathlib import Path
-from typing import Any, Collection, Generator
+from typing import Any, NotRequired
 
-from typing_extensions import NotRequired, TypedDict  # for Python <3.11
+from typing_extensions import TypedDict
 
 from dirscan.digest import COMPARE_FN, DIGEST_FN, HASHALGORITHM
 
@@ -72,8 +73,17 @@ class DirscanObj:
     objname: str
     objmode: int
 
-    __slots__ = ('name', 'path', 'excluded',
-                 'mode', 'uid', 'gid', 'dev', 'size', '_mtime')
+    __slots__ = (
+        '_mtime',
+        'dev',
+        'excluded',
+        'gid',
+        'mode',
+        'name',
+        'path',
+        'size',
+        'uid'
+    )
 
     # Type definitions
     name: str
@@ -214,7 +224,7 @@ class DirscanObj:
         '''
         for ex in excludes:
             ex = Path(base.fullpath, ex)
-            if fnmatch.fnmatch(self.fullpath, ex):  # type: ignore
+            if fnmatch.fnmatch(self.fullpath, ex):
                 self.excluded = True
                 return
 

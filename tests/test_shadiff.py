@@ -12,7 +12,7 @@ def scan(dirs, compare=ds.obj_compare2):
             dirs,
             traverse_into_oneside=True,
         ):
-        c, t = compare(
+        c, _t = compare(
             o,
             shadb=shadb,
         )

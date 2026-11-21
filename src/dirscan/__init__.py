@@ -38,35 +38,25 @@ from dirscan.walkdirs import (
 
 # Order matter to documentation
 __all__ = [
-
-    # Primary functions
-    "main",
-    "walkdirs",
-    "scan_shadb",
-    "obj_compare1",
-    "obj_compare2",
-
-    # Scanfile functions
-    "is_scanfile",
-    "open_dir_or_scanfile",
-    "read_scanfile",
-
-    # Factories
-    "create_from_fs",
-    "create_from_dict",
-
-    # Dirscan objects
-    "DirscanObj",
-    "FileObj",
-    "LinkObj",
-    "DirObj",
     "BlockDevObj",
     "CharDevObj",
-    "SocketObj",
-    "FifoObj",
-    "NonExistingObj",
-
-    # Helpers
-    "set_debug",
+    "DirObj",
     "DirscanException",
+    "DirscanObj",
+    "FifoObj",
+    "FileObj",
+    "LinkObj",
+    "NonExistingObj",
+    "SocketObj",
+    "create_from_dict",
+    "create_from_fs",
+    "is_scanfile",
+    "main",
+    "obj_compare1",
+    "obj_compare2",
+    "open_dir_or_scanfile",
+    "read_scanfile",
+    "scan_shadb",
+    "set_debug",
+    "walkdirs",
 ]

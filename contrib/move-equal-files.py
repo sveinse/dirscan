@@ -1,6 +1,7 @@
 """Tool to move files on the right that are equal to files on the left."""
-from pathlib import Path
 import argparse
+from pathlib import Path
+
 import dirscan
 
 parser = argparse.ArgumentParser(description="""

@@ -7,10 +7,10 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable, Collection, Container, Generator, Sequence
 from pathlib import Path
-from typing import Any, Callable, Collection, Container, Generator, Sequence
+from typing import Any
 
-# Typings
 from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, TPath, create_from_fs
 from dirscan.log import debug
 from dirscan.progress import getprogress
@@ -243,7 +243,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
         try:
             # Get the hashsum and store it to the shadb list
             shadb.setdefault(obj.hashsum, []).append((index, obj))
-        except IOError as err:
+        except OSError as err:
             if not exception_fn or not exception_fn(err, obj):
                 raise
 
@@ -290,7 +290,7 @@ def scan_shadb(dirs: Collection[DirscanObj],
 
         # If we're not including single entries, build the shadb from the
         # sizedb now
-        for size, objlist in sizedb.items():
+        for objlist in sizedb.values():
             # Not interested in single entries (that's the speed optimization)
             if len(objlist) < 2:
                 continue
@@ -341,9 +341,8 @@ def obj_compare1(objs: Sequence[DirscanObj],
 
     # File DUPLICATED
     # ===============
-    if shadb and isinstance(obj, FileObj):
-        if len(shadb.get(obj.hashsum_cache, [])) > 1:
-            return ('duplicated', 'Duplicated entry')
+    if (shadb and isinstance(obj, FileObj) and len(shadb.get(obj.hashsum_cache, [])) > 1):
+        return ('duplicated', 'Duplicated entry')
 
     return ('scan', 'scan')
 
@@ -446,7 +445,7 @@ def obj_compare2(objs: Sequence[DirscanObj],
 
     # File type DIFFERENT
     # ===================
-    if len(set(type(o) for o in objs)) > 1:
+    if len({type(o) for o in objs}) > 1:
         text = (f"Different type, "
                 f"{left.objname} in left and {right.objname} in right")
         return ('different_type', text)
@@ -481,11 +480,9 @@ def obj_compare2(objs: Sequence[DirscanObj],
                     continue
                 change = 'right is newer'
                 change_type = 'right_newer'
-            elif 'u' in ignores and 'UID differs' in change:
-                continue
-            elif 'g' in ignores and 'GID differs' in change:
-                continue
-            elif 'p' in ignores and 'permissions differs' in change:
+            elif (('u' in ignores and 'UID differs' in change) or
+                 ('g' in ignores and 'GID differs' in change) or
+                 ('p' in ignores and 'permissions differs' in change)):
                 continue
             filtered_changes.append(change)
 

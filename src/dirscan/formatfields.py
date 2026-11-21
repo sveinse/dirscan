@@ -10,7 +10,8 @@ import stat
 import string
 import sys
 import time
-from typing import Any, Callable, Collection, TextIO
+from collections.abc import Callable, Collection
+from typing import Any, TextIO
 
 from dirscan.dirscan import DirscanObj, FileObj, LinkObj
 
@@ -144,11 +145,11 @@ SCAN_SUMMARY: list[TSummary] = [
     ('n_files',          "    {n_files}  files, total {sum_bytes_t}"),
     ('n_dirs',           "    {n_dirs}  directories"),
     ('n_symlinks',       "    {n_symlinks}  symbolic links"),
-    ('n_special',        "    {n_special}  special files  "
+    ('n_special',       ("    {n_special}  special files  "
                                 "({n_blkdev} block devices, "
                                 "{n_chrdev} char devices, "
                                 "{n_fifos} fifos, "
-                                "{n_sockets} sockets)"),
+                                "{n_sockets} sockets)")),
     ('n_exclude',        "    {n_exclude}  excluded files or directories"),
     (True,               "In total {n_objects} file objects in {time_s}"),
 ]
@@ -349,7 +350,7 @@ def write_fileinfo(formatstr: str, fields: dict[str, TField],
     '''
 
     if not quoter:
-        quoter = lambda a: a  # noqa: E731
+        quoter = lambda a: a
 
     line = Formatter(quoter).format(formatstr, **fields)
     if line:
@@ -383,9 +384,9 @@ def get_compare_types(comparestr: str, default: str) -> str:
         cset = set(comparestr)
     foreign = cset.difference(COMPARE_TYPES_ALL)
     if foreign:
-        raise ValueError((
+        raise ValueError(
             f"Unknown filter: '{''.join(foreign)}', "
-            f"valid values in '{''.join(sorted(COMPARE_TYPES_ALL))}' or 'all'"))
+            f"valid values in '{''.join(sorted(COMPARE_TYPES_ALL))}' or 'all'")
     if invert:
         return ''.join(set(default).difference(cset))
     return ''.join(cset)
@@ -404,9 +405,9 @@ def get_file_types(typestr: str, default: str) -> str:
         cset = set(typestr)
     foreign = cset.difference(FILE_TYPES_ALL)
     if foreign:
-        raise ValueError((
+        raise ValueError(
             f"Unknown file type(s): '{''.join(foreign)}', "
-            f"valid values '{''.join(sorted(FILE_TYPES_ALL))}' or 'all'"))
+            f"valid values '{''.join(sorted(FILE_TYPES_ALL))}' or 'all'")
     if invert:
         return ''.join(set(default).difference(cset))
     return ''.join(cset)
