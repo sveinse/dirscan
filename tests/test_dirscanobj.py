@@ -9,18 +9,18 @@ from pytest import raises
 import dirscan as ds
 
 # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-FAKESTAT = os.stat_result((0o123456, 0, 0, 0, 'uid', 'gid', 'size', 11, 42, 0))
+FAKESTAT = os.stat_result((0o123456, 0, 0, 0, "uid", "gid", "size", 11, 42, 0))
 
 
 def test_dirscanobj():
 
-    a = ds.DirscanObj('a', path='b', stat=FAKESTAT)
+    a = ds.DirscanObj("a", path="b", stat=FAKESTAT)
 
     assert type(a) is ds.DirscanObj
 
     # Attributes
-    assert a.name == 'a'
-    assert a.path == 'b'
+    assert a.name == "a"
+    assert a.path == "b"
     assert a.mode == osstat.S_IMODE(FAKESTAT.st_mode)
     assert a.uid == FAKESTAT.st_uid
     assert a.gid == FAKESTAT.st_gid
@@ -29,7 +29,7 @@ def test_dirscanobj():
 
     # Properties
     assert a.mtime == datetime.datetime.fromtimestamp(FAKESTAT.st_mtime)
-    assert a.fullpath == Path('b/a')
+    assert a.fullpath == Path("b/a")
 
     # Methods
     assert a.children() == ()
@@ -43,14 +43,14 @@ def test_dirscanobj():
 
 def test_fileobj():
 
-    a = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'1234')
+    a = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=b"1234")
 
     assert type(a) is ds.FileObj
 
     # Attributes
-    assert a.objtype == 'f'
-    assert a.name == 'a'
-    assert a.path == 'b'
+    assert a.objtype == "f"
+    assert a.name == "a"
+    assert a.path == "b"
     assert a.mode == osstat.S_IMODE(FAKESTAT.st_mode)
     assert a.uid == FAKESTAT.st_uid
     assert a.gid == FAKESTAT.st_gid
@@ -59,8 +59,8 @@ def test_fileobj():
 
     # Properties
     assert a.mtime == datetime.datetime.fromtimestamp(FAKESTAT.st_mtime)
-    assert a.fullpath == Path('b/a')
-    assert a.hashsum == b'1234'
+    assert a.fullpath == Path("b/a")
+    assert a.hashsum == b"1234"
 
     # Methods
     assert a.children() == ()
@@ -69,16 +69,16 @@ def test_fileobj():
 
     # Serializer won't work in base class
     assert a.to_dict() == {
-        'objtype': 'f',
-        'name': 'a',
-        'path': 'b',
-        'mode': osstat.S_IMODE(FAKESTAT.st_mode),
-        'uid': FAKESTAT.st_uid,
-        'gid': FAKESTAT.st_gid,
-        'dev': FAKESTAT.st_dev,
-        'size': FAKESTAT.st_size,
-        'mtime': FAKESTAT.st_mtime,
-        'hashsum': '31323334',
+        "objtype": "f",
+        "name": "a",
+        "path": "b",
+        "mode": osstat.S_IMODE(FAKESTAT.st_mode),
+        "uid": FAKESTAT.st_uid,
+        "gid": FAKESTAT.st_gid,
+        "dev": FAKESTAT.st_dev,
+        "size": FAKESTAT.st_size,
+        "mtime": FAKESTAT.st_mtime,
+        "hashsum": "31323334",
     }
 
 
@@ -90,16 +90,16 @@ def test_linkobj():
 
 def test_dirobj():
 
-    a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
+    a = ds.DirObj("a", path="b", stat=FAKESTAT, children=())
 
     # TODO: Test children input None
 
     assert type(a) is ds.DirObj
 
     # Attributes
-    assert a.objtype == 'd'
-    assert a.name == 'a'
-    assert a.path == 'b'
+    assert a.objtype == "d"
+    assert a.name == "a"
+    assert a.path == "b"
     assert a.mode == osstat.S_IMODE(FAKESTAT.st_mode)
     assert a.uid == FAKESTAT.st_uid
     assert a.gid == FAKESTAT.st_gid
@@ -108,7 +108,7 @@ def test_dirobj():
 
     # Properties
     assert a.mtime == datetime.datetime.fromtimestamp(FAKESTAT.st_mtime)
-    assert a.fullpath == Path('b/a')
+    assert a.fullpath == Path("b/a")
 
     # Methods
     assert a.children() == ()
@@ -117,16 +117,16 @@ def test_dirobj():
 
     # Serializer won't work in base class
     assert a.to_dict() == {
-        'objtype': 'd',
-        'name': 'a',
-        'path': 'b',
-        'mode': osstat.S_IMODE(FAKESTAT.st_mode),
-        'uid': FAKESTAT.st_uid,
-        'gid': FAKESTAT.st_gid,
-        'dev': FAKESTAT.st_dev,
-        'size': 0,
-        'mtime': FAKESTAT.st_mtime,
-        'children': (),
+        "objtype": "d",
+        "name": "a",
+        "path": "b",
+        "mode": osstat.S_IMODE(FAKESTAT.st_mode),
+        "uid": FAKESTAT.st_uid,
+        "gid": FAKESTAT.st_gid,
+        "dev": FAKESTAT.st_dev,
+        "size": 0,
+        "mtime": FAKESTAT.st_mtime,
+        "children": (),
     }
 
 
@@ -149,17 +149,17 @@ def test_fileobj_hashsum():
 
     # TODO: Test hashsum input
 
-    _ = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=None)
-    _ = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'')
-    _ = ds.FileObj('a', path='b', stat=FAKESTAT, hashsum=b'something')
+    _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=None)
+    _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=b"")
+    _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=b"something")
 
 
 def test_dirobj_children():
 
     # TODO: Test children input
 
-    _ = ds.DirObj('a', path='b', stat=FAKESTAT, children=None)
-    _ = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
+    _ = ds.DirObj("a", path="b", stat=FAKESTAT, children=None)
+    _ = ds.DirObj("a", path="b", stat=FAKESTAT, children=())
 
 
 def test_obj_compare():
@@ -173,16 +173,16 @@ def test_create_from_fs(wd):
 
     # TODO: Check setting full path in name vs setting path
 
-    wd.makedirs('a')
+    wd.makedirs("a")
 
-    stat = os.lstat('a')
+    stat = os.lstat("a")
 
-    a = ds.create_from_fs('a')
+    a = ds.create_from_fs("a")
 
     assert type(a) is ds.DirObj
-    assert a.objtype == 'd'
-    assert a.name == 'a'
-    assert a.path == ''
+    assert a.objtype == "d"
+    assert a.name == "a"
+    assert a.path == ""
     assert a.mode == osstat.S_IMODE(stat.st_mode)
     assert a.size == 0  # Dir has no size
     assert a.uid == stat.st_uid
@@ -193,17 +193,17 @@ def test_create_from_fs(wd):
 
 def test_create_from_dict(wd):
 
-    wd.makedirs('a')
+    wd.makedirs("a")
 
-    a = ds.DirObj('a', path='b', stat=FAKESTAT, children=())
+    a = ds.DirObj("a", path="b", stat=FAKESTAT, children=())
     d = a.to_dict()
 
     b = ds.create_from_dict(d)
 
     assert type(b) is ds.DirObj
-    assert b.objtype == 'd'
-    assert b.name == 'a'
-    assert b.path == 'b'
+    assert b.objtype == "d"
+    assert b.name == "a"
+    assert b.path == "b"
     assert b.mode == osstat.S_IMODE(FAKESTAT.st_mode)
     assert b.uid == FAKESTAT.st_uid
     assert b.gid == FAKESTAT.st_gid
@@ -215,21 +215,22 @@ def test_create_from_dict(wd):
     assert tuple(a.compare(b)) == ()
 
 
-#-----------------
+# -----------------
+
 
 def xtest_dirscan_create(wd):
 
     # TODO: Read a real directory
 
-    #wrdata('a')
-    wd.makedirs('a')
-    wd.makedirs('a/b')
-    wd.makedirs('a/b/c')
-    wd.wrdata('a/d', 'Hello')
-    wd.wrdata('a/b/e', 'World')
+    # wrdata('a')
+    wd.makedirs("a")
+    wd.makedirs("a/b")
+    wd.makedirs("a/b/c")
+    wd.wrdata("a/d", "Hello")
+    wd.wrdata("a/b/e", "World")
 
-    a = ds.create_from_fs('.')
+    a = ds.create_from_fs(".")
     for _ in ds.walkdirs((a,), close_during=False):
         pass
-    #tuple(ds.walkdirs((a,), close_during=False))
+    # tuple(ds.walkdirs((a,), close_during=False))
     pprint(a.to_dict())

@@ -7,13 +7,13 @@ import dirscan as ds
 
 
 def toslash(text):
-    if sys.platform == 'win32':
-        return '\n' + text.replace('\\', '/')
-    return '\n' + text
+    if sys.platform == "win32":
+        return "\n" + text.replace("\\", "/")
+    return "\n" + text
 
 
 def test_main_no_arguments():
-    ''' Test scanning a dir with no access '''
+    """Test scanning a dir with no access"""
 
     with raises(SystemExit) as exc:
         ds.main([])
@@ -45,10 +45,10 @@ def test_main_args_version(capsys):
 
 @pytest.fixture()
 def main_files(wd):
-    wd.makedirs('a')
-    wd.wrdata('a/a', '')
-    wd.makedirs('a/b')
-    wd.wrdata('a/b/c', '')
+    wd.makedirs("a")
+    wd.wrdata("a/a", "")
+    wd.makedirs("a/b")
+    wd.wrdata("a/b/c", "")
 
 
 def test_main_scan(main_files, capsys):
@@ -56,32 +56,41 @@ def test_main_scan(main_files, capsys):
     ds.main(["a"])
     captured = capsys.readouterr()
 
-    assert toslash(captured.out) == '''
+    assert (
+        toslash(captured.out)
+        == """
 a
 a/a
 a/b
 a/b/c
-'''
+"""
+    )
     return
 
     ds.main(["-a", "a"])
     captured = capsys.readouterr()
 
-    #print("\n" + toslash(captured.out))
-    assert toslash(captured.out) == '''
+    # print("\n" + toslash(captured.out))
+    assert (
+        toslash(captured.out)
+        == """
 drwxrwxrwx      0     0           0                                                                    d  a
 -rw-rw-rw-      0     0           0                                                                    f  a/a
 drwxrwxrwx      0     0           0                                                                    d  a/b
 -rw-rw-rw-      0     0           0                                                                    f  a/b/c
-'''
+"""
+    )
 
     ds.main(["-l", "a"])
     captured = capsys.readouterr()
 
-    #print("\n" + toslash(captured.out))
-    assert toslash(captured.out) == '''
+    # print("\n" + toslash(captured.out))
+    assert (
+        toslash(captured.out)
+        == """
 drwxrwxrwx      0     0           0  2022-12-30 14:21:25  a
 -rw-rw-rw-      0     0           0  2022-12-30 14:21:25  a/a
 drwxrwxrwx      0     0           0  2022-12-30 14:21:25  a/b
 -rw-rw-rw-      0     0           0  2022-12-30 14:21:25  a/b/c
-'''
+"""
+    )

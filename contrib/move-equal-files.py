@@ -1,10 +1,12 @@
 """Tool to move files on the right that are equal to files on the left."""
+
 import argparse
 from pathlib import Path
 
 import dirscan
 
-parser = argparse.ArgumentParser(description="""
+parser = argparse.ArgumentParser(
+    description="""
 Move files on the right that are equal to files on the left. It compares
 left and right directories or scanfiles, and for files that are equal, it
 moves the file from the right directory to a destination directory,
@@ -51,11 +53,11 @@ for path, (left, right) in dirscan.walkdirs([leftroot, rightroot]):
 
     # Check for files with same hashsum in shadb
     sha_files = shadb.get(right.hashsum, [])
-    if len(sha_files) > 1:         
+    if len(sha_files) > 1:
         is_in_left = any(index == 0 for index, _ in sha_files)
-        c = ' '
+        c = " "
         if opts.go and is_in_left:
-            c = 'H'
+            c = "H"
             move_file(srcpath, dstpath)
         if opts.verbose or (opts.go and is_in_left):
             print(f"{c}  {path}")

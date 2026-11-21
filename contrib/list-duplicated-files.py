@@ -1,9 +1,11 @@
 """Tool to list duplicated files in a directory or scanfile."""
+
 import argparse
 
 import dirscan
 
-parser = argparse.ArgumentParser(description="""
+parser = argparse.ArgumentParser(
+    description="""
 Tool to list duplicated files in a directory or scanfile. It scans the specified
 directory or scanfile and identifies files with identical content based on
 their SHA hashes. The output lists each SHA hash followed by the relative paths
