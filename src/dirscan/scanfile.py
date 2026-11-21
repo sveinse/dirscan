@@ -10,7 +10,16 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 
-from dirscan.dirscan import DirObj, DirscanDict, DirscanException, DirscanObj, TPath, VirtualDirObj, create_from_dict, create_from_fs
+from dirscan.dirscan import (
+    DirObj,
+    DirscanDict,
+    DirscanException,
+    DirscanObj,
+    TPath,
+    VirtualDirObj,
+    create_from_dict,
+    create_from_fs,
+)
 from dirscan.log import debug, debug_level
 
 # Known scan file versions

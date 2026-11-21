@@ -13,7 +13,7 @@ import os
 import stat as osstat
 from collections.abc import Generator, Iterable
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, Self, TypedDict
 
 from dirscan.digest import COMPARE_FN, DIGEST_FN, HASHALGORITHM
 
@@ -450,7 +450,7 @@ class VirtualDirObj(DirObj):
     objname = 'virtual directory'
 
     @classmethod
-    def create(cls, children: Iterable[DirscanObj] | None=None):
+    def create(cls, children: Iterable[DirscanObj] | None=None) -> Self:
         obj = cls(name="", path="", stat=os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0)))
         if children:
             obj._children = tuple(children)
