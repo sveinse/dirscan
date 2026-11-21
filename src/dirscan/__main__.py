@@ -10,6 +10,7 @@ import io
 import sys
 from argparse import Namespace
 from collections.abc import Iterable
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Self
@@ -316,79 +317,122 @@ def main(argv: Iterable[str] | None = None) -> int:
     debug(1, "  Opts          : {}", opts)
     debug(1, "")
 
-    # -- Handler for printing progress to stderr
-    #    Set the global scope to allow inner functions to report progress
-    progressmgr = PrintProgress(
-        file=sys.stderr,
-        update_interval=UPDATE_INTERVAL,
-        update_delay=UPDATE_DELAY,
-        show_progress=opts.progress,
-    )
-    progressmgr.__enter__()
-    setprogress(progressmgr)
-
-    # -- Prepare the histograms to collect statistics
-    stats = Statistics(opts.dir_or_scanfiles)
-
-    # -- Error handler
-    def error_handler(exception: Exception, path: DirscanObj | TPath) -> bool:
-        """Callback for handling scanning errors during parsing"""
-        stats.add_stats("err")
-        if not opts.quieterr:
-            if isinstance(path, DirscanObj):
-                path = path.fullpath
-            progressmgr.print(f"{path}: {exception.__class__.__qualname__}: {exception}")
-
-        # True will swallow the exception. In debug mode
-        # the error will be raised
-        return not opts.debug
-
-    #
-    # Directory scanning
-    # -------------------
-
-    outfile = None
-    try:
-        # -- Prepare the list of subdirectories for each scan file
-        subdirs = [opts.subdir] * len(opts.dir_or_scanfiles)
-        subdirs[0] = opts.leftsubdir or opts.subdir
-        if len(opts.dir_or_scanfiles) > 1:
-            subdirs[1] = opts.rightsubdir or opts.subdir
-
-        # -- Check and read the scan files
-        dirs = [
-            open_dir_or_scanfile(scanfile, subdir=subdir, prefix=opts.prefix)
-            for scanfile, subdir in zip(opts.dir_or_scanfiles, subdirs)
-        ]
-
-        # -- Combine multiple scans into a single list of directories
-        if scan_mode and len(dirs) > 1:
-            dirs = [VirtualDirObj.create(dirs)]
-
-        # -- Scan the database
-        if ctx.duplicates or opts.shadiff:
-            progressmgr.print("Building SHA database...")
-
-            # -- Build the sha database
-            ctx.shadb = scan_shadb(
-                dirs,
-                include_single_entries=not ctx.duplicates,
-                reverse=opts.reverse,
-                excludes=opts.exclude,
-                onefs=opts.onefs,
-                exception_fn=error_handler,
+    # -- Main execution context with resource management --
+    with ExitStack() as stack:
+        # -- Handler for printing progress to stderr
+        #    Set the global scope to allow inner functions to report progress
+        progressmgr = stack.enter_context(
+            PrintProgress(
+                file=sys.stderr,
+                update_interval=UPDATE_INTERVAL,
+                update_delay=UPDATE_DELAY,
+                show_progress=opts.progress,
             )
+        )
+        setprogress(progressmgr)
 
-        # -- First pass
-        obj_count = -1
-        if opts.twopass:
-            progressmgr.print("Pass 1...")
+        # -- Prepare the histograms to collect statistics and setup the end time callback
+        stats = Statistics(opts.dir_or_scanfiles)
+        stack.callback(stats.set_end_time)
 
+        # -- Error handler
+        def error_handler(exception: Exception, path: DirscanObj | TPath) -> bool:
+            """Callback for handling scanning errors during parsing"""
+            stats.add_stats("err")
+            if not opts.quieterr:
+                if isinstance(path, DirscanObj):
+                    path = path.fullpath
+                progressmgr.print(f"{path}: {exception.__class__.__qualname__}: {exception}")
+
+            # True will swallow the exception. In debug mode
+            # the error will be raised
+            return not opts.debug
+
+        #
+        # Directory scanning
+        # -------------------
+        try:
+            # -- Prepare the list of subdirectories for each scan file
+            subdirs = [opts.subdir] * len(opts.dir_or_scanfiles)
+            subdirs[0] = opts.leftsubdir or opts.subdir
+            if len(opts.dir_or_scanfiles) > 1:
+                subdirs[1] = opts.rightsubdir or opts.subdir
+
+            # -- Check and read the scan files
+            dirs = [
+                open_dir_or_scanfile(scanfile, subdir=subdir, prefix=opts.prefix)
+                for scanfile, subdir in zip(opts.dir_or_scanfiles, subdirs)
+            ]
+
+            # -- Combine multiple scans into a single list of directories
+            if scan_mode and len(dirs) > 1:
+                dirs = [VirtualDirObj.create(dirs)]
+
+            # -- Scan the database
+            if ctx.duplicates or opts.shadiff:
+                progressmgr.print("Building SHA database...")
+
+                # -- Build the sha database
+                ctx.shadb = scan_shadb(
+                    dirs,
+                    include_single_entries=not ctx.duplicates,
+                    reverse=opts.reverse,
+                    excludes=opts.exclude,
+                    onefs=opts.onefs,
+                    exception_fn=error_handler,
+                )
+
+            # -- First pass
+            obj_count = -1
+            if opts.twopass:
+                progressmgr.print("Pass 1...")
+
+                with progressmgr.progress(
+                    prefix=f"{pr_prefix} {{count}} files:  ",
+                    format="{text}",
+                ) as progress:
+                    # -- Do the first pass to count the number of objects
+                    for path, objs in walkdirs(
+                        dirs,
+                        reverse=opts.reverse,
+                        excludes=opts.exclude,
+                        onefs=opts.onefs,
+                        traverse_into_oneside=ctx.recurse,
+                        exception_fn=error_handler,
+                        close_during=False,
+                        sequential=True,
+                    ):
+                        # Progress printing
+                        progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
+
+                    obj_count = progress.count
+                    ctx.sequential = False
+
+            # -- Open output file
+            outfile = None
+            if opts.outfile:
+                outfile = stack.enter_context(
+                    open(
+                        opts.outfile,
+                        "w",
+                        encoding="utf-8",
+                        errors="surrogateescape",
+                    )
+                )
+                outfile.write(get_fileheader())
+
+            # -- Setup progress printing context
             with progressmgr.progress(
-                prefix=f"{pr_prefix} {{count}} files:  ",
+                prefix=f"{pr_prefix} {{count}} files:  "
+                if obj_count < 0
+                else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
+                total_count=obj_count,
                 format="{text}",
             ) as progress:
-                # -- Do the first pass to count the number of objects
+                if opts.twopass:
+                    progressmgr.print("Pass 2...")
+
+                # -- TRAVERSE THE DIR(S)
                 for path, objs in walkdirs(
                     dirs,
                     reverse=opts.reverse,
@@ -397,117 +441,68 @@ def main(argv: Iterable[str] | None = None) -> int:
                     traverse_into_oneside=ctx.recurse,
                     exception_fn=error_handler,
                     close_during=False,
-                    sequential=True,
+                    sequential=ctx.sequential,
                 ):
                     # Progress printing
                     progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
 
-                obj_count = progress.count
-                ctx.sequential = False
+                    # Compare the objects
+                    try:
+                        change = dir_comparator(
+                            objs,
+                            ignores=opts.ignore,
+                            no_compare=ctx.no_compare,
+                            ignore_time=not opts.compare_time,
+                            shadb=ctx.shadb,
+                        )
 
-        # -- Open output file
-        if opts.outfile:
-            outfile = open(  # noqa: SIM115
-                opts.outfile,
-                "w",
-                encoding="utf-8",
-                errors="surrogateescape",
-            )
-            outfile.write(get_fileheader())
+                    except OSError as err:
+                        # Errors here are due to comparisons that fail.
+                        if not error_handler(err, path):
+                            raise
+                        change = ("error", "Compare failed: " + str(err))
 
-        # -- Setup progress printing context
-        with progressmgr.progress(
-            prefix=f"{pr_prefix} {{count}} files:  "
-            if obj_count < 0
-            else f"{pr_prefix} {{count}} / {{total_count}} files:  ",
-            total_count=obj_count,
-            format="{text}",
-        ) as progress:
-            if opts.twopass:
-                progressmgr.print("Pass 2...")
+                    debug(3, "      Compare: {} {}", change[0], change[1])
 
-            # -- TRAVERSE THE DIR(S)
-            for path, objs in walkdirs(
-                dirs,
-                reverse=opts.reverse,
-                excludes=opts.exclude,
-                onefs=opts.onefs,
-                traverse_into_oneside=ctx.recurse,
-                exception_fn=error_handler,
-                close_during=False,
-                sequential=ctx.sequential,
-            ):
-                # Progress printing
-                progress.update(text=str(objs[0].fullpath if len(objs) == 1 else path))
+                    # -- PROCESS THE COMPARE
 
-                # Compare the objects
-                try:
-                    change = dir_comparator(
-                        objs,
-                        ignores=opts.ignore,
-                        no_compare=ctx.no_compare,
-                        ignore_time=not opts.compare_time,
-                        shadb=ctx.shadb,
-                    )
+                    # Save histogram info for the change type
+                    stats.add_stats(change[0])
 
-                except OSError as err:
-                    # Errors here are due to comparisons that fail.
-                    if not error_handler(err, path):
-                        raise
-                    change = ("error", "Compare failed: " + str(err))
+                    # Determine whether to show the entry
+                    show = show_entry(objs, change, ctx)
+                    if not show:
+                        debug(3, "      hidden")
+                        continue
 
-                debug(3, "      Compare: {} {}", change[0], change[1])
+                    # Save file histogram info
+                    stats.add_filestats(objs)
 
-                # -- PROCESS THE COMPARE
+                    # Generate the fields for printing and log any errors from it
+                    fields, errors = generate_fields(path, objs, change, ctx)
+                    for error in errors:
+                        if not error_handler(error, path):
+                            raise error
 
-                # Save histogram info for the change type
-                stats.add_stats(change[0])
+                    # Print to stdout
+                    if ctx.printfmt:
+                        write_fileinfo(
+                            ctx.printfmt, fields, quoter=text_quote, file=sys.stdout, end=end
+                        )
 
-                # Determine whether to show the entry
-                show = show_entry(objs, change, ctx)
-                if not show:
-                    debug(3, "      hidden")
-                    continue
+                    # Write to file -- don't write if we couldn't get all fields
+                    if outfile and ctx.writefmt and not errors:
+                        write_fileinfo(ctx.writefmt, fields, quoter=file_quote, file=outfile)
 
-                # Save file histogram info
-                stats.add_filestats(objs)
+        except (DirscanException, OSError) as err:
+            # Handle user-specific errors
+            progressmgr.print(argp.prog + ": " + str(err))
 
-                # Generate the fields for printing and log any errors from it
-                fields, errors = generate_fields(path, objs, change, ctx)
-                for error in errors:
-                    if not error_handler(error, path):
-                        raise error
+            # Show the full traceback in debug mode
+            if opts.debug:
+                raise
 
-                # Print to stdout
-                if ctx.printfmt:
-                    write_fileinfo(
-                        ctx.printfmt, fields, quoter=text_quote, file=sys.stdout, end=end
-                    )
-
-                # Write to file -- don't write if we couldn't get all fields
-                if outfile and ctx.writefmt and not errors:
-                    write_fileinfo(ctx.writefmt, fields, quoter=file_quote, file=outfile)
-
-    except (DirscanException, OSError) as err:
-        # Handle user-specific errors
-        progressmgr.print(argp.prog + ": " + str(err))
-
-        # Show the full traceback in debug mode
-        if opts.debug:
-            raise
-
-        return 1
-
-    finally:
-        # Close the statistics
-        stats.set_end_time()
-
-        # Close any open output file
-        if outfile:
-            outfile.close()
-
-        # Exit the progress manager context
-        progressmgr.__exit__(None, None, None)
+            return 1
 
     #
     # Statistics printing
