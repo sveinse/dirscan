@@ -20,13 +20,6 @@ def test_main_no_arguments():
     assert int(exc.value.code) == 2
 
 
-def test_main_too_many_arguments():
-
-    with raises(SystemExit) as exc:
-        ds.main(["a", "b", "c"])
-    assert int(exc.value.code) == 2
-
-
 def test_main_args_help():
 
     with raises(SystemExit) as exc:

@@ -242,6 +242,9 @@ def main(argv: Iterable[str] | None=None) -> int:
         print(DIRSCAN_FORMAT_HELP)
         argp.exit(1)
 
+    if not opts.dir_or_scanfiles:
+        argp.error("No directories or scanfiles specified")
+
     # -- Determine scan mode
     try:
         scan_mode = determine_scan_mode(opts)

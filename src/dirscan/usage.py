@@ -337,7 +337,7 @@ def argument_parser() -> argparse.ArgumentParser:
 
     # Main arguments
     argp.add_argument("dir_or_scanfiles", metavar="DIR_OR_SCANFILE",
-                      nargs="+", help="""
+                      nargs="*", help="""
         Directory to scan or scanfile to read
         """)
 
