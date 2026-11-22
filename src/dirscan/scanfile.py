@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Generator
+from collections.abc import Iterator
 from pathlib import Path
 
 from dirscan.dirscan import (
@@ -280,7 +280,7 @@ def parse_line(line: str, base_fname: str, dirtree: TDirtree) -> None:
 def quote(text: str, extended: bool = False) -> str:
     """Quote the text"""
 
-    def _quote(text: str) -> Generator[str, None, None]:
+    def _quote(text: str) -> Iterator[str]:
         ext = extended
         for c in text:
             v = ord(c)
@@ -309,7 +309,7 @@ def quote(text: str, extended: bool = False) -> str:
 def unquote(text: str, extended: bool = False) -> str:
     """Unquote the text"""
 
-    def _unqoute(text: str) -> Generator[str, None, None]:
+    def _unqoute(text: str) -> Iterator[str]:
 
         # Escape code translations
         escapes = {

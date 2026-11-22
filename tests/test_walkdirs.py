@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -6,9 +5,11 @@ import pytest
 from pytest import raises
 
 import dirscan as ds
+from dirscan.dirscan import *
+from tests.common import ExpectedT, Tempdir
 
 
-def test_walkdirs_no_access_to_topdir(wd):
+def test_walkdirs_no_access_to_topdir(wd: Tempdir) -> None:
     """Test scanning a dir with no access"""
 
     if sys.platform == "win32":
@@ -27,7 +28,7 @@ def test_walkdirs_no_access_to_topdir(wd):
         ds.main(["--debug", "a"])
 
 
-def test_walkdirs_top_is_not_a_dir(wd):
+def test_walkdirs_top_is_not_a_dir(wd: Tempdir) -> None:
     """Test giving a file to scan instead of a dir"""
 
     wd.wrdata("a", None)
@@ -42,7 +43,7 @@ def test_walkdirs_top_is_not_a_dir(wd):
         ds.main(["--debug", "a"])
 
 
-def test_walkdirs_top_is_not_existing(wd):
+def test_walkdirs_top_is_not_existing(wd: Tempdir) -> None:
     """Test scanning a path that doesn't exist"""
 
     # Direct call
@@ -55,7 +56,7 @@ def test_walkdirs_top_is_not_existing(wd):
         ds.main(["--debug", "noexist"])
 
 
-def test_walkdirs_empty_dirlist(wd):
+def test_walkdirs_empty_dirlist(wd: Tempdir) -> None:
     """Test passing empty lists to walkdirs()"""
 
     ds.set_debug(1)
@@ -68,260 +69,213 @@ def test_walkdirs_empty_dirlist(wd):
 
     # None list
     with raises(TypeError):
-        for _ in ds.walkdirs(None):
+        for _ in ds.walkdirs(None):  # type: ignore
             pass
 
 
-# st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-FAKESTAT = os.stat_result((0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+TEST_TREE = [
+    ("x", "f", ""),
+    ("b", "d", None),
+    ("b/y", "f", "abc"),
+    ("c", "d", None),
+]
 
 
-def prep(expected, start):
+def test_walkdirs_scan1(wd: Tempdir) -> None:
+    """Test basic walkdirs scan with a single directory"""
 
-    def mk_obj(obj, path, s):
-        if path == ".":
-            return obj("", path=s, stat=FAKESTAT)
-        pp = os.path.split(path)
-        kw = {}
-        if obj is not ds.NonExistingObj:
-            kw["stat"] = FAKESTAT
-        return obj(pp[-1], path=Path(s, pp[0]), **kw)
+    wd.maketree("a", TEST_TREE)
 
-    for path, *obj in expected:
-        yield Path(path), tuple(mk_obj(o, path, s) for o, s in zip(obj, start))
+    expected = [
+        (".", DirObj),
+        ("b", DirObj),
+        ("b/y", FileObj),
+        ("c", DirObj),
+        ("x", FileObj),
+    ]
 
-
-def maketree(wd, base, withb=True):
-    wd.makedirs(base)
-    wd.wrdata(Path(base, "x"), None)
-    if withb:
-        wd.makedirs(Path(base, "b"))
-        wd.wrdata(Path(base, "b/y"), None)
-    wd.makedirs(Path(base, "c"))
+    tree = ds.walkdirs(["a"])
+    wd.compare(tree, expected)
 
 
-def compare(dirs, expected, **kwargs):
-    walks = tuple(ds.walkdirs(dirs, **kwargs))
-    for (ap, aobj), (bp, bobj) in zip(walks, prep(expected, dirs), strict=True):
-        # print((ap, aobj), (bp, bobj))
+def test_walkdirs_scan2(wd: Tempdir) -> None:
+    """Test walkdirs scan with multiple directories"""
 
-        # Path is equal
-        assert ap == bp
+    wd.maketree("a", TEST_TREE)
+    wd.maketree("b", TEST_TREE)
 
-        # For each of the objects...
-        for ao, bo in zip(aobj, bobj, strict=True):
-            # Assert that type, name and path is equal
-            assert type(ao) is type(bo)
-            assert ao.name == bo.name
-            assert ao.path == bo.path
+    expected = [
+        (".", DirObj, DirObj),
+        ("b", DirObj, DirObj),
+        ("b/y", FileObj, FileObj),
+        ("c", DirObj, DirObj),
+        ("x", FileObj, FileObj),
+    ]
 
-    return walks
-
-
-#
-# Plain scan without additional options
-#
+    tree = ds.walkdirs(["a", "b"])
+    wd.compare(tree, expected)
 
 
-def test_walkdirs_scan(wd):
+def test_walkdirs_scan3(wd: Tempdir) -> None:
+    """Test walkdirs scan with three directories"""
 
-    maketree(wd, "a")
-    dirs = ("a",)
+    wd.maketree("a", TEST_TREE)
+    wd.maketree("b", TEST_TREE)
+    wd.maketree("c", TEST_TREE)
 
-    expected = (
-        (".", ds.DirObj),
-        ("b", ds.DirObj),
-        ("b/y", ds.FileObj),
-        ("c", ds.DirObj),
-        ("x", ds.FileObj),
-    )
+    expected = [
+        (".", DirObj, DirObj, DirObj),
+        ("b", DirObj, DirObj, DirObj),
+        ("b/y", FileObj, FileObj, FileObj),
+        ("c", DirObj, DirObj, DirObj),
+        ("x", FileObj, FileObj, FileObj),
+    ]
 
-    compare(dirs, expected)
-
-
-def test_walkdirs_scan2(wd):
-
-    maketree(wd, "a")
-    maketree(wd, "b")
-    dirs = ("a", "b")
-
-    expected = (
-        (".", ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.DirObj),
-        ("b/y", ds.FileObj, ds.FileObj),
-        ("c", ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj),
-    )
-
-    compare(dirs, expected)
+    tree = ds.walkdirs(["a", "b", "c"])
+    wd.compare(tree, expected)
 
 
-def test_walkdirs_scan3(wd):
+def test_walkdirs_scan_reverse(wd: Tempdir) -> None:
+    """Test walkdirs scan in reverse order"""
 
-    maketree(wd, "a")
-    maketree(wd, "b")
-    maketree(wd, "c")
-    dirs = ("a", "b", "c")
+    wd.maketree("a", TEST_TREE)
 
-    expected = (
-        (".", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("b/y", ds.FileObj, ds.FileObj, ds.FileObj),
-        ("c", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj, ds.FileObj),
-    )
+    expected = [
+        (".", DirObj),
+        ("x", FileObj),
+        ("c", DirObj),
+        ("b", DirObj),
+        ("b/y", FileObj),
+    ]
 
-    compare(dirs, expected)
-
-
-#
-# Reversed
-#
+    tree = ds.walkdirs(["a"], reverse=True)
+    wd.compare(tree, expected)
 
 
-def test_walkdirs_scan_reverse(wd):
+def test_walkdirs_traverse_into_onesided_scan(wd: Tempdir) -> None:
+    """Test walkdirs scan with traverse_into_oneside setting"""
 
-    maketree(wd, "a")
-    dirs = ("a",)
+    wd.maketree("a", TEST_TREE)
 
-    expected = (
-        (".", ds.DirObj),
-        ("x", ds.FileObj),
-        ("c", ds.DirObj),
-        ("b", ds.DirObj),
-        ("b/y", ds.FileObj),
-    )
+    expected = [
+        (".", DirObj),
+        ("b", DirObj),
+        ("b/y", FileObj),
+        ("c", DirObj),
+        ("x", FileObj),
+    ]
 
-    compare(dirs, expected, reverse=True)
-
-
-#
-# Test traverse_into_oneside setting
-#
+    tree = ds.walkdirs(["a"], traverse_into_oneside=False)
+    wd.compare(tree, expected)
+    tree = ds.walkdirs(["a"], traverse_into_oneside=True)
+    wd.compare(tree, expected)
 
 
-def test_walkdirs_traverse_into_onesided_scan(wd):
-
-    maketree(wd, "a")
-    dirs = ("a",)
-
-    expected = (
-        (".", ds.DirObj),
-        ("b", ds.DirObj),
-        ("b/y", ds.FileObj),
-        ("c", ds.DirObj),
-        ("x", ds.FileObj),
-    )
-
-    compare(dirs, expected, traverse_into_oneside=False)
-    compare(dirs, expected, traverse_into_oneside=True)
+TEST_TREE_NO_B = [
+    ("x", "f", ""),
+    ("c", "d", None),
+]
 
 
-def test_walkdirs_traverse_into_onesided_scan2(wd):
+def test_walkdirs_traverse_into_onesided_scan2(wd: Tempdir) -> None:
+    """Test walkdirs scan with traverse_into_oneside setting for two directories"""
 
-    maketree(wd, "a")
-    maketree(wd, "b", withb=False)
-    dirs = ("a", "b")
+    wd.maketree("a", TEST_TREE)
+    wd.maketree("b", TEST_TREE_NO_B)
 
-    expected_false = (
-        (".", ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.NonExistingObj),
-        # ('b/y', ds.FileObj, ds.FileObj),
-        ("c", ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj),
-    )
-    expected_true = (
-        (".", ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.NonExistingObj),
-        ("b/y", ds.FileObj, ds.NonExistingObj),
-        ("c", ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj),
-    )
+    expected = [
+        (".", DirObj, DirObj),
+        ("b", DirObj, NonExistingObj),
+        # ('b/y', FileObj, FileObj),
+        ("c", DirObj, DirObj),
+        ("x", FileObj, FileObj),
+    ]
+    tree = ds.walkdirs(["a", "b"], traverse_into_oneside=False)
+    wd.compare(tree, expected)
 
-    compare(dirs, expected_false, traverse_into_oneside=False)
-    compare(dirs, expected_true, traverse_into_oneside=True)
+    expected2 = [
+        (".", DirObj, DirObj),
+        ("b", DirObj, NonExistingObj),
+        ("b/y", FileObj, NonExistingObj),
+        ("c", DirObj, DirObj),
+        ("x", FileObj, FileObj),
+    ]
+    tree = ds.walkdirs(["a", "b"], traverse_into_oneside=True)
+    wd.compare(tree, expected2)
 
 
-def test_walkdirs_traverse_into_onesided_scan3(wd):
+def test_walkdirs_traverse_into_onesided_scan3(wd: Tempdir) -> None:
+    """Test walkdirs scan with traverse_into_oneside setting for three directories"""
 
-    maketree(wd, "a")
-    maketree(wd, "b")
-    maketree(wd, "c", withb=False)
-    dirs1 = ("a", "b", "c")
+    wd.maketree("a", TEST_TREE)
+    wd.maketree("b", TEST_TREE)
+    wd.maketree("c", TEST_TREE_NO_B)
 
-    maketree(wd, "d")
-    maketree(wd, "e", withb=False)
-    maketree(wd, "f", withb=False)
-    dirs2 = ("d", "e", "f")
+    wd.maketree("d", TEST_TREE)
+    wd.maketree("e", TEST_TREE_NO_B)
+    wd.maketree("f", TEST_TREE_NO_B)
 
-    expected_false1 = (
-        (".", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.DirObj, ds.NonExistingObj),
-        ("b/y", ds.FileObj, ds.FileObj, ds.NonExistingObj),
-        ("c", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj, ds.FileObj),
-    )
-    expected_false2 = (
-        (".", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.NonExistingObj, ds.NonExistingObj),
-        # ('b/y', ds.FileObj, ds.NonExistingObj, ds.NonExistingObj),
-        ("c", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj, ds.FileObj),
-    )
+    expected_false1 = [
+        (".", DirObj, DirObj, DirObj),
+        ("b", DirObj, DirObj, NonExistingObj),
+        ("b/y", FileObj, FileObj, NonExistingObj),
+        ("c", DirObj, DirObj, DirObj),
+        ("x", FileObj, FileObj, FileObj),
+    ]
+    expected_false2 = [
+        (".", DirObj, DirObj, DirObj),
+        ("b", DirObj, NonExistingObj, NonExistingObj),
+        # ('b/y', FileObj, NonExistingObj, NonExistingObj),
+        ("c", DirObj, DirObj, DirObj),
+        ("x", FileObj, FileObj, FileObj),
+    ]
 
-    compare(dirs1, expected_false1, traverse_into_oneside=False)
-    compare(dirs2, expected_false2, traverse_into_oneside=False)
+    tree = ds.walkdirs(["a", "b", "c"], traverse_into_oneside=False)
+    wd.compare(tree, expected_false1)
+    tree = ds.walkdirs(["d", "e", "f"], traverse_into_oneside=False)
+    wd.compare(tree, expected_false2)
 
     expected_true1 = expected_false1
-    expected_true2 = (
-        (".", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("b", ds.DirObj, ds.NonExistingObj, ds.NonExistingObj),
-        ("b/y", ds.FileObj, ds.NonExistingObj, ds.NonExistingObj),
-        ("c", ds.DirObj, ds.DirObj, ds.DirObj),
-        ("x", ds.FileObj, ds.FileObj, ds.FileObj),
-    )
+    expected_true2 = [
+        (".", DirObj, DirObj, DirObj),
+        ("b", DirObj, NonExistingObj, NonExistingObj),
+        ("b/y", FileObj, NonExistingObj, NonExistingObj),
+        ("c", DirObj, DirObj, DirObj),
+        ("x", FileObj, FileObj, FileObj),
+    ]
 
-    compare(dirs1, expected_true1, traverse_into_oneside=True)
-    compare(dirs2, expected_true2, traverse_into_oneside=True)
-
-
-#
-# Exclusion testing
-#
+    tree = ds.walkdirs(["a", "b", "c"], traverse_into_oneside=True)
+    wd.compare(tree, expected_true1)
+    tree = ds.walkdirs(["d", "e", "f"], traverse_into_oneside=True)
+    wd.compare(tree, expected_true2)
 
 
-def test_walkdirs_exclude(wd):
+def test_walkdirs_exclude(wd: Tempdir) -> None:
+    """Test walkdirs with exclusion of certain directories"""
 
-    maketree(wd, "a")
-    dirs = ("a",)
+    wd.maketree("a", TEST_TREE)
 
-    expected = (
-        (".", ds.DirObj),
-        ("b", ds.DirObj),
-        # ('b/y', ds.FileObj),
-        ("c", ds.DirObj),
-        ("x", ds.FileObj),
-    )
+    expected: list[ExpectedT] = [
+        (".", DirObj),
+        ("b", {"obj": DirObj, "excluded": True}),
+        # ('b/y', FileObj),  # Excluded
+        ("c", DirObj),
+        ("x", FileObj),
+    ]
 
-    walk = compare(dirs, expected, excludes=["b"])
-
-    # FIXME: Is it unexpected that 'b' is returned? However excluded is
-    #        set
-    for p, (obj,) in walk:
-        if p == Path("b"):
-            assert obj.excluded
+    tree = ds.walkdirs(["a"], excludes=["b"])
+    wd.compare(tree, expected)
 
 
-def test_walkdirs_dirofdir(wd):
+def _test_walkdirs_dirofdir(wd: Tempdir) -> None:
+    """Test walkdirs with directories containing other directories"""
 
     pytest.skip("Not complete yet")
 
     # FIXME: Test the top-level Dirobject name and path, both from fs and
     # from scanfile
 
-    wd.makedirs("a")
-    wd.makedirs("a/a")
-    wd.wrdata("a/a/b", None)
+    wd.maketree("a", [("a", "d", None), ("a/b", "f", None)])
 
     print()
     for a in ds.walkdirs(("a/a",)):

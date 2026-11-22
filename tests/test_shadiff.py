@@ -1,8 +1,13 @@
+from collections.abc import Collection, Iterator
+
 import dirscan as ds
-from dirscan.__main__ import scan_shadb
+from dirscan.walkdirs import DirscanComparator, scan_shadb
+from tests.common import Tempdir
 
 
-def scan(dirs, compare=ds.obj_compare2):
+def scan(
+    dirs: Collection[ds.DirscanObj], compare: DirscanComparator = ds.obj_compare2
+) -> Iterator[tuple[str, str]]:
     """Generator for directory differences"""
 
     # Build the scan database
@@ -20,7 +25,7 @@ def scan(dirs, compare=ds.obj_compare2):
         yield (str(p), c)
 
 
-def test_shascan_dup(wd):
+def test_shascan_dup(wd: Tempdir) -> None:
     """Test that it detects duplicates"""
 
     wd.makedirs("a")

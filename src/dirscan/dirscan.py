@@ -11,7 +11,7 @@ import datetime
 import fnmatch
 import os
 import stat as osstat
-from collections.abc import Generator, Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any, NotRequired, Self, TypedDict
 
@@ -166,7 +166,7 @@ class DirscanObj:
         :py:meth:`DirscanObj.children()` will return an empty list of children.
         """
 
-    def compare(self, other: DirscanObj) -> Generator[str, None, None]:
+    def compare(self, other: DirscanObj) -> Iterator[str]:
         """Generator that yields the differences between this and ``other``.
 
         Args:
@@ -303,7 +303,7 @@ class FileObj(DirscanObj):
         """Return the hex hashsum of the file"""
         return binascii.hexlify(self.hashsum).decode("ascii")
 
-    def compare(self, other: DirscanObj) -> Generator[str, None, None]:
+    def compare(self, other: DirscanObj) -> Iterator[str]:
         if not isinstance(other, type(self)):
             yield "type mismatch"
             return
@@ -363,7 +363,7 @@ class LinkObj(DirscanObj):
         super().__init__(name, path=path, stat=stat)
         self.link = link
 
-    def compare(self, other: DirscanObj) -> Generator[str, None, None]:
+    def compare(self, other: DirscanObj) -> Iterator[str]:
         if not isinstance(other, type(self)):
             yield "type mismatch"
             return
@@ -607,10 +607,10 @@ def create_from_fs(
     # in a full traversal of the directory, which could take considerable time.
     # Reading the directory objects are done with the .children() function
 
-    return objcls(str(name), path=path, stat=stat, **kwargs)
+    return objcls(str(name), path=Path(path), stat=stat, **kwargs)
 
 
-def create_from_fsdir(path: TPath) -> Generator[DirscanObj, None, None]:
+def create_from_fsdir(path: TPath) -> Iterator[DirscanObj]:
     """Generator that produces file object instances for directory 'path'"""
 
     # Iterate over the directory
@@ -663,7 +663,7 @@ def create_from_dict(data: DirscanDict) -> DirscanObj:
         kwargs["hashsum"] = hashsum
 
     elif objcls is LinkObj:
-        kwargs["link"] = data["link"]  # pyright: ignore
+        kwargs["link"] = data.get("link", "")  # pyright: ignore
 
     elif objcls is DirObj:
         if data.get("children"):

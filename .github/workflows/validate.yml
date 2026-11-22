@@ -17,56 +17,54 @@ jobs:
         python-version: ["3.11", "3.15"]
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0  # To ensure non-shallow git clones for sonar
+        uses: actions/checkout@v7
 
-      - name: Set up python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.4.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .[dev]
+          uv sync --extra dev
 
       - name: Run pytest
         run: |
-          pytest --cov --cov-report=xml --cov-report=term --tb=line
+          uv run pytest --cov --cov-report=xml --cov-report=term --tb=line
 
   mypy:
     name: Static type analysis
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install .[dev]
+          uv sync --extra dev
 
       - name: Run mypy
         run: |
-          mypy src
-        continue-on-error: true
-
+          uv run mypy src tests
 
   ruff:
     name: Code linting
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Run ruff check
-        uses: astral-sh/ruff-action@v3
+        uses: astral-sh/ruff-action@v4.1.0
         with:
           args: check
+          src: "."
+
+      - name: Run ruff format
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          args: format --diff
           src: "."

@@ -4,17 +4,8 @@ ME="$(basename "$0")"
 HERE="$(dirname "$0")"
 
 cleanvenv=
-py3=1
 runall=
-
-bin=bin
-py2=python
-py3=python3
-if [[ "$(uname -o)" = "Msys" ]]; then
-    bin=Scripts
-    py2=py -2
-    py3=py -3
-fi
+ds="uv run dirscan"
 
 # -- Helpers
 log () {
@@ -32,15 +23,13 @@ usage () {
 $ME -- Dirscan tester
 (C) 2018 Svein Seldal
 
-  Run dirscan tests
+    Run dirscan tests
 
 Usage: $ME [OPTION] TESTS...
 
 Options:
-  -h, --help         Print this help
-  -2, --py2          Test using python2
-  -3, --py3          Test using python3
-  --clean            Clean previous venvs
+    -h, --help         Print this help
+    --all              Run all tests
 EOF
 }
 
@@ -53,9 +42,6 @@ main() {
             --all)
                 runall=1
                 ;;
-            --clean)
-                cleanvenv=1
-                ;;
             --debug)
                 export PS4='   --->  $LINENO:  '
                 set -x
@@ -63,12 +49,6 @@ main() {
             -h|--help)
                 usage
                 exit 1
-                ;;
-            -2|--py2)
-                py3=
-                ;;
-            -3|--py3)
-                py3=1
                 ;;
             --)
                 shift
@@ -95,34 +75,6 @@ main() {
         quit 1 "Too few arguments"
     fi
 
-
-    # -- Setup the testing venvs
-    if [[ "$py3" ]]; then
-        venv="$(pwd)/venv3"
-        [[ "$cleanvenv" ]] && rm -rf $venv
-        if [[ ! -d "$venv" ]]; then
-            log "Setting up py3 virtual environment in $venv"
-            (set -ex;
-            $py3 -m venv $venv
-            cd $HERE/..
-            $venv/$bin/pip install -e .
-            ) || exit 1
-        fi
-    else
-        venv="$(pwd)/venv2"
-        [[ "$cleanvenv" ]] && rm -rf $venv
-        if [[ ! -d "$venv" ]]; then
-            log "Setting up py2 virtual environment in $venv"
-            (set -ex;
-            $py2 -m virtualenv $venv
-            cd $HERE/..
-            $venv/$bin/pip install -e .
-            ) || exit 1
-        fi
-    fi
-    ds="$venv/$bin/dirscan"
-
-
     # -- Read all test files
     testfiles=(??-*.sh)
     alltests=()
@@ -146,8 +98,6 @@ main() {
         tclean
     done
 }
-
-
 
 # -- Test functions
 tsetup() {
@@ -199,8 +149,6 @@ techo() {
         echo "$text" >$f
     done
 }
-
-
 
 # -- RUN
 main "$@"
