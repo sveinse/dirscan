@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Collection, Container, Generator, Sequence
+from collections.abc import Callable, Container, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from dirscan.dirscan import DirscanObj, FileObj, NonExistingObj, TPath, create_from_fs
 from dirscan.log import debug
@@ -17,16 +17,16 @@ from dirscan.progress import getprogress
 
 
 def walkdirs(
-    dirs: Collection[DirscanObj | TPath],
+    dirs: Iterable[DirscanObj | TPath],
     *,
-    excludes: Collection[TPath] | None = None,
+    excludes: Iterable[TPath] | None = None,
     exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None = None,
     reverse: bool = False,
     onefs: bool = False,
     traverse_into_oneside: bool = True,
     close_during: bool = True,
     sequential: bool = False,
-) -> Generator[tuple[Path, tuple[DirscanObj, ...]], None, None]:
+) -> Iterator[tuple[Path, tuple[DirscanObj, ...]]]:
     """
     Generator function that recursively traverses the given directories and
     yields the found files as it traverses the tree(s). The directories will
@@ -87,6 +87,10 @@ def walkdirs(
       not the others, the object will be :py:class:`NonExistingObj`.
     """
 
+    # Consume the iterators since they will be consumed many times
+    dirs = tuple(dirs)
+    excludes = tuple(excludes) if excludes else ()
+
     if sequential:
         for obj in dirs:
             yield from walkdirs(
@@ -100,10 +104,6 @@ def walkdirs(
                 sequential=False,
             )
         return
-
-    # Ensure the exclusion list is a list
-    if excludes is None:
-        excludes = []
 
     # When scanning a single directory 'False' will not work due to the
     # selection logic below.
@@ -207,7 +207,7 @@ def walkdirs(
 
 
 def scan_shadb(
-    dirs: Collection[DirscanObj],
+    dirs: Iterable[DirscanObj],
     *,
     exception_fn: Callable[[Exception, DirscanObj | TPath], bool] | None = None,
     include_single_entries: bool = True,
@@ -296,6 +296,19 @@ def scan_shadb(
                 add_sha(i, obj)
 
     return shadb
+
+
+class DirscanComparator(Protocol):
+    """Protocol for object comparator functions."""
+
+    def __call__(
+        self,
+        objs: Sequence[DirscanObj],
+        ignores: Container[str] = "",
+        no_compare: bool = False,
+        ignore_time: bool = True,
+        shadb: dict[bytes, list[tuple[int, FileObj]]] | None = None,
+    ) -> tuple[str, str]: ...
 
 
 def obj_compare1(

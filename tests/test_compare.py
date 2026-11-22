@@ -1,9 +1,10 @@
 from pytest import raises
 
 import dirscan as ds
+from tests.common import Tempdir
 
 
-def test_compare1_two_dirs(wd):
+def test_compare1_two_dirs(wd: Tempdir) -> None:
     """Test that obj_compare1 doesn't accept multiple dirs"""
 
     wd.makedirs("a")
@@ -18,7 +19,7 @@ def test_compare1_two_dirs(wd):
         ds.obj_compare1((a, a, a))
 
 
-def test_compare1_scan(wd):
+def test_compare1_scan(wd: Tempdir) -> None:
     """Test"""
 
     wd.makedirs("a")
@@ -29,7 +30,7 @@ def test_compare1_scan(wd):
     assert cmp == ("scan", "scan")
 
 
-def test_compare1_exclude(wd):
+def test_compare1_exclude(wd: Tempdir) -> None:
     """Test"""
 
     wd.makedirs("a")
@@ -41,7 +42,7 @@ def test_compare1_exclude(wd):
     assert cmp == ("excluded", "excluded")
 
 
-def test_compare2_two_dirs(wd):
+def test_compare2_two_dirs(wd: Tempdir) -> None:
     """Test that obj_compare2 doesn't accept multiple dirs"""
 
     wd.makedirs("a")
@@ -56,7 +57,7 @@ def test_compare2_two_dirs(wd):
         ds.obj_compare2((a, a, a))
 
 
-def test_compare2_exclude(wd):
+def test_compare2_exclude(wd: Tempdir) -> None:
     """Test compares involving exclusions"""
 
     wd.makedirs("a")
@@ -110,7 +111,7 @@ def test_compare2_exclude(wd):
     assert cmp == ("excluded", "excluded, only in right")
 
 
-def test_compare2_types(wd):
+def test_compare2_types(wd: Tempdir) -> None:
     """Test mismatching types"""
 
     wd.makedirs("a")
@@ -123,7 +124,7 @@ def test_compare2_types(wd):
     assert cmp == ("different_type", "Different type, directory in left and file in right")
 
 
-def test_compare2_comparetype(wd):
+def test_compare2_comparetype(wd: Tempdir) -> None:
     """Test when compare is ignored"""
 
     wd.makedirs("a")
@@ -136,7 +137,7 @@ def test_compare2_comparetype(wd):
     assert cmp == ("skipped", "compare skipped")
 
 
-def test_compare2_equal(wd):
+def test_compare2_equal(wd: Tempdir) -> None:
     """Test for equality"""
 
     wd.wrdata("a", "foobar")
@@ -149,7 +150,7 @@ def test_compare2_equal(wd):
     assert cmp == ("equal", "equal")
 
 
-def test_compare2_change(wd):
+def test_compare2_change(wd: Tempdir) -> None:
     """Test for changed file contents"""
 
     wd.wrdata("a", "foobar")
@@ -162,7 +163,7 @@ def test_compare2_change(wd):
     assert cmp == ("changed", "file changed: contents differs")
 
 
-def test_compare2_change_size(wd):
+def test_compare2_change_size(wd: Tempdir) -> None:
     """Test for changed file contents"""
 
     wd.wrdata("a", "foobar")

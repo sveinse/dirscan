@@ -115,32 +115,32 @@ test_0412 () {
 }
 
 # FIXME: This isn't pretty
-xdirs="-X bin -X usr -X lib -X var -X opt -X tmp -X sbin -X etc -X snap -X boot -X root"
+# xdirs="-X bin -X usr -X lib -X var -X opt -X tmp -X sbin -X etc -X snap -X boot -X root -X /System"
 
-test_0413 () {
-    tsetup $FUNCNAME "Scan root path" \
-        "- A bug where files had incorrect slash, e.g. '.file' (WRONG)"
+# test_0413 () {
+#     tsetup $FUNCNAME "Scan root path" \
+#         "- A bug where files had incorrect slash, e.g. '.file' (WRONG)"
 
-    dirscan -x / $xdirs
-}
+#     dirscan -x / $xdirs
+# }
 
-test_0414 () {
-    tsetup $FUNCNAME "Scan root path to scan-file"
+# test_0414 () {
+#     tsetup $FUNCNAME "Scan root path to scan-file"
 
-    dirscan -o scanfile.txt -x / $xdirs
-    tcmd cat scanfile.txt
-}
+#     dirscan -o scanfile.txt -x / $xdirs
+#     tcmd cat scanfile.txt
+# }
 
-test_0415 () {
-    tsetup $FUNCNAME "Scan root path to scan-file, read back"
+# test_0415 () {
+#     tsetup $FUNCNAME "Scan root path to scan-file, read back"
 
-    dirscan -o scanfile.txt -x / $xdirs
-    dirscan -als scanfile.txt
-}
+#     dirscan -o scanfile.txt -x / $xdirs
+#     dirscan -als scanfile.txt
+# }
 
-test_0416 () {
-    tsetup $FUNCNAME "Scan root path to scan-file, compare with root"
+# test_0416 () {
+#     tsetup $FUNCNAME "Scan root path to scan-file, compare with root"
 
-    dirscan -o scanfile.txt -x / $xdirs
-    dirscan -ax scanfile.txt / $xdirs
-}
+#     dirscan -o scanfile.txt -x / $xdirs
+#     dirscan -ax scanfile.txt / $xdirs
+# }

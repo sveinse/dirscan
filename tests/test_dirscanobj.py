@@ -2,17 +2,18 @@ import datetime
 import os
 import stat as osstat
 from pathlib import Path
-from pprint import pprint
 
 from pytest import raises
 
 import dirscan as ds
+from tests.common import Tempdir
 
 # st_mode, st_ino, st_dev, st_nlink, st_uid, st_gid, st_size, st_atime, st_mtime, st_ctime
-FAKESTAT = os.stat_result((0o123456, 0, 0, 0, "uid", "gid", "size", 11, 42, 0))
+FAKESTAT = os.stat_result((0o123456, 0, 0, 0, "uid", "gid", "size", 11, 42, 0))  # type: ignore
 
 
-def test_dirscanobj():
+def test_dirscanobj() -> None:
+    """Test the DirscanObj class"""
 
     a = ds.DirscanObj("a", path="b", stat=FAKESTAT)
 
@@ -41,7 +42,8 @@ def test_dirscanobj():
         a.to_dict()
 
 
-def test_fileobj():
+def test_fileobj() -> None:
+    """Test the FileObj class"""
 
     a = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=b"1234")
 
@@ -82,13 +84,14 @@ def test_fileobj():
     }
 
 
-def test_linkobj():
+def test_linkobj() -> None:
+    """Test the LinkObj class"""
 
     # TODO: Add test for linkobj
-    pass
 
 
-def test_dirobj():
+def test_dirobj() -> None:
+    """Test the DirObj class"""
 
     a = ds.DirObj("a", path="b", stat=FAKESTAT, children=())
 
@@ -130,31 +133,33 @@ def test_dirobj():
     }
 
 
-def test_objects():
+def test_objects() -> None:
+    """Test miscellaneous DirscanObj subclasses"""
 
     # TODO: Test BlockDevObj
     # TODO: Test CharDevObj
     # TODO: Test FifoObj
     # TODO: Test SocketObj
-    pass
 
 
-def test_nonexistingobj():
+def test_nonexistingobj() -> None:
+    """Test the NonExistingObj class"""
 
     # TODO: Test NonExistingObj
-    pass
 
 
-def test_fileobj_hashsum():
+def test_fileobj_hashsum() -> None:
+    """Test the hashsum attribute of the FileObj class"""
 
     # TODO: Test hashsum input
 
-    _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=None)
+    _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=None)  # type: ignore
     _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=b"")
     _ = ds.FileObj("a", path="b", stat=FAKESTAT, hashsum=b"something")
 
 
-def test_dirobj_children():
+def test_dirobj_children() -> None:
+    """Test the children attribute of the DirObj class"""
 
     # TODO: Test children input
 
@@ -162,14 +167,15 @@ def test_dirobj_children():
     _ = ds.DirObj("a", path="b", stat=FAKESTAT, children=())
 
 
-def test_obj_compare():
+def test_obj_compare() -> None:
+    """Test the compare method of DirscanObj subclasses"""
 
     # TODO: Test compare operations.
     # TODO: Test hashsum compare operations
-    pass
 
 
-def test_create_from_fs(wd):
+def test_create_from_fs(wd: Tempdir) -> None:
+    """Test the create_from_fs function"""
 
     # TODO: Check setting full path in name vs setting path
 
@@ -182,7 +188,7 @@ def test_create_from_fs(wd):
     assert type(a) is ds.DirObj
     assert a.objtype == "d"
     assert a.name == "a"
-    assert a.path == ""
+    assert a.path == Path("")
     assert a.mode == osstat.S_IMODE(stat.st_mode)
     assert a.size == 0  # Dir has no size
     assert a.uid == stat.st_uid
@@ -191,7 +197,8 @@ def test_create_from_fs(wd):
     assert a.dev == stat.st_dev
 
 
-def test_create_from_dict(wd):
+def test_create_from_dict(wd: Tempdir) -> None:
+    """Test the create_from_dict function"""
 
     wd.makedirs("a")
 
@@ -213,24 +220,3 @@ def test_create_from_dict(wd):
 
     # TODO: Do we need a == operator in DirscanObj?
     assert tuple(a.compare(b)) == ()
-
-
-# -----------------
-
-
-def xtest_dirscan_create(wd):
-
-    # TODO: Read a real directory
-
-    # wrdata('a')
-    wd.makedirs("a")
-    wd.makedirs("a/b")
-    wd.makedirs("a/b/c")
-    wd.wrdata("a/d", "Hello")
-    wd.wrdata("a/b/e", "World")
-
-    a = ds.create_from_fs(".")
-    for _ in ds.walkdirs((a,), close_during=False):
-        pass
-    # tuple(ds.walkdirs((a,), close_during=False))
-    pprint(a.to_dict())

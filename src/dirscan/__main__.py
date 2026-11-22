@@ -41,7 +41,7 @@ from dirscan.scanfile import (
     text_quote,
 )
 from dirscan.usage import DIRSCAN_FORMAT_HELP, argument_parser
-from dirscan.walkdirs import obj_compare1, obj_compare2, scan_shadb, walkdirs
+from dirscan.walkdirs import DirscanComparator, obj_compare1, obj_compare2, scan_shadb, walkdirs
 
 # Update interval of the progress in ms
 UPDATE_DELAY = 300
@@ -260,6 +260,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         argp.error(str(err))
 
     # -- Determine settings and print format
+    dir_comparator: DirscanComparator
     if scan_mode:
         # -- Settings for scanning
         dir_comparator = obj_compare1
